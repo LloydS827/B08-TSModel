@@ -1,0 +1,24 @@
+source_format: long
+column_mapping:
+  timestamp: ts
+  device_id: equipment
+  batch_id: lot
+  stage: phase
+  sensor_id: tag
+  value: reading
+defaults:
+  quality_flag: good
+  degradation_label: normal
+  failure_proxy: false
+stage_map:
+  vacuum: 抽真空
+  cooling: 冷却
+sensors:
+  - source: PumpShake1
+    sensor_id: PumpShake1
+    domain: mechanical
+    unit: mm/s
+  - source: OutletOxygen
+    sensor_id: OutletOxygen
+    domain: atmosphere
+    unit: percent

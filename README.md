@@ -34,3 +34,15 @@ python3.11 -m venv .venv
 ```bash
 .venv/bin/b08-model-core benchmark --dataset data/simulated/furnace_fu13_45d.parquet --output reports/model_core_evaluation.md
 ```
+
+验证真实数据导出：
+
+```bash
+.venv/bin/b08-model-core real-data validate --input path/to/real_export.csv --schema-map configs/real_data_schema_map.template.yaml --output reports/real_data_validation.md
+```
+
+运行第一轮 forecasting 实验脚手架：
+
+```bash
+.venv/bin/b08-model-core experiment forecasting --dataset data/simulated/furnace_fu13_45d.parquet --output reports/forecasting_experiment.md
+```
