@@ -169,6 +169,7 @@ validation CLI 的约定：
 ## 关键目录
 
 ```text
+AGENTS.md                              # 后续 Agent 工作规则和阶段边界
 details.md                              # 面向用户和非技术人员的项目进展台账
 configs/
   real_data_schema_map.template.yaml   # 真实数据映射模板
@@ -189,6 +190,7 @@ tests/                                 # 回归测试
 
 ## 文档入口
 
+- [Agent 工作规则](AGENTS.md)
 - [项目进展说明](details.md)
 - [docs/index.html](docs/index.html)
 - [模型输入输出定义](docs/model-io-definition.html)
