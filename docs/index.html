@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 设备时序基础模型 - 文档入口</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #5c6670;
+      --line: #dce1e7;
+      --accent: #0f766e;
+      --accent-soft: #e6f4f1;
+      --warn: #a16207;
+      --warn-soft: #fff7dd;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1080px, calc(100% - 40px));
+      margin: 32px auto 48px;
+    }
+    header {
+      padding: 28px 0 18px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin: 0 0 14px;
+      font-size: 20px;
+    }
+    p { margin: 0 0 12px; }
+    .lead {
+      max-width: 820px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-top: 22px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+    }
+    .card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 17px;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .note {
+      background: var(--warn-soft);
+      border: 1px solid #f4d37a;
+      color: var(--warn);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-top: 18px;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 650;
+    }
+    a:hover { text-decoration: underline; }
+    ul {
+      padding-left: 20px;
+      margin: 8px 0 0;
+    }
+    footer {
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>B08 设备时序基础模型</h1>
+      <p class="lead">面向 B08 核心时序基础模型课题。当前文档已经从完整预测性维护系统收束到模型本体：模拟数据、模型输入输出、开源引用/微调/自训判断，以及专利论文等知识成果。</p>
+    </header>
+
+    <section class="grid" aria-label="主要文档">
+      <article class="card">
+        <span class="tag">brainstorming 成果</span>
+        <strong><a href="brainstorming-result.html">阶段收束成果</a></strong>
+        <p>明确课题目标、边界、两项核心工作、模型输入输出和知识成果方向。</p>
+      </article>
+      <article class="card">
+        <span class="tag">数据沙盘</span>
+        <strong><a href="data-simulation-scenario.html">模拟数据场景</a></strong>
+        <p>以真空速凝炉 FU13 为例，定义阶段、传感器、退化模式、标签和模型 IO 推导依据。</p>
+      </article>
+      <article class="card">
+        <span class="tag">模型接口</span>
+        <strong><a href="model-io-definition.html">模型 IO 定义</a></strong>
+        <p>从模拟数据倒推基础模型输入张量、上下文 token、输出头和任务边界。</p>
+      </article>
+      <article class="card">
+        <span class="tag">能力矩阵</span>
+        <strong><a href="model-capability-matrix.html">模型能力矩阵</a></strong>
+        <p>将 forecasting、imputation、embedding、退化响应和迁移能力映射到评测任务。</p>
+      </article>
+      <article class="card">
+        <span class="tag">开源适配</span>
+        <strong><a href="open-source-model-fit.html">开源模型适配</a></strong>
+        <p>判断候选模型能否直接引用、冻结表征、轻量微调或仅作为 baseline。</p>
+      </article>
+      <article class="card">
+        <span class="tag">路线决策</span>
+        <strong><a href="model-route-decision.html">模型路线决策</a></strong>
+        <p>比较直接引用、轻量微调和领域自训的进入条件、退出条件和知识价值。</p>
+      </article>
+      <article class="card">
+        <span class="tag">知识成果</span>
+        <strong><a href="knowledge-output-plan.html">知识成果规划</a></strong>
+        <p>规划专利、论文、数据集、benchmark 和模型资产。</p>
+      </article>
+      <article class="card">
+        <span class="tag">最终 plan</span>
+        <strong><a href="implementation-plan.html">实施计划 HTML</a></strong>
+        <p>聚焦核心模型：模拟数据、IO 定义、开源适配、路线决策和知识成果。</p>
+      </article>
+      <article class="card">
+        <span class="tag">agentic plan</span>
+        <strong><a href="superpowers/plans/2026-05-31-b08-core-timeseries-model-plan.md">Markdown Plan</a></strong>
+        <p>保留标准 plan header、任务清单、测试命令和交付检查项。</p>
+      </article>
+    </section>
+
+    <section class="grid" aria-label="归档材料">
+      <article class="card">
+        <strong>原始材料</strong>
+        <ul>
+          <li><a href="%E5%8E%9F%E5%A7%8B%E6%9D%90%E6%96%99/03-B08_%E8%AE%BE%E5%A4%87%E6%97%B6%E5%BA%8F%E5%9F%BA%E7%A1%80%E6%A8%A1%E5%9E%8B%E8%AF%BE%E9%A2%98.md">课题定义</a></li>
+          <li><a href="%E5%8E%9F%E5%A7%8B%E6%9D%90%E6%96%99/%E6%95%B0%E6%8D%AE%E5%88%86%E6%9E%90%E5%AE%A2%E8%A7%82%E6%9D%A1%E4%BB%B6%E4%B8%8E%E7%9B%AE%E6%A0%87.md">客观条件与目标</a></li>
+          <li><a href="%E5%8E%9F%E5%A7%8B%E6%9D%90%E6%96%99/%E9%99%84%E4%BB%B62_%E6%96%B0%E5%A2%9E%E8%AF%BE%E9%A2%98%E8%A7%84%E5%88%92%E8%AF%B4%E6%98%8E.md">新增课题规划说明</a></li>
+        </ul>
+      </article>
+      <article class="card">
+        <strong>前期草稿归档</strong>
+        <ul>
+          <li><a href="%E5%BD%92%E6%A1%A3/01-%E6%80%BB%E4%BD%93%E8%A7%84%E5%88%92%E5%BB%BA%E8%AE%BE%E6%96%B9%E6%A1%88.md">总体规划草稿</a></li>
+          <li><a href="%E5%BD%92%E6%A1%A3/02-PEA%E5%88%9D%E7%A8%BF.md">PEA 草稿</a></li>
+          <li><a href="%E5%BD%92%E6%A1%A3/03-%E6%A8%A1%E5%9E%8B%E8%BE%93%E5%85%A5%E8%BE%93%E5%87%BA%E4%B8%8E%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1.md">模型 IO 与架构草稿</a></li>
+          <li><a href="%E5%BD%92%E6%A1%A3/04-MVP%E5%AE%9E%E6%96%BD%E8%B7%AF%E7%BA%BF%E4%B8%8E%E9%AA%8C%E6%94%B6%E6%8C%87%E6%A0%87.md">MVP 路线草稿</a></li>
+        </ul>
+      </article>
+      <article class="card">
+        <strong>调研资料</strong>
+        <ul>
+          <li><a href="%E8%B0%83%E7%A0%94%E8%B5%84%E6%96%99/%E5%BC%80%E6%BA%90%E6%97%B6%E5%BA%8F%E5%9F%BA%E7%A1%80%E6%A8%A1%E5%9E%8B%E8%B0%83%E7%A0%94.md">开源时序基础模型调研</a></li>
+        </ul>
+      </article>
+    </section>
+
+    <div class="note">
+      当前主线已经收束为：先模拟一个完整真空速凝炉时序场景，用它倒推模型输入输出和任务，再判断开源模型能否直接引用、是否需要微调，或是否需要自训小型领域模型。
+    </div>
+
+    <footer>更新日期：2026-05-31</footer>
+  </main>
+</body>
+</html>

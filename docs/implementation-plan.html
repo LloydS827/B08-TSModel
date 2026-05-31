@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 核心时序模型实施计划</title>
+  <style>
+    :root{--bg:#f6f7f9;--panel:#fff;--text:#17202a;--muted:#5c6670;--line:#dce1e7;--accent:#0f766e;--blue:#1d4ed8;--soft:#e6f4f1;--blueSoft:#eef4ff;--warn:#a16207;--warnSoft:#fff7dd;--radius:8px}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{width:min(1180px,calc(100% - 40px));margin:28px auto 48px} nav{margin-bottom:18px}
+    a{color:var(--accent);font-weight:650;text-decoration:none} a:hover{text-decoration:underline}
+    header{padding-bottom:20px;border-bottom:1px solid var(--line)} h1{margin:0 0 8px;font-size:30px;letter-spacing:0}
+    h2{margin:28px 0 12px;font-size:21px} h3{margin:0 0 8px;font-size:17px} p{margin:0 0 12px}
+    .lead{color:var(--muted);max-width:940px;font-size:16px}.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px;margin-top:18px}
+    .card,.task,.note{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}.card strong{display:block;color:var(--blue);margin-bottom:6px}
+    .task{margin-bottom:12px}.task h3{color:var(--accent)}.files{margin:8px 0 10px;color:var(--muted);font-size:14px}
+    ul{margin:8px 0 0;padding-left:21px} code,pre{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+    code{background:#eef0f3;padding:1px 5px;border-radius:4px} pre{margin:10px 0 0;padding:12px;overflow-x:auto;background:#17202a;color:#f8fafc;border-radius:var(--radius)}
+    table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left} th{background:var(--blueSoft);color:#17315e} tr:last-child td{border-bottom:0}
+    .note{background:var(--soft);border-color:#b7ddd5;margin:18px 0}.warn{background:var(--warnSoft);border-color:#f4d37a;color:var(--warn)}
+    footer{margin-top:28px;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <main>
+    <nav><a href="index.html">返回文档入口</a></nav>
+    <header>
+      <h1>B08 核心时序模型实施计划</h1>
+      <p class="lead">这份计划按 Superpowers plan 标准收束为可执行任务清单。它只围绕核心时序基础模型：模拟数据、模型 IO、基线、开源适配、模型路线决策和知识成果，不展开完整预测性维护系统。</p>
+    </header>
+
+    <section class="summary">
+      <article class="card"><strong>主目标</strong>定义、原型化并评估 B08 核心设备时序基础模型。</article>
+      <article class="card"><strong>数据驱动</strong>先模拟真空速凝炉完整时序场景，再倒推模型输入输出。</article>
+      <article class="card"><strong>模型路线</strong>用同一任务集比较直接引用、轻量微调和领域自训。</article>
+      <article class="card"><strong>知识成果</strong>专利、论文、数据集、benchmark 和模型资产作为一等产出。</article>
+    </section>
+
+    <section>
+      <h2>1. 最终交付物</h2>
+      <table>
+        <thead><tr><th>交付物</th><th>文件/目录</th><th>完成证据</th></tr></thead>
+        <tbody>
+          <tr><td>模拟数据场景</td><td><code>docs/data-simulation-scenario.html</code></td><td>包含设备、阶段、传感器、退化模式、标签</td></tr>
+          <tr><td>模型 IO 定义</td><td><code>docs/model-io-definition.html</code></td><td>定义输入张量、token、输出头和边界</td></tr>
+          <tr><td>能力矩阵</td><td><code>docs/model-capability-matrix.html</code></td><td>能力映射到任务和评测指标</td></tr>
+          <tr><td>开源适配报告</td><td><code>docs/open-source-model-fit.html</code></td><td>比较 TSPulse、MOMENT、TTM、Chronos、TimesFM、UniTS、Moirai</td></tr>
+          <tr><td>路线决策</td><td><code>docs/model-route-decision.html</code></td><td>给出直接引用、微调、自训 Go/No-Go 条件</td></tr>
+          <tr><td>知识成果计划</td><td><code>docs/knowledge-output-plan.html</code></td><td>包含专利、论文、数据集、benchmark、模型资产</td></tr>
+          <tr><td>标准执行计划</td><td><code>docs/superpowers/plans/2026-05-31-b08-core-timeseries-model-plan.md</code></td><td>包含 TDD 步骤、命令、预期结果和验收门</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>2. 任务分解</h2>
+      <article class="task"><h3>Task 1：项目骨架与配置</h3><p class="files"><code>pyproject.toml</code>、<code>src/b08_model_core/config.py</code>、<code>configs/furnace_fu13_sim.yaml</code></p><ul><li>定义设备、阶段、传感器、物理域、采样周期。</li><li>测试：<code>pytest tests/test_config.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 2：观测数据 schema</h3><p class="files"><code>tasks/schema.py</code></p><ul><li>冻结字段：timestamp、device_id、batch_id、stage、sensor_id、value、unit、domain、quality_flag、degradation_label、failure_proxy。</li><li>测试：<code>pytest tests/test_simulation_schema.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 3：炉次与阶段时间线模拟</h3><p class="files"><code>simulation/furnace_scenario.py</code></p><ul><li>生成 45 天、约 160 炉次，包含 8 个阶段和不规则停机。</li><li>测试：<code>pytest tests/test_furnace_scenario.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 4：多物理域信号生成</h3><p class="files"><code>simulation/signal_generators.py</code></p><ul><li>生成机械、液压、热、气氛、电气、流体六类信号。</li><li>测试：<code>pytest tests/test_signal_generators.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 5：退化与故障代理注入</h3><p class="files"><code>simulation/degradation_modes.py</code></p><ul><li>注入真空泄漏、冷却效率下降、液压密封衰退、泵振动上升、绝缘劣化。</li><li>测试：<code>pytest tests/test_degradation_modes.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 6：模拟数据导出 CLI</h3><p class="files"><code>simulation/export_dataset.py</code>、<code>cli.py</code></p><ul><li>命令：<code>b08-model-core simulate --days 45 --seed 42 --output data/simulated/furnace_fu13_45d.parquet</code></li><li>验收：至少 120 个炉次、15 个传感器。</li></ul></article>
+      <article class="task"><h3>Task 7：窗口与任务数据集构建</h3><p class="files"><code>tasks/window_builder.py</code>、<code>tasks/labels.py</code></p><ul><li>生成 forecasting、imputation、reconstruction、representation、degradation 任务窗口。</li><li>测试：<code>pytest tests/test_window_builder.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 8：模型 IO 规格与输出头</h3><p class="files"><code>model_io/io_spec.py</code>、<code>model_io/output_heads.py</code></p><ul><li>定义 <code>X</code>、<code>mask</code>、<code>delta_t</code>、<code>stage_token</code>、<code>sensor_token</code>、<code>domain_token</code>、<code>device_token</code>。</li><li>测试：<code>pytest tests/test_model_io_spec.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 9：基线模型与指标</h3><p class="files"><code>baselines/</code>、<code>evaluation/metrics.py</code></p><ul><li>实现阶段感知稳健预测、重构 baseline 和评测指标。</li><li>测试：<code>pytest tests/test_baselines.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 10：开源模型适配矩阵</h3><p class="files"><code>adapters/base.py</code>、<code>evaluation/open_source_matrix.py</code></p><ul><li>记录 TSPulse、MOMENT、TTM、Chronos、TimesFM、UniTS、Moirai 的任务支持和路线建议。</li><li>测试：<code>pytest tests/test_open_source_matrix.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 11：轻量 adapter 原型</h3><p class="files"><code>adapters/ttm_adapter.py</code>、<code>moment_adapter.py</code>、<code>chronos_adapter.py</code>、<code>timesfm_adapter.py</code></p><ul><li>外部依赖必须可选；无权重下载时也能给出 unavailable reason。</li><li>测试：<code>pytest tests/test_open_source_matrix.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 12：Benchmark runner</h3><p class="files"><code>evaluation/benchmark.py</code>、<code>reports/model_core_evaluation.md</code></p><ul><li>输出模型、任务、指标、baseline 对比、路线推荐和原因。</li><li>命令：<code>b08-model-core benchmark --dataset data/simulated/furnace_fu13_45d.parquet --output reports/model_core_evaluation.md</code></li></ul></article>
+      <article class="task"><h3>Task 13：模型路线决策报告</h3><p class="files"><code>docs/model-route-decision.html</code>、<code>reports/model_route_decision.md</code></p><ul><li>冻结直接引用、轻量微调、领域自训的进入条件和退出条件。</li></ul></article>
+      <article class="task"><h3>Task 14：知识成果规划</h3><p class="files"><code>knowledge/patent_candidates.py</code>、<code>knowledge/paper_candidates.py</code>、<code>docs/knowledge-output-plan.html</code></p><ul><li>至少 3 个专利候选和 3 个论文候选，每项包含 novelty 和 evidence。</li><li>测试：<code>pytest tests/test_knowledge_outputs.py -v</code></li></ul></article>
+      <article class="task"><h3>Task 15：HTML 评审材料</h3><p class="files"><code>docs/*.html</code></p><ul><li>确保 HTML 是主评审入口，Markdown plan 是执行入口。</li><li>验证所有本地链接可解析。</li></ul></article>
+      <article class="task"><h3>Task 16：最终验证门</h3><p class="files">全项目</p><ul><li>运行 <code>pytest -v</code>。</li><li>运行模拟数据生成和 benchmark。</li><li>搜索验证模型核心关键词覆盖。</li></ul></article>
+    </section>
+
+    <section>
+      <h2>3. 路线决策标准</h2>
+      <table>
+        <thead><tr><th>路线</th><th>进入条件</th><th>退出条件</th><th>最小证据</th></tr></thead>
+        <tbody>
+          <tr><td>直接引用</td><td>zero-shot 或 frozen 表征优于稳健 baseline</td><td>不能表达阶段/物理域上下文或部署过重</td><td>预测、补全、embedding 或异常响应指标</td></tr>
+          <tr><td>轻量微调</td><td>开源 backbone 有帮助，但领域偏差明显</td><td>微调收益小或不稳定</td><td>linear probe、adapter 或 LoRA 带来稳定提升</td></tr>
+          <tr><td>领域自训</td><td>开源模型不满足核心 IO 或退化任务</td><td>数据量或算力不足</td><td>自定义预训练目标优于 baseline 且具备研究新颖性</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. 自审记录</h2>
+      <table>
+        <thead><tr><th>轮次</th><th>发现</th><th>修正</th></tr></thead>
+        <tbody>
+          <tr><td>Round 1：范围</td><td>早期计划偏向系统交付</td><td>明确排除前端、工单、后台、LLM 诊断和生产告警</td></tr>
+          <tr><td>Round 2：可执行性</td><td>任务太像主题列表</td><td>补齐文件、测试、命令、预期结果和验收门</td></tr>
+          <tr><td>Round 3：模型完整性</td><td>开源/微调/自训路线条件不够清楚</td><td>增加三条路线的进入条件、退出条件和最小证据</td></tr>
+          <tr><td>Round 4：知识成果</td><td>专利论文只是口头提到</td><td>加入知识模块和测试，要求专利/论文候选具备 novelty 与 evidence</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="note">完整可执行细节见 <a href="superpowers/plans/2026-05-31-b08-core-timeseries-model-plan.md">Markdown 标准 plan</a>。本页保留为 HTML 评审版。</div>
+    <div class="note warn">执行时请先做 Task 1-8，冻结模拟数据和模型 IO；不要先进入系统接口或业务告警模块。</div>
+    <footer>更新日期：2026-05-31</footer>
+  </main>
+</body>
+</html>

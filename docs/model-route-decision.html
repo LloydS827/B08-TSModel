@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 模型路线决策</title>
+  <style>
+    body{margin:0;background:#f7f8fa;color:#17202a;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{width:min(1120px,calc(100% - 40px));margin:28px auto 48px}a{color:#0f766e;font-weight:650;text-decoration:none}h1{font-size:30px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 12px}.lead{color:#5c6670;max-width:900px}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d9e0e7;border-radius:8px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid #d9e0e7;text-align:left;vertical-align:top}th{background:#eef4ff;color:#17315e}tr:last-child td{border-bottom:0}
+  </style>
+</head>
+<body><main>
+  <p><a href="index.html">返回文档入口</a></p>
+  <h1>模型路线决策</h1>
+  <p class="lead">B08 的关键决策不是“要不要做模型”，而是先用开源、微调，还是自训。决策依据来自同一套模拟数据和真实片段评测。</p>
+
+  <h2>路线对比</h2>
+  <table>
+    <thead><tr><th>路线</th><th>进入条件</th><th>退出条件</th><th>产出</th><th>知识价值</th></tr></thead>
+    <tbody>
+      <tr><td>直接引用</td><td>zero-shot 预测和 embedding 任务稳定优于 baseline</td><td>无法处理阶段语义或退化前兆</td><td>adapter、评测报告、工程引用建议</td><td>较低</td></tr>
+      <tr><td>轻量微调</td><td>开源模型有效但领域偏差明显</td><td>微调收益低或部署复杂度过高</td><td>阶段/传感器 adapter、微调权重、领域评测</td><td>中高，适合专利和应用论文</td></tr>
+      <tr><td>领域自训</td><td>开源模型不满足输入输出和任务需求</td><td>数据规模不足以支撑稳定预训练</td><td>小型设备时序 foundation model、预训练任务、benchmark</td><td>最高，但风险最大</td></tr>
+    </tbody>
+  </table>
+
+  <h2>推荐节奏</h2>
+  <table>
+    <thead><tr><th>阶段</th><th>动作</th><th>目标</th></tr></thead>
+    <tbody>
+      <tr><td>第 1 阶段</td><td>直接引用 + frozen embedding</td><td>快速判断已有模型是否可用</td></tr>
+      <tr><td>第 2 阶段</td><td>轻量微调</td><td>验证阶段 token 和物理域适配是否带来增益</td></tr>
+      <tr><td>第 3 阶段</td><td>领域自训可行性</td><td>只有当开源路线不足时启动</td></tr>
+    </tbody>
+  </table>
+</main></body>
+</html>

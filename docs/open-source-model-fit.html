@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 开源时序模型适配判断</title>
+  <style>
+    body{margin:0;background:#f7f8fa;color:#17202a;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{width:min(1160px,calc(100% - 40px));margin:28px auto 48px}a{color:#0f766e;font-weight:650;text-decoration:none}h1{font-size:30px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 12px}.lead{color:#5c6670;max-width:900px}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d9e0e7;border-radius:8px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid #d9e0e7;text-align:left;vertical-align:top}th{background:#eef4ff;color:#17315e}tr:last-child td{border-bottom:0}.note{background:#e6f4f1;border:1px solid #b7ddd5;border-radius:8px;padding:16px;margin:18px 0}
+  </style>
+</head>
+<body><main>
+  <p><a href="index.html">返回文档入口</a></p>
+  <h1>开源时序模型适配判断</h1>
+  <p class="lead">目标不是列模型清单，而是判断哪些开源模型可以直接引用、哪些适合微调、哪些只能作为 baseline。</p>
+
+  <h2>1. 候选模型</h2>
+  <table>
+    <thead><tr><th>模型</th><th>链接</th><th>优先评测能力</th><th>B08 适配判断</th></tr></thead>
+    <tbody>
+      <tr><td>TSPulse</td><td><a href="https://huggingface.co/ibm-granite/granite-timeseries-tspulse-r1">Hugging Face</a></td><td>表征、异常、预测、补全</td><td>优先评估是否可作为多任务 backbone</td></tr>
+      <tr><td>MOMENT</td><td><a href="https://github.com/moment-timeseries-foundation-model/moment">GitHub</a></td><td>forecasting、imputation、classification、anomaly</td><td>优先评估 embedding 和重构/异常任务</td></tr>
+      <tr><td>TTM</td><td><a href="https://huggingface.co/ibm-granite/granite-timeseries-ttm-r2">Hugging Face</a></td><td>轻量预测、微调、多变量</td><td>优先评估内网部署和预测残差任务</td></tr>
+      <tr><td>Chronos</td><td><a href="https://github.com/amazon-science/chronos-forecasting">GitHub</a></td><td>zero-shot / few-shot forecasting</td><td>适合作为预测路线 baseline</td></tr>
+      <tr><td>TimesFM</td><td><a href="https://github.com/google-research/timesfm">GitHub</a></td><td>长上下文 forecasting、分位数</td><td>适合趋势预测和分位数评测</td></tr>
+      <tr><td>UniTS</td><td><a href="https://github.com/mims-harvard/UniTS">GitHub</a></td><td>统一多任务时序模型</td><td>适合作为研究对照</td></tr>
+      <tr><td>Moirai / Uni2TS</td><td><a href="https://github.com/SalesforceAIResearch/uni2ts">GitHub</a></td><td>概率预测</td><td>适合作为 forecasting 对照</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. 评测模式</h2>
+  <table>
+    <thead><tr><th>模式</th><th>做什么</th><th>通过条件</th></tr></thead>
+    <tbody>
+      <tr><td>Zero-shot</td><td>不训练，直接在模拟数据和真实片段上预测</td><td>显著优于稳健统计 baseline</td></tr>
+      <tr><td>Frozen embedding</td><td>冻结模型，抽 embedding 做阶段/退化聚类</td><td>阶段、退化和设备状态可分</td></tr>
+      <tr><td>Linear probe</td><td>少量标签训练轻量头</td><td>弱标签风险事件可识别</td></tr>
+      <tr><td>Adapter/LoRA</td><td>轻量微调阶段和传感器适配</td><td>比 frozen 模式稳定提升，且部署成本可接受</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">如果没有模型能处理阶段 token、多物理域传感器和退化前兆任务，B08 才进入自训小型领域 foundation model 路线。</div>
+</main></body>
+</html>

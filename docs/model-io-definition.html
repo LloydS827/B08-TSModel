@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 模型输入输出定义</title>
+  <style>
+    body{margin:0;background:#f7f8fa;color:#17202a;font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{width:min(1120px,calc(100% - 40px));margin:28px auto 48px}a{color:#0f766e;font-weight:650;text-decoration:none}h1{font-size:30px;margin:0 0 8px}h2{font-size:21px;margin:28px 0 12px}.lead{color:#5c6670;max-width:900px}.panel{background:#fff;border:1px solid #d9e0e7;border-radius:8px;padding:16px;margin:14px 0}table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #d9e0e7;border-radius:8px;overflow:hidden}th,td{padding:10px 12px;border-bottom:1px solid #d9e0e7;text-align:left;vertical-align:top}th{background:#eef4ff;color:#17315e}tr:last-child td{border-bottom:0}code{background:#eef0f3;padding:1px 5px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  </style>
+</head>
+<body><main>
+  <p><a href="index.html">返回文档入口</a></p>
+  <h1>B08 模型输入输出定义</h1>
+  <p class="lead">本页从真空速凝炉模拟数据倒推基础模型本体的输入、输出和任务头。这里定义的是模型接口，不是预测性维护系统接口。</p>
+
+  <h2>1. 输入张量</h2>
+  <table>
+    <thead><tr><th>输入</th><th>形状</th><th>含义</th><th>为什么需要</th></tr></thead>
+    <tbody>
+      <tr><td><code>X</code></td><td><code>B × L × C</code></td><td>多传感器数值窗口</td><td>保留多物理域耦合</td></tr>
+      <tr><td><code>mask</code></td><td><code>B × L × C</code></td><td>缺失、停机、异常采样标记</td><td>工业采样非均匀，不能硬插值伪装连续</td></tr>
+      <tr><td><code>delta_t</code></td><td><code>B × L</code></td><td>相邻采样时间间隔</td><td>区分运行间隔和长停机</td></tr>
+      <tr><td><code>stage_token</code></td><td><code>B × L</code></td><td>PLC 工艺阶段</td><td>同一传感器在不同阶段物理意义不同</td></tr>
+      <tr><td><code>sensor_token</code></td><td><code>C</code></td><td>传感器身份、单位、量纲</td><td>支持不同点位和新设备迁移</td></tr>
+      <tr><td><code>domain_token</code></td><td><code>C</code></td><td>机械、液压、热、气氛、电气、流体</td><td>帮助模型学习物理域结构</td></tr>
+      <tr><td><code>device_token</code></td><td><code>B</code></td><td>设备身份</td><td>表达设备个体差异</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2. 输出头</h2>
+  <table>
+    <thead><tr><th>输出头</th><th>输出</th><th>对应任务</th><th>评测方式</th></tr></thead>
+    <tbody>
+      <tr><td>Forecasting Head</td><td>未来序列、分位数、置信区间</td><td>预测正常轨迹</td><td>MAE/RMSE、分位数覆盖率</td></tr>
+      <tr><td>Imputation Head</td><td>缺失点补全</td><td>传感器缺失恢复</td><td>人工 mask 重建误差</td></tr>
+      <tr><td>Reconstruction Head</td><td>当前窗口重构</td><td>正常行为建模</td><td>重构误差对退化注入的响应</td></tr>
+      <tr><td>Representation Head</td><td>窗口、阶段、子系统 embedding</td><td>状态表征和检索</td><td>阶段/退化聚类可分性</td></tr>
+      <tr><td>Degradation Head</td><td>异常分数、退化分数、变点、趋势</td><td>损坏前兆识别</td><td>提前量、误报、弱标签 AUC</td></tr>
+      <tr><td>Adaptation Head</td><td>风险概率、RUL</td><td>少量标签后的任务适配</td><td>维修/故障记录对齐验证</td></tr>
+    </tbody>
+  </table>
+
+  <h2>3. 模型边界</h2>
+  <div class="panel">
+    <p>模型本体输出预测、补全、表征、异常/退化分数和适配头。上层系统再把这些结果转成告警、日报、工单或维护建议。</p>
+    <p>因此，B08 的核心验收不是“前端能不能报警”，而是模型是否能在模拟和真实数据上稳定产出有用的时序表征与任务输出。</p>
+  </div>
+</main></body>
+</html>

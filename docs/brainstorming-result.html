@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 模型核心 Brainstorming 成果</title>
+  <style>
+    :root{--bg:#f7f8fa;--panel:#fff;--text:#17202a;--muted:#5c6670;--line:#d9e0e7;--accent:#0f766e;--blue:#1d4ed8;--soft:#e6f4f1;--blueSoft:#eef4ff;--radius:8px}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    main{width:min(1120px,calc(100% - 40px));margin:28px auto 48px} nav{margin-bottom:18px}
+    a{color:var(--accent);font-weight:650;text-decoration:none} a:hover{text-decoration:underline}
+    header{padding-bottom:20px;border-bottom:1px solid var(--line)} h1{margin:0 0 8px;font-size:30px;letter-spacing:0}
+    h2{margin:28px 0 12px;font-size:21px} h3{margin:0 0 8px;font-size:17px} p{margin:0 0 12px}
+    .lead{color:var(--muted);max-width:880px;font-size:16px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+    .card,.decision{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+    .decision{background:var(--soft);border-color:#b7ddd5;margin:18px 0}.pill{display:inline-block;padding:2px 8px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:12px;margin-bottom:8px}
+    table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+    th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left} th{background:var(--blueSoft);color:#17315e} tr:last-child td{border-bottom:0}
+    ul{margin:8px 0 0;padding-left:20px} code{background:#eef0f3;padding:1px 5px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+    footer{margin-top:28px;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <main>
+    <nav><a href="index.html">返回文档入口</a></nav>
+    <header>
+      <h1>B08 模型核心 Brainstorming 成果</h1>
+      <p class="lead">本页按你的反馈重新收束：B08 的主体不是预测性维护系统，而是其中的核心时序基础模型。外部项目需求只用于倒推模型输入、输出、功能边界和开源可引用性。</p>
+    </header>
+
+    <section>
+      <h2>1. 重新定位</h2>
+      <div class="decision">
+        <p><strong>课题对象：</strong>设备时序基础模型本体。</p>
+        <p><strong>直接目的：</strong>用一个具体设备场景的数据模拟和任务定义，判断模型应接收什么、输出什么、具备什么能力，以及现有开源模型能否直接引用、轻量微调或需要自训。</p>
+        <p><strong>最终成果：</strong>不只是项目模块，还包括模型方法、数据集/评测基准、专利点、论文方向和可复用知识资产。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. 两个核心工作</h2>
+      <div class="grid">
+        <article class="card">
+          <span class="pill">工作 A</span>
+          <h3>模拟完整设备时序数据</h3>
+          <p>以真空速凝炉为首个具体场景，模拟炉次、阶段、传感器、多物理域耦合、退化和潜在故障前兆。数据不是为了展示，而是为了倒推模型 IO、任务和评测方式。</p>
+        </article>
+        <article class="card">
+          <span class="pill">工作 B</span>
+          <h3>确定模型路线</h3>
+          <p>围绕同一批模拟数据和真实数据切片，比较直接引用开源模型、领域微调、从零训练三条路线，判断哪条最符合 B08 的课题定位和交付节奏。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 模型 IO 初步定义</h2>
+      <table>
+        <thead><tr><th>层级</th><th>输入</th><th>输出</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>基础预测</td><td>阶段窗口内多传感器序列、mask、时间间隔、阶段 token、传感器 token</td><td>未来序列、分位数、置信区间</td><td>判断正常轨迹与未来偏离</td></tr>
+          <tr><td>表征学习</td><td>单传感器/子系统/设备级窗口</td><td>embedding、相似窗口、状态簇</td><td>支持检索、冷启动和迁移</td></tr>
+          <tr><td>异常与退化</td><td>预测残差、重构误差、历史基线、物理阈值</td><td>异常分数、退化分数、变点、趋势斜率</td><td>形成损坏前兆证据</td></tr>
+          <tr><td>任务适配</td><td>少量故障、维修、专家复核标签</td><td>风险概率、RUL、阶段级健康评分</td><td>后期从基础模型走向维护预测</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. 开源模型判断标准</h2>
+      <table>
+        <thead><tr><th>问题</th><th>判断方式</th><th>可能结论</th></tr></thead>
+        <tbody>
+          <tr><td>能否直接用</td><td>在模拟数据和真实片段上做 zero-shot / frozen embedding 评测</td><td>可直接用于 forecasting、embedding 或 anomaly score 的某一部分</td></tr>
+          <tr><td>是否需要微调</td><td>比较 LoRA/linear probe/adapter 前后效果</td><td>若阶段语义和传感器分布差异大，优先轻量微调</td></tr>
+          <tr><td>是否需要自训</td><td>当开源模型无法处理阶段、多物理域、退化前兆或内网部署约束时启动</td><td>自训目标应是小型领域 foundation model，而非泛化大模型</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>5. 知识成果方向</h2>
+      <ul>
+        <li>专利：阶段感知多物理域设备时序基础模型、基于模拟退化数据的预损坏表征学习、无故障标签下的设备损坏前兆评测方法。</li>
+        <li>论文：工业小样本设备时序基础模型、仿真驱动的预测性维护预训练任务、工艺阶段条件化的多变量时间序列表征学习。</li>
+        <li>数据资产：真空速凝炉模拟数据生成器、阶段化窗口数据集、退化注入基准、开源模型适配评测榜单。</li>
+      </ul>
+    </section>
+
+    <footer>结论：brainstorming 阶段已收束为“数据模拟驱动模型定义 + 开源/微调/自训路线评估 + 知识成果沉淀”。</footer>
+  </main>
+</body>
+</html>
