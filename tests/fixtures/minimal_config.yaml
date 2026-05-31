@@ -1,0 +1,54 @@
+device_id: FU13
+sample_period_seconds: 5
+random_seed: 42
+domains:
+  - mechanical
+  - hydraulic
+  - thermal
+  - atmosphere
+  - electrical
+  - fluid
+stages:
+  - name: 上盖开启
+    min_seconds: 45
+    max_seconds: 90
+  - name: 上盖关闭
+    min_seconds: 40
+    max_seconds: 80
+  - name: 抽真空
+    min_seconds: 900
+    max_seconds: 1800
+  - name: 氩气导入
+    min_seconds: 180
+    max_seconds: 420
+  - name: 溶解
+    min_seconds: 1800
+    max_seconds: 3600
+  - name: 浇筑
+    min_seconds: 240
+    max_seconds: 600
+  - name: 测温
+    min_seconds: 120
+    max_seconds: 300
+  - name: 冷却
+    min_seconds: 1200
+    max_seconds: 2400
+sensors:
+  - id: VIB_PUMP
+    domain: mechanical
+    unit: mm/s
+  - id: HYD_PRESS
+    domain: hydraulic
+    unit: MPa
+  - id: CHAMBER_TEMP
+    domain: thermal
+    unit: C
+  - id: OXYGEN_PPM
+    domain: atmosphere
+    unit: ppm
+  - id: LEAKAGE_CURRENT
+    domain: electrical
+    unit: mA
+  - id: COOLANT_FLOW
+    domain: fluid
+    unit: L/min

@@ -1,0 +1,46 @@
+device_id: FU13
+sample_period_seconds: 5
+days: 45
+target_batches: 160
+stages:
+  - name: 上盖开启
+    min_minutes: 2
+    max_minutes: 5
+  - name: 上盖关闭
+    min_minutes: 1
+    max_minutes: 3
+  - name: 抽真空
+    min_minutes: 18
+    max_minutes: 35
+  - name: 浇筑
+    min_minutes: 4
+    max_minutes: 10
+  - name: 溶解
+    min_minutes: 35
+    max_minutes: 65
+  - name: 测温
+    min_minutes: 2
+    max_minutes: 6
+  - name: 冷却
+    min_minutes: 45
+    max_minutes: 90
+  - name: 氩气导入
+    min_minutes: 5
+    max_minutes: 12
+sensors:
+  - {id: PumpShake1, domain: mechanical, unit: mm/s}
+  - {id: PumpShake2, domain: mechanical, unit: mm/s}
+  - {id: SysSelfPressure, domain: hydraulic, unit: MPa, lower_limit: 0, upper_limit: 12}
+  - {id: CoverPressure, domain: hydraulic, unit: MPa, lower_limit: 0, upper_limit: 12}
+  - {id: ValvePressure, domain: hydraulic, unit: MPa, lower_limit: 0, upper_limit: 12}
+  - {id: CoolingWallTemp1, domain: thermal, unit: C}
+  - {id: CoolingWallTemp2, domain: thermal, unit: C}
+  - {id: CoolingWallTemp3, domain: thermal, unit: C}
+  - {id: CoilReturnTemp1, domain: thermal, unit: C}
+  - {id: CoilReturnTemp2, domain: thermal, unit: C}
+  - {id: MeltingOxygen, domain: atmosphere, unit: percent, lower_limit: 0, upper_limit: 3}
+  - {id: OutletOxygen, domain: atmosphere, unit: percent, lower_limit: 0, upper_limit: 3}
+  - {id: CrucibleLeakCurrent, domain: electrical, unit: mA, lower_limit: 0, upper_limit: 50}
+  - {id: RollerWaterFlow, domain: fluid, unit: L/min}
+  - {id: CylinderWaterFlow, domain: fluid, unit: L/min}
+  - {id: WaterTemp, domain: fluid, unit: C}

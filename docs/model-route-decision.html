@@ -32,5 +32,15 @@
       <tr><td>第 3 阶段</td><td>领域自训可行性</td><td>只有当开源路线不足时启动</td></tr>
     </tbody>
   </table>
+
+  <h2>Go/No-Go 规则</h2>
+  <table>
+    <thead><tr><th>决策点</th><th>Go 条件</th><th>No-Go 条件</th><th>关联知识产出</th></tr></thead>
+    <tbody>
+      <tr><td>直接引用</td><td>冻结模型预测和表征均超过稳健 baseline，且 adapter 可在本地部署</td><td>无法表达阶段 token、传感器 token 或多物理域上下文</td><td>开源适配评测报告</td></tr>
+      <tr><td>轻量微调</td><td>微调后 forecasting、imputation、退化识别至少两类任务稳定提升</td><td>收益小于 baseline 波动，或模型依赖过重</td><td>阶段适配专利、应用论文</td></tr>
+      <tr><td>领域自训</td><td>开源路线无法覆盖模型输入输出，且数据量足以支持预训练任务</td><td>数据不足、计算成本过高，或知识创新不明确</td><td>设备时序基础模型论文、benchmark 数据集</td></tr>
+    </tbody>
+  </table>
 </main></body>
 </html>
