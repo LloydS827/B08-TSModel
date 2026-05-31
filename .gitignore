@@ -1,0 +1,6 @@
+.worktrees/
+__pycache__/
+.pytest_cache/
+*.pyc
+data/simulated/*.parquet
+reports/*.md
