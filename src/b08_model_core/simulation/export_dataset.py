@@ -15,9 +15,10 @@ def simulate_dataset(
     seed: int = 42,
     output: str | Path | None = None,
     output_path: str | Path | None = None,
+    config_path: str | Path = "configs/furnace_fu13_sim.yaml",
 ) -> pd.DataFrame:
-    timeline = generate_batch_timeline(days=days, seed=seed)
-    clean = generate_signals(timeline, seed=seed)
+    timeline = generate_batch_timeline(days=days, seed=seed, config_path=config_path)
+    clean = generate_signals(timeline, seed=seed, config_path=config_path)
     degraded = inject_degradation(clean, seed=seed)
     degraded = degraded.sort_values(["timestamp", "sensor_id"]).reset_index(drop=True)
     validation = validate_observation_frame(degraded)

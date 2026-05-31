@@ -1,32 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Iterable, Optional
+from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
 
-STAGE_NAMES = [
-    "上盖开启",
-    "上盖关闭",
-    "抽真空",
-    "浇筑",
-    "溶解",
-    "测温",
-    "冷却",
-    "氩气导入",
-]
+from b08_model_core.config import load_config
 
-STAGE_DURATION_MINUTES = {
-    "上盖开启": (2, 5),
-    "上盖关闭": (1, 3),
-    "抽真空": (18, 35),
-    "浇筑": (4, 10),
-    "溶解": (35, 65),
-    "测温": (2, 6),
-    "冷却": (45, 90),
-    "氩气导入": (5, 12),
-}
+DEFAULT_CONFIG_PATH = Path("configs/furnace_fu13_sim.yaml")
 
 
 def _rng(seed: Optional[int]) -> np.random.Generator:
@@ -34,21 +17,24 @@ def _rng(seed: Optional[int]) -> np.random.Generator:
 
 
 def generate_batch_timeline(
-    days: int = 45,
+    days: int | None = 45,
     seed: int = 42,
     start: datetime | None = None,
     target_batches: int | None = None,
+    config_path: str | Path = DEFAULT_CONFIG_PATH,
 ) -> pd.DataFrame:
     """Generate stage intervals for a furnace with irregular idle gaps."""
+    cfg = load_config(config_path)
     random = _rng(seed)
     if start is None:
         start = datetime(2026, 4, 1, 8, 0, tzinfo=timezone(timedelta(hours=8)))
 
+    days = cfg.days if days is None else days
     end = start + timedelta(days=days)
     current = start
     rows = []
     batch_index = 1
-    target = target_batches or max(1, int(days * 3.55))
+    target = target_batches or cfg.target_batches or max(1, int(days * 3.55))
 
     while current < end and batch_index <= target:
         if batch_index > 1:
@@ -69,8 +55,9 @@ def generate_batch_timeline(
                 break
 
         batch_id = f"B{batch_index:04d}"
-        for stage in STAGE_NAMES:
-            low, high = STAGE_DURATION_MINUTES[stage]
+        for stage_cfg in cfg.stages:
+            stage = stage_cfg.name
+            low, high = stage_cfg.min_minutes, stage_cfg.max_minutes
             minutes = float(random.uniform(low, high))
             stage_start = current
             stage_end = min(stage_start + timedelta(minutes=minutes), end)

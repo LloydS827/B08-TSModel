@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List
-
 import numpy as np
 import pandas as pd
 
@@ -30,8 +28,12 @@ def build_model_windows(
     windows: list[ModelWindow] = []
     sensors = sorted(df["sensor_id"].unique())
     domain_map = df.drop_duplicates("sensor_id").set_index("sensor_id")["domain"].to_dict()
+    group_keys = ["device_id", "batch_id"] if allow_cross_stage else ["device_id", "batch_id", "stage"]
 
-    for (device_id, batch_id, stage), group in df.groupby(["device_id", "batch_id", "stage"], sort=False):
+    for _, group in df.groupby(group_keys, sort=False):
+        device_id = group["device_id"].iloc[0]
+        batch_id = group["batch_id"].iloc[0]
+        stage = "cross_stage" if allow_cross_stage else group["stage"].iloc[0]
         if stage == "停机" and not allow_cross_stage:
             continue
         pivot = (
@@ -47,6 +49,7 @@ def build_model_windows(
         timestamps = pd.to_datetime(pivot.index)
         dt = timestamps.to_series().diff().dt.total_seconds().fillna(0).to_numpy(dtype=float)
         labels = group.groupby("timestamp")["degradation_label"].agg(lambda x: x.iloc[0]).reindex(pivot.index)
+        stage_by_timestamp = group.groupby("timestamp")["stage"].agg(lambda x: x.iloc[0]).reindex(pivot.index)
         for start in range(0, len(values) - context_length - prediction_length + 1, stride):
             end = start + context_length
             y_end = end + prediction_length
@@ -59,7 +62,7 @@ def build_model_windows(
                     X=values[start:end],
                     mask=mask[start:end],
                     delta_t=dt[start:end],
-                    stage_token=np.array([stage] * context_length),
+                    stage_token=stage_by_timestamp.iloc[start:end].to_numpy(dtype=object),
                     sensor_token=sensors,
                     domain_token=[domain_map[sensor] for sensor in sensors],
                     device_token=device_id,

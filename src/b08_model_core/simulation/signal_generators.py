@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, Iterable, Optional
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from b08_model_core.simulation.furnace_scenario import expand_stage_samples
+from b08_model_core.config import load_config
+from b08_model_core.simulation.furnace_scenario import DEFAULT_CONFIG_PATH, expand_stage_samples
 
 
 @dataclass(frozen=True)
@@ -16,7 +17,7 @@ class SensorMeta:
     unit: str
 
 
-SENSORS = [
+DEFAULT_SENSORS = [
     SensorMeta("PumpShake1", "mechanical", "mm/s"),
     SensorMeta("PumpShake2", "mechanical", "mm/s"),
     SensorMeta("SysSelfPressure", "hydraulic", "MPa"),
@@ -34,6 +35,11 @@ SENSORS = [
     SensorMeta("CylinderWaterFlow", "fluid", "L/min"),
     SensorMeta("WaterTemp", "fluid", "C"),
 ]
+
+
+def _sensors_from_config(config_path: str | Path) -> list[SensorMeta]:
+    cfg = load_config(config_path)
+    return [SensorMeta(sensor.id, sensor.domain, sensor.unit) for sensor in cfg.sensors]
 
 
 def _stage_load(stage: str) -> float:
@@ -120,18 +126,27 @@ def _values_for(sensor: SensorMeta, stage: str, pos: np.ndarray, rng: np.random.
     return noise
 
 
-def generate_signals(timeline: pd.DataFrame, seed: int = 42, device_id: str = "FU13", include_idle: bool = False) -> pd.DataFrame:
+def generate_signals(
+    timeline: pd.DataFrame,
+    seed: int = 42,
+    device_id: str | None = None,
+    include_idle: bool = False,
+    config_path: str | Path = DEFAULT_CONFIG_PATH,
+) -> pd.DataFrame:
+    cfg = load_config(config_path)
+    sensors = _sensors_from_config(config_path) or DEFAULT_SENSORS
     rng = np.random.default_rng(seed)
-    samples = expand_stage_samples(timeline, include_idle=include_idle)
+    samples = expand_stage_samples(timeline, sample_period_seconds=cfg.sample_period_seconds, include_idle=include_idle)
     frames = []
+    device = device_id or cfg.device_id
     for (_batch_id, stage), segment in samples.groupby(["batch_id", "stage"], sort=False):
         pos = segment["stage_position"].to_numpy(dtype=float)
-        for sensor in SENSORS:
+        for sensor in sensors:
             frames.append(
                 pd.DataFrame(
                     {
                         "timestamp": segment["timestamp"].to_numpy(),
-                        "device_id": device_id,
+                        "device_id": device,
                         "batch_id": segment["batch_id"].to_numpy(),
                         "stage": stage,
                         "sensor_id": sensor.sensor_id,

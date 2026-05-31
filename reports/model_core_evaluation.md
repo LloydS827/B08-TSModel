@@ -1,6 +1,6 @@
 # B08 Model Core Evaluation
 
-Dataset summary: rows=5179200, batches=159, sensors=16, stages=8, failure_proxy_rows=159886
+Dataset summary: rows=5213392, batches=160, sensors=16, stages=8, failure_proxy_rows=160455
 
 The stage-aware robust median/MAD forecaster is the baseline comparison for forecasting and interval coverage.
 
@@ -22,10 +22,11 @@ Related route report: reports/model_route_decision.md
 | model name | task | metric | baseline comparison | route recommendation | reason |
 | --- | --- | --- | --- | --- | --- |
 | RobustStageForecaster | forecasting | MAE, interval_coverage | baseline | baseline | Minimum delivery bar for the model-core sandbox. |
+| FlowState | forecasting | direct_use_score, fine_tune_score | 0.76 direct / 0.80 fine-tune vs baseline | direct_reuse | Useful as an additional forecast-first comparator before custom pretraining. |
 | TSPulse | forecasting, representation, anomaly | direct_use_score, fine_tune_score | 0.62 direct / 0.82 fine-tune vs baseline | fine_tune | Promising backbone, but B08 stage/domain conditioning needs adaptation. |
 | MOMENT | forecasting, imputation, classification, representation | direct_use_score, fine_tune_score | 0.70 direct / 0.86 fine-tune vs baseline | fine_tune | Covers many heads, but degradation labels require project-specific heads. |
 | TTM | forecasting | direct_use_score, fine_tune_score | 0.75 direct / 0.78 fine-tune vs baseline | direct_reuse | Useful as a frozen forecasting gate before custom work. |
-| Chronos | forecasting | direct_use_score, fine_tune_score | 0.58 direct / 0.60 fine-tune vs baseline | baseline_only | Limited fit for multivariate equipment-state representation. |
+| Chronos | forecasting | direct_use_score, fine_tune_score | 0.72 direct / 0.75 fine-tune vs baseline | direct_reuse | Worth evaluating for forecasting, but not sufficient for full B08 IO contract. |
 | TimesFM | forecasting | direct_use_score, fine_tune_score | 0.74 direct / 0.76 fine-tune vs baseline | direct_reuse | Good for forecast head, insufficient for full B08 IO contract. |
 | UniTS | forecasting, classification, imputation | direct_use_score, fine_tune_score | 0.64 direct / 0.83 fine-tune vs baseline | fine_tune | Needs adapter work but maps well to the B08 task mix. |
 | Moirai | forecasting | direct_use_score, fine_tune_score | 0.72 direct / 0.79 fine-tune vs baseline | direct_reuse | Good for forecasting benchmark before custom heads are justified. |

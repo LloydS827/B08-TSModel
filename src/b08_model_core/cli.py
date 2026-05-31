@@ -15,6 +15,7 @@ def main(argv: list[str] | None = None) -> int:
     simulate.add_argument("--days", type=int, default=45)
     simulate.add_argument("--seed", type=int, default=42)
     simulate.add_argument("--output", required=True)
+    simulate.add_argument("--config", default="configs/furnace_fu13_sim.yaml")
 
     benchmark = sub.add_parser("benchmark")
     benchmark.add_argument("--dataset", required=True)
@@ -22,7 +23,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
-        simulate_dataset(days=args.days, seed=args.seed, output=args.output)
+        simulate_dataset(days=args.days, seed=args.seed, output=args.output, config_path=args.config)
         return 0
     if args.command == "benchmark":
         run_benchmark(args.dataset, args.output)
