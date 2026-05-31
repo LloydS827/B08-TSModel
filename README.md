@@ -169,6 +169,7 @@ validation CLI 的约定：
 ## 关键目录
 
 ```text
+details.md                              # 面向用户和非技术人员的项目进展台账
 configs/
   real_data_schema_map.template.yaml   # 真实数据映射模板
 docs/
@@ -188,12 +189,33 @@ tests/                                 # 回归测试
 
 ## 文档入口
 
+- [项目进展说明](details.md)
 - [docs/index.html](docs/index.html)
 - [模型输入输出定义](docs/model-io-definition.html)
 - [模型路线决策](docs/model-route-decision.html)
 - [开源时序基础模型调研](docs/调研资料/开源时序基础模型调研.md)
 - [真实数据 Schema Map](docs/reviews/real-data-schema-map.md)
 - [Code Review 与下一阶段计划](docs/reviews/2026-05-31-code-review-and-next-stage.md)
+
+## Agent 维护规则
+
+`details.md` 是项目进展台账，面向用户、管理者和非技术人员。后续 Agent 在完成任何实质性项目推进后，都要检查并及时更新该文件。
+
+必须检查 `details.md` 的场景：
+
+- 新增或改变了项目能力，例如真实数据接入、模型实验、评测指标、报告输出。
+- 改变了当前阶段判断，例如从沙盒阶段进入真实数据验证阶段。
+- 改变了下一步计划、优先级、路线选择或 Go/No-Go 判断。
+- 发现新的风险、阻塞项、数据问题或模型适配问题。
+- 完成了一轮关键验证、code review、实验、提交或推送。
+
+更新 `details.md` 时遵守：
+
+- 用非技术人员能理解的语言说明项目现在在做什么。
+- 分清“已经具备的能力”和“后续需要补充的能力”。
+- 更新“下一阶段计划”和“近期更新记录”。
+- 保留上下文，不只写一句技术提交说明。
+- 如果本轮工作不影响项目进展，也要在最终回复中说明已检查且无需更新。
 
 ## 当前验收口径
 
