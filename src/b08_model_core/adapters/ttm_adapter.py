@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Callable
+import os
+import tempfile
+from typing import Callable, Iterator, Protocol
 
 import numpy as np
 
@@ -23,6 +26,96 @@ class PreparedTTMWindows:
     channel_scale: np.ndarray
 
 
+class TTMRuntimeProtocol(Protocol):
+    def predict(
+        self,
+        prepared: PreparedTTMWindows,
+        checkpoint: str,
+        prediction_length: int,
+        allow_download: bool,
+        model_cache_dir: str | None,
+    ) -> np.ndarray:
+        ...
+
+
+@contextmanager
+def hf_runtime_environment(model_cache_dir: str | None, allow_download: bool) -> Iterator[None]:
+    previous_hf_home = os.environ.get("HF_HOME")
+    previous_hf_offline = os.environ.get("HF_HUB_OFFLINE")
+    had_hf_home = "HF_HOME" in os.environ
+    had_hf_offline = "HF_HUB_OFFLINE" in os.environ
+
+    try:
+        if model_cache_dir is not None:
+            os.environ["HF_HOME"] = model_cache_dir
+        if allow_download:
+            os.environ.pop("HF_HUB_OFFLINE", None)
+        else:
+            os.environ["HF_HUB_OFFLINE"] = "1"
+        yield
+    finally:
+        if had_hf_home:
+            os.environ["HF_HOME"] = previous_hf_home or ""
+        else:
+            os.environ.pop("HF_HOME", None)
+        if had_hf_offline:
+            os.environ["HF_HUB_OFFLINE"] = previous_hf_offline or ""
+        else:
+            os.environ.pop("HF_HUB_OFFLINE", None)
+
+
+class TTMRuntime:
+    def predict(
+        self,
+        prepared: PreparedTTMWindows,
+        checkpoint: str,
+        prediction_length: int,
+        allow_download: bool,
+        model_cache_dir: str | None,
+    ) -> np.ndarray:
+        with hf_runtime_environment(model_cache_dir, allow_download):
+            import torch
+            from torch.utils.data import Dataset
+            from transformers import Trainer, TrainingArguments
+            from tsfm_public.toolkit.get_model import get_model
+
+            class _PreparedDataset(Dataset):
+                def __len__(self) -> int:
+                    return int(prepared.past_values.shape[0])
+
+                def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
+                    return {
+                        "past_values": torch.tensor(prepared.past_values[index], dtype=torch.float32),
+                        "past_observed_mask": torch.tensor(
+                            prepared.past_observed_mask[index],
+                            dtype=torch.bool,
+                        ),
+                    }
+
+            try:
+                model = get_model(
+                    checkpoint,
+                    context_length=int(prepared.past_values.shape[1]),
+                    prediction_length=prediction_length,
+                )
+            except TypeError:
+                model = get_model(checkpoint)
+
+            training_args = TrainingArguments(
+                output_dir=tempfile.mkdtemp(prefix="b08-ttm-runtime-"),
+                per_device_eval_batch_size=prepared.past_values.shape[0],
+                report_to=[],
+            )
+            trainer = Trainer(model=model, args=training_args)
+            prediction_output = trainer.predict(_PreparedDataset())
+            predictions = prediction_output.predictions
+            if isinstance(predictions, tuple):
+                predictions = predictions[0]
+            if isinstance(predictions, dict):
+                predictions = predictions.get("prediction_outputs", next(iter(predictions.values())))
+            return np.asarray(predictions, dtype=float)
+
+
 class TTMForecastAdapter:
     name = "TTM"
     adapter_name = "ttm"
@@ -31,9 +124,11 @@ class TTMForecastAdapter:
         self,
         checkpoint: str = DEFAULT_TTM_CHECKPOINT,
         dependency_checker: Callable[[str], bool] = dependency_available,
+        runtime_factory: Callable[[], TTMRuntimeProtocol] = TTMRuntime,
     ) -> None:
         self.checkpoint = checkpoint
         self.dependency_checker = dependency_checker
+        self.runtime_factory = runtime_factory
 
     def dependency_status(self) -> tuple[bool, str]:
         missing = [module for module in REQUIRED_TTM_MODULES if not self.dependency_checker(module)]
@@ -123,15 +218,15 @@ class TTMForecastAdapter:
         try:
             prepared = self.prepare_windows(windows, context_length, prediction_length)
             return self._predict_with_ttm(prepared, allow_download=allow_download, model_cache_dir=model_cache_dir)
-        except NotImplementedError as exc:
+        except ValueError as exc:
             return FoundationForecastResult(
                 model_name=self.name,
                 adapter_name=self.adapter_name,
-                status=FoundationModelStatus.RUNTIME_FAILED,
+                status=FoundationModelStatus.UNSUPPORTED_WINDOW_SHAPE,
                 reason=str(exc),
                 metadata={"checkpoint": self.checkpoint, "allow_download": allow_download},
                 dependency_status=dependency_status,
-                weight_status="not_attempted",
+                weight_status="unknown",
                 cache_dir=model_cache_dir,
             )
 
@@ -142,7 +237,73 @@ class TTMForecastAdapter:
         allow_download: bool,
         model_cache_dir: str | None,
     ) -> FoundationForecastResult:
-        raise NotImplementedError("TTM runtime inference is intentionally deferred to Task 4")
+        try:
+            runtime = self.runtime_factory()
+            scaled_prediction = np.asarray(
+                runtime.predict(
+                    prepared,
+                    self.checkpoint,
+                    prepared.future_values.shape[1],
+                    allow_download,
+                    model_cache_dir,
+                ),
+                dtype=float,
+            )
+        except Exception as exc:
+            status, weight_status = self._runtime_error_status(exc)
+            return FoundationForecastResult(
+                model_name=self.name,
+                adapter_name=self.adapter_name,
+                status=status,
+                reason=str(exc),
+                metadata={"checkpoint": self.checkpoint, "allow_download": allow_download},
+                dependency_status="installed",
+                weight_status=weight_status,
+                cache_dir=model_cache_dir,
+            )
+
+        if scaled_prediction.shape != prepared.future_values.shape:
+            return FoundationForecastResult(
+                model_name=self.name,
+                adapter_name=self.adapter_name,
+                status=FoundationModelStatus.UNSUPPORTED_WINDOW_SHAPE,
+                reason=(
+                    "TTM runtime prediction shape mismatch: "
+                    f"expected {prepared.future_values.shape}, got {scaled_prediction.shape}"
+                ),
+                metadata={"checkpoint": self.checkpoint, "allow_download": allow_download},
+                dependency_status="installed",
+                weight_status="unknown",
+                cache_dir=model_cache_dir,
+            )
+
+        y_hat = (
+            scaled_prediction * prepared.channel_scale[:, np.newaxis, :]
+            + prepared.channel_center[:, np.newaxis, :]
+        )
+        return FoundationForecastResult(
+            model_name=self.name,
+            adapter_name=self.adapter_name,
+            status=FoundationModelStatus.AVAILABLE_AND_RAN,
+            y_hat=y_hat,
+            metadata={"checkpoint": self.checkpoint, "allow_download": allow_download},
+            io_coverage={
+                "point_forecast": True,
+                "prediction_interval": False,
+                "sensor_token_preserved": True,
+            },
+            dependency_status="installed",
+            weight_status="available",
+            cache_dir=model_cache_dir,
+        )
+
+    @staticmethod
+    def _runtime_error_status(exc: Exception) -> tuple[FoundationModelStatus, str]:
+        message = str(exc).lower()
+        blocked_markers = ("offline", "download", "cache", "connection", "401", "403", "not found")
+        if any(marker in message for marker in blocked_markers):
+            return FoundationModelStatus.MISSING_OR_BLOCKED_WEIGHTS, "blocked_or_unknown"
+        return FoundationModelStatus.RUNTIME_FAILED, "unknown"
 
     @staticmethod
     def _masked_channel_stats(values: np.ndarray, observed_mask: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

@@ -18,6 +18,12 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]
+foundation-ttm = [
+  "granite-tsfm",
+  "torch",
+  "transformers",
+  "huggingface_hub",
+]
 
 [project.scripts]
 b08-model-core = "b08_model_core.cli:main"
