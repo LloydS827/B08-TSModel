@@ -13,7 +13,7 @@ from b08_model_core.foundation.results import FoundationForecastResult, Foundati
 
 DEFAULT_TTM_CHECKPOINT = "ibm-granite/granite-timeseries-ttm-r2"
 DEFAULT_TTM_FREQUENCY_TOKEN = 0
-REQUIRED_TTM_MODULES = ("tsfm_public", "transformers")
+REQUIRED_TTM_MODULES = ("tsfm_public", "torch", "transformers", "huggingface_hub")
 
 
 @dataclass

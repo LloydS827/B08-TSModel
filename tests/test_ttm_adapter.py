@@ -70,7 +70,7 @@ def test_missing_dependency_predict_returns_result_without_weight_imports():
     assert result.dependency_status.startswith("missing:")
     assert result.weight_status == "not_attempted"
     assert result.cache_dir == "/private/tmp/b08-model-cache"
-    assert checked_modules == ["tsfm_public", "transformers"]
+    assert checked_modules == ["tsfm_public", "torch", "transformers", "huggingface_hub"]
 
 
 def test_injected_runtime_predict_succeeds_and_unscales_output():
