@@ -25,7 +25,7 @@ Use `configs/real_data_schema_map.template.yaml` as the starting point.
 Run:
 
 ```bash
-.venv/bin/b08-model-core real-data validate \
+uv run b08-model-core real-data validate \
   --input path/to/real_export.csv \
   --schema-map configs/real_data_schema_map.template.yaml \
   --output reports/real_data_validation.md

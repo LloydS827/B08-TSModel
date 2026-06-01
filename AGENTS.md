@@ -20,6 +20,7 @@ B08 是设备预测性维护项目中的“时序基础模型核心沙盒”。
 
 - `README.md`：项目入口，说明项目定位、当前阶段、运行命令和 Agent 维护规则。
 - `details.md`：项目进展台账，面向用户、管理者和非技术人员。
+- `uv.lock`：uv 生成的 Python 依赖锁文件。
 - `docs/index.html`：文档总入口。
 - `configs/real_data_schema_map.template.yaml`：真实数据映射模板。
 - `src/b08_model_core/real_data/`：真实数据 schema map 和 validation。
@@ -73,6 +74,7 @@ B08 是设备预测性维护项目中的“时序基础模型核心沙盒”。
 ### 4. 小步修改，避免过度设计
 
 - 优先延续现有文件结构和命令风格。
+- Python 环境默认使用 `uv`：同步依赖用 `uv sync --extra dev`，运行命令用 `uv run ...`。
 - 不做与当前任务无关的重构。
 - 不主动引入大型依赖。
 - 开源大模型相关依赖保持 optional，不能让基础测试依赖外部权重下载。
@@ -83,10 +85,10 @@ B08 是设备预测性维护项目中的“时序基础模型核心沙盒”。
 
 - 文档改动：至少运行 Markdown/链接/whitespace 检查。
 - 代码改动：运行相关 targeted tests。
-- 影响核心流程时：运行完整 pytest。
+- 影响核心流程时：运行完整测试，优先使用 `uv run pytest -q`。
 - 提交前：运行 `git diff --check`，确认没有无关文件 staged。
 
-不要把 `.venv/`、`.pytest_cache/`、`__pycache__/`、生成的 parquet 数据或其他忽略产物提交。
+不要把 `.venv/`、`.pytest_cache/`、`__pycache__/`、生成的 parquet 数据或其他忽略产物提交。依赖变更时应更新并提交 `uv.lock`。
 
 ## 当前阶段结论
 

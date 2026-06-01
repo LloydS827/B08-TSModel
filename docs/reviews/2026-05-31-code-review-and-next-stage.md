@@ -37,7 +37,7 @@ Findings addressed in this review pass:
 Current verification command:
 
 ```bash
-.venv/bin/python -m pytest -v
+uv run pytest -v
 ```
 
 Current status:
@@ -76,8 +76,8 @@ Goal: preserve a stable baseline before importing external model dependencies.
 Use:
 
 ```bash
-.venv/bin/b08-model-core simulate --days 45 --seed 42 --output data/simulated/furnace_fu13_45d.parquet
-.venv/bin/b08-model-core benchmark --dataset data/simulated/furnace_fu13_45d.parquet --output reports/model_core_evaluation.md
+uv run b08-model-core simulate --days 45 --seed 42 --output data/simulated/furnace_fu13_45d.parquet
+uv run b08-model-core benchmark --dataset data/simulated/furnace_fu13_45d.parquet --output reports/model_core_evaluation.md
 ```
 
 Locked metrics:
