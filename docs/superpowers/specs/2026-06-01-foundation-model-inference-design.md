@@ -167,6 +167,27 @@ Model weights should be local-only:
 - Ignore `models/`, `hf_cache/`, `.cache/`, and generated model output directories.
 - Do not commit downloaded checkpoints, generated parquet files, or transient experiment reports.
 
+### TTM Download Semantics After Review
+
+TTM setup has three separate layers. Installing the optional package is not the same as downloading model weights.
+
+1. Dependency installation: `uv sync --extra dev --extra foundation-ttm` installs optional Python packages. It must not download model weights by itself.
+2. Cache location: `--model-cache-dir hf_cache` or `HF_HOME=hf_cache` chooses where Hugging Face reads and writes model files for this run. The cache directory is local-only and ignored by Git.
+3. Download permission: `--allow-download` permits the adapter to fetch missing weights. `--no-download` forces offline/cache-only behavior.
+
+Expected behavior:
+
+| Situation | Report status | CLI result |
+| --- | --- | --- |
+| Baseline mode | `skipped_by_user` or baseline-only report | exit `0` |
+| TTM selected, optional packages missing | `missing_dependency` | exit `1`, report still written |
+| TTM selected, packages installed, `--no-download`, weights already cached | `available_and_ran` if inference succeeds | exit `0` |
+| TTM selected, packages installed, `--no-download`, weights not cached | `missing_or_blocked_weights` | exit `1`, report still written |
+| TTM selected, packages installed, `--allow-download` | `available_and_ran` if download/load/inference succeeds | exit `0` |
+| TTM selected, download or load fails | `missing_or_blocked_weights` or `runtime_failed` | exit `1`, report still written |
+
+Implementation note: `HF_HOME` and `HF_HUB_OFFLINE` should be set only around the TTM runtime call and restored afterwards. `--model-cache-dir` is an explicit per-run override and should not be implemented with `setdefault`.
+
 README should explicitly state that weights are local artifacts and must not be uploaded to GitHub.
 
 ## Data Conversion
@@ -202,7 +223,7 @@ Recommended status values:
 | --- | --- |
 | `available_and_ran` | dependencies and weights were available, inference completed |
 | `missing_dependency` | optional dependency is not installed |
-| `missing_or_blocked_weights` | dependency exists but weights cannot be downloaded or loaded |
+| `missing_or_blocked_weights` | dependency exists but weights are absent, download is disabled, or weights cannot be downloaded or loaded |
 | `unsupported_window_shape` | model cannot consume the requested context, horizon, or channels |
 | `runtime_failed` | model loaded but inference failed |
 | `skipped_by_user` | user selected baseline-only mode |

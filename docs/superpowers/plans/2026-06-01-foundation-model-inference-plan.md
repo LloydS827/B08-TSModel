@@ -94,6 +94,32 @@ uv sync --extra dev --extra foundation-ttm
 
 If `uv` is unavailable in the local shell, install or expose `uv` before implementation. Do not replace project documentation with non-uv commands.
 
+## TTM Download and Cache Design Review
+
+The download design has been reviewed because it is easy to misread. Treat TTM setup as three different layers:
+
+1. **Install optional code dependencies.** `uv sync --extra dev --extra foundation-ttm` installs packages such as `granite-tsfm`, `torch`, `transformers`, and `huggingface_hub`. It must not be described as downloading model weights.
+2. **Choose local cache location.** `--model-cache-dir hf_cache` or `HF_HOME=hf_cache` tells Hugging Face where to read/write model files for this run. The cache stays local and is ignored by Git.
+3. **Permit or block network download.** `--allow-download` may fetch missing weights into the cache. `--no-download` means offline/cache-only mode: if weights are already cached, TTM may still run; if not, the report status is `missing_or_blocked_weights`.
+
+Expected status contract:
+
+| Condition | `FoundationModelStatus` | Exit code |
+| --- | --- | --- |
+| Baseline mode | `skipped_by_user` or baseline-only path | `0` |
+| TTM selected, optional packages missing | `missing_dependency` | `1` |
+| TTM selected, packages installed, offline cache hit | `available_and_ran` | `0` |
+| TTM selected, packages installed, offline cache miss | `missing_or_blocked_weights` | `1` |
+| TTM selected, `--allow-download`, download/load/inference succeeds | `available_and_ran` | `0` |
+| TTM selected, download/load fails | `missing_or_blocked_weights` or `runtime_failed` | `1` |
+
+Implementation requirements:
+
+- Set `HF_HOME` and `HF_HUB_OFFLINE` only within the TTM runtime call and restore the previous environment afterwards.
+- Treat `--model-cache-dir` as an explicit per-run override; do not use `os.environ.setdefault("HF_HOME", ...)`.
+- Do not invent a separate `download_blocked` model status. Use `missing_or_blocked_weights` for the formal status and add details in `reason` and `weight_status`.
+- Keep baseline-only tests free of TTM imports, optional packages, model downloads, and Hugging Face cache access.
+
 ## Task 1: Foundation Result and Metric Contract
 
 **Files:**
@@ -810,53 +836,66 @@ Add a runtime class that imports heavy dependencies only inside `predict`:
 ```python
 class TTMRuntime:
     def predict(self, prepared: PreparedTTMWindows, checkpoint: str, prediction_length: int, allow_download: bool, model_cache_dir: str | Path | None) -> np.ndarray:
+        import os
         import tempfile
+        from contextlib import contextmanager
 
-        import torch
-        from torch.utils.data import Dataset
-        from transformers import Trainer, TrainingArguments
-        from tsfm_public.toolkit.get_model import get_model
+        @contextmanager
+        def hf_environment():
+            keys = ("HF_HOME", "HF_HUB_OFFLINE")
+            previous = {key: os.environ.get(key) for key in keys}
+            try:
+                if model_cache_dir is not None:
+                    os.environ["HF_HOME"] = str(model_cache_dir)
+                if not allow_download:
+                    os.environ["HF_HUB_OFFLINE"] = "1"
+                else:
+                    os.environ.pop("HF_HUB_OFFLINE", None)
+                yield
+            finally:
+                for key, value in previous.items():
+                    if value is None:
+                        os.environ.pop(key, None)
+                    else:
+                        os.environ[key] = value
 
-        class WindowDataset(Dataset):
-            def __len__(self):
-                return len(prepared.past_values)
+        with hf_environment():
+            import torch
+            from torch.utils.data import Dataset
+            from transformers import Trainer, TrainingArguments
+            from tsfm_public.toolkit.get_model import get_model
 
-            def __getitem__(self, index):
-                return {
-                    "past_values": torch.as_tensor(prepared.past_values[index], dtype=torch.float32),
-                    "past_observed_mask": torch.as_tensor(prepared.past_observed_mask[index], dtype=torch.bool),
-                    "future_values": torch.as_tensor(prepared.future_values[index], dtype=torch.float32),
-                }
+            class WindowDataset(Dataset):
+                def __len__(self):
+                    return len(prepared.past_values)
 
-        if model_cache_dir is not None:
-            import os
+                def __getitem__(self, index):
+                    return {
+                        "past_values": torch.as_tensor(prepared.past_values[index], dtype=torch.float32),
+                        "past_observed_mask": torch.as_tensor(prepared.past_observed_mask[index], dtype=torch.bool),
+                        "future_values": torch.as_tensor(prepared.future_values[index], dtype=torch.float32),
+                    }
 
-            os.environ.setdefault("HF_HOME", str(model_cache_dir))
-        if not allow_download:
-            import os
-
-            os.environ.setdefault("HF_HUB_OFFLINE", "1")
-
-        model = get_model(
-            checkpoint,
-            context_length=prepared.past_values.shape[1],
-            prediction_length=prediction_length,
-            freq_prefix_tuning=False,
-            freq=None,
-            prefer_l1_loss=False,
-            prefer_longer_context=True,
-        )
-        trainer = Trainer(
-            model=model,
-            args=TrainingArguments(
-                output_dir=tempfile.mkdtemp(prefix="b08-ttm-"),
-                per_device_eval_batch_size=min(16, max(1, len(prepared.past_values))),
-                report_to="none",
-            ),
-        )
-        output = trainer.predict(WindowDataset())
-        predictions = output.predictions[0] if isinstance(output.predictions, (tuple, list)) else output.predictions
-        return np.asarray(predictions, dtype=float)
+            model = get_model(
+                checkpoint,
+                context_length=prepared.past_values.shape[1],
+                prediction_length=prediction_length,
+                freq_prefix_tuning=False,
+                freq=None,
+                prefer_l1_loss=False,
+                prefer_longer_context=True,
+            )
+            trainer = Trainer(
+                model=model,
+                args=TrainingArguments(
+                    output_dir=tempfile.mkdtemp(prefix="b08-ttm-"),
+                    per_device_eval_batch_size=min(16, max(1, len(prepared.past_values))),
+                    report_to="none",
+                ),
+            )
+            output = trainer.predict(WindowDataset())
+            predictions = output.predictions[0] if isinstance(output.predictions, (tuple, list)) else output.predictions
+            return np.asarray(predictions, dtype=float)
 ```
 
 Update `TTMForecastAdapter.__init__`:
@@ -906,7 +945,12 @@ Implement `_predict_with_ttm`:
             )
         except Exception as exc:
             message = str(exc)
-            status = FoundationModelStatus.MISSING_OR_BLOCKED_WEIGHTS if "offline" in message.lower() or "download" in message.lower() else FoundationModelStatus.RUNTIME_FAILED
+            blocked_markers = ("offline", "download", "cache", "connection", "401", "403", "not found")
+            status = (
+                FoundationModelStatus.MISSING_OR_BLOCKED_WEIGHTS
+                if any(marker in message.lower() for marker in blocked_markers)
+                else FoundationModelStatus.RUNTIME_FAILED
+            )
             return FoundationForecastResult(
                 model_name=self.name,
                 adapter_name=self.adapter_name,

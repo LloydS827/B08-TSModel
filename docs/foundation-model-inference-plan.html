@@ -296,13 +296,66 @@
         <article class="panel">
           <span class="tag danger">完成标准</span>
           <strong><code>available_and_ran</code> 才算真实跑通</strong>
-          <p><code>missing_dependency</code>、<code>download_blocked</code>、<code>runtime_failed</code> 只能说明链路未完成，不能作为阶段通过。</p>
+          <p><code>missing_dependency</code>、<code>missing_or_blocked_weights</code>、<code>runtime_failed</code> 只能说明链路未完成，不能作为阶段通过。</p>
         </article>
       </div>
     </section>
 
     <section>
-      <h2>2. 实施路径</h2>
+      <h2>2. TTM 下载设计审查结论</h2>
+      <div class="callout warn">
+        <strong>安装依赖、指定缓存、允许下载是三件不同的事</strong>
+        <p><code>uv sync --extra dev --extra foundation-ttm</code> 只安装 Python 包，不代表模型权重已经下载。<code>--model-cache-dir hf_cache</code> 或 <code>HF_HOME=hf_cache</code> 只说明权重读写位置。只有 <code>--allow-download</code> 才允许本次运行从 Hugging Face 下载缺失权重。</p>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>运行情况</th>
+            <th>报告状态</th>
+            <th>命令结果</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>baseline 模式</td>
+            <td><code>skipped_by_user</code> 或 baseline-only 报告</td>
+            <td>退出码 <code>0</code></td>
+          </tr>
+          <tr>
+            <td>选择 TTM，但 optional 依赖未安装</td>
+            <td><code>missing_dependency</code></td>
+            <td>退出码 <code>1</code>，仍写出报告</td>
+          </tr>
+          <tr>
+            <td>选择 TTM，依赖已安装，<code>--no-download</code>，权重已在本机 cache 中</td>
+            <td><code>available_and_ran</code></td>
+            <td>退出码 <code>0</code></td>
+          </tr>
+          <tr>
+            <td>选择 TTM，依赖已安装，<code>--no-download</code>，本机 cache 没有权重</td>
+            <td><code>missing_or_blocked_weights</code></td>
+            <td>退出码 <code>1</code>，仍写出报告</td>
+          </tr>
+          <tr>
+            <td>选择 TTM，依赖已安装，<code>--allow-download</code>，下载、加载和推理成功</td>
+            <td><code>available_and_ran</code></td>
+            <td>退出码 <code>0</code></td>
+          </tr>
+          <tr>
+            <td>选择 TTM，但下载、加载或推理失败</td>
+            <td><code>missing_or_blocked_weights</code> 或 <code>runtime_failed</code></td>
+            <td>退出码 <code>1</code>，仍写出报告</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout">
+        <strong>实现要求</strong>
+        <p><code>HF_HOME</code> 和 <code>HF_HUB_OFFLINE</code> 只应在 TTM runtime 调用期间临时设置，并在调用后恢复。<code>--model-cache-dir</code> 是本次运行的显式覆盖项，不应使用 <code>setdefault</code> 让旧环境变量悄悄抢优先级。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 实施路径</h2>
       <div class="flow">
         <article class="step">
           <span>1</span>
@@ -333,7 +386,7 @@
     </section>
 
     <section>
-      <h2>3. 文件职责</h2>
+      <h2>4. 文件职责</h2>
       <table>
         <thead>
           <tr>
@@ -379,7 +432,7 @@
     </section>
 
     <section>
-      <h2>4. 任务拆解</h2>
+      <h2>5. 任务拆解</h2>
 
       <details open>
         <summary>Task 1: Foundation Result and Metric Contract</summary>
@@ -469,7 +522,7 @@
               <p><strong>验证重点：</strong></p>
               <ul class="compact-list">
                 <li>所有重量级 import 都是 lazy import。</li>
-                <li>下载被禁止时返回 <code>download_blocked</code>。</li>
+                <li>下载被禁止且 cache 未命中时返回 <code>missing_or_blocked_weights</code>，并在 <code>reason</code> 和 <code>weight_status</code> 中说明。</li>
                 <li>adapter 不吞掉错误，报告能看到可诊断的失败原因。</li>
               </ul>
             </div>
@@ -625,7 +678,7 @@ git status --short</code></pre>
     </section>
 
     <section>
-      <h2>5. 关键命令</h2>
+      <h2>6. 关键命令</h2>
       <div class="grid">
         <article class="panel">
           <strong>基础开发环境</strong>
@@ -657,10 +710,10 @@ uv run pytest -q</code></pre>
     </section>
 
     <section>
-      <h2>6. 什么情况下不能算完成</h2>
+      <h2>7. 什么情况下不能算完成</h2>
       <div class="callout danger">
         <strong>失败报告有价值，但不是完成标准</strong>
-        <p>如果最终状态是 <code>missing_dependency</code>、<code>download_blocked</code>、<code>runtime_failed</code>、<code>shape_mismatch</code> 或其他非 <code>available_and_ran</code> 状态，本阶段只能说明发现了阻塞点，不能宣布“真实基础模型推理已跑通”。</p>
+        <p>如果最终状态是 <code>missing_dependency</code>、<code>missing_or_blocked_weights</code>、<code>runtime_failed</code>、<code>unsupported_window_shape</code> 或其他非 <code>available_and_ran</code> 状态，本阶段只能说明发现了阻塞点，不能宣布“真实基础模型推理已跑通”。</p>
       </div>
       <div class="callout warn">
         <strong>不能只看模型名称</strong>
@@ -669,7 +722,7 @@ uv run pytest -q</code></pre>
     </section>
 
     <section>
-      <h2>7. 交付物清单</h2>
+      <h2>8. 交付物清单</h2>
       <table>
         <thead>
           <tr>
