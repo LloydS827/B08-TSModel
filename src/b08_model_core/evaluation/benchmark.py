@@ -33,7 +33,7 @@ def _baseline_section(
     context_length: int,
     prediction_length: int,
     max_windows: int,
-) -> tuple[list[str], dict[str, float]]:
+) -> tuple[list[str], dict[str, float | None]]:
     if dataset_path is None or not Path(dataset_path).exists():
         return ["Baseline metrics: skipped because no dataset was supplied."], {}
 
@@ -70,7 +70,7 @@ def _adapter_availability_lines() -> list[str]:
     return lines
 
 
-def _write_route_decision_report(output_path: Path, robust_metrics: dict[str, float]) -> Path:
+def _write_route_decision_report(output_path: Path, robust_metrics: dict[str, float | None]) -> Path:
     target = output_path.parent / "model_route_decision.md"
     metric_line = (
         f"Current baseline evidence: RobustStageForecaster MAE={robust_metrics['mae']:.6f}, "
