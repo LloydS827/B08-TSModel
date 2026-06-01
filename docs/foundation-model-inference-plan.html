@@ -1,0 +1,714 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 真实基础模型推理实施计划</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #5d6872;
+      --line: #d9e0e7;
+      --accent: #0f766e;
+      --accent-soft: #e4f3ef;
+      --blue: #2454a6;
+      --blue-soft: #eaf1ff;
+      --warn: #925f00;
+      --warn-soft: #fff6d7;
+      --danger: #9f3030;
+      --danger-soft: #fdecec;
+      --ok: #147348;
+      --ok-soft: #e7f6ee;
+      --code: #eef1f4;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.68 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1160px, calc(100% - 40px));
+      margin: 28px auto 52px;
+    }
+    a {
+      color: var(--accent);
+      font-weight: 650;
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+    header {
+      padding: 26px 0 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 31px;
+      letter-spacing: 0;
+      line-height: 1.24;
+    }
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 4px 0; }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    pre {
+      margin: 12px 0 0;
+      overflow: auto;
+      background: #111827;
+      color: #f7fafc;
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--blue-soft);
+      color: #17315e;
+      font-weight: 700;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .lead {
+      max-width: 920px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .meta {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .panel strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 16px;
+    }
+    .tag {
+      display: inline-block;
+      margin: 0 7px 8px 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .tag.blue {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+    .tag.warn {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+    .tag.danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .callout {
+      border: 1px solid #b7ddd5;
+      background: var(--accent-soft);
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      margin: 16px 0;
+    }
+    .callout.ok {
+      border-color: #b9e0ca;
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+    .callout.warn {
+      border-color: #f0cf74;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+    .callout.danger {
+      border-color: #f1b6b6;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .step {
+      min-height: 96px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .step span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 750;
+      margin-bottom: 7px;
+    }
+    .step b {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .step small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    details {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      margin: 10px 0;
+      padding: 0;
+      overflow: hidden;
+    }
+    summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 14px 16px;
+      font-weight: 750;
+      color: #17315e;
+      background: var(--blue-soft);
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: "展开";
+      float: right;
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 650;
+      margin-left: 12px;
+    }
+    details[open] summary::after { content: "收起"; }
+    .task-body {
+      padding: 15px 16px 16px;
+    }
+    .task-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(240px, 0.72fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .compact-list {
+      padding-left: 18px;
+      margin-top: 4px;
+    }
+    .footer {
+      margin-top: 30px;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+    @media (max-width: 880px) {
+      main { width: min(100% - 28px, 1160px); margin-top: 18px; }
+      h1 { font-size: 25px; }
+      .flow, .task-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="index.html">返回文档入口</a></p>
+    <header>
+      <h1>B08 真实基础模型推理实施计划</h1>
+      <p class="lead">本页是可执行 Markdown plan 的中文可读版。目标是在 FU13 模拟窗口上真正跑通至少一个开源时序基础模型，优先从 TTM 开始，并用同一套指标和 baseline 判断下一步是直接引用、轻量微调、备用模型，还是转向领域自研。</p>
+      <p class="meta">更新日期：2026-06-01 ｜ 对应完整计划：<a href="superpowers/plans/2026-06-01-foundation-model-inference-plan.md">Foundation Model Inference Implementation Plan</a> ｜ 对应方案：<a href="foundation-model-inference-design.html">真实基础模型推理验证方案</a></p>
+    </header>
+
+    <section class="callout ok">
+      <strong>一句话执行目标</strong>
+      <p>新增一个模型无关的 foundation forecasting 边界，让 baseline-only 流程继续不依赖外部权重，同时让 TTM 在本机可选安装、可选下载、可真实推理，并输出能和现有 baseline 同口径比较的报告。</p>
+    </section>
+
+    <section>
+      <h2>1. 关键判断门槛</h2>
+      <div class="grid">
+        <article class="panel">
+          <span class="tag">必须保留</span>
+          <strong>基础流程不依赖模型权重</strong>
+          <p>默认 `uv sync --extra dev` 和 `uv run pytest -q` 仍应能运行，不要求下载 TTM、Hugging Face 权重或大型缓存。</p>
+        </article>
+        <article class="panel">
+          <span class="tag blue">第一条真实链路</span>
+          <strong>TTM 先跑通，但不锁死生态</strong>
+          <p>TTM 是第一轮最小可行 adapter。TimesFM、Chronos、Moirai、FlowState 暂不实现，只在报告里作为后续备用路线。</p>
+        </article>
+        <article class="panel">
+          <span class="tag warn">本机权重</span>
+          <strong>模型权重只保存在本机</strong>
+          <p>Hugging Face cache、模型权重、生成 parquet 和临时报告不能提交到 GitHub。README 需要写明下载、缓存和使用方法。</p>
+        </article>
+        <article class="panel">
+          <span class="tag danger">完成标准</span>
+          <strong><code>available_and_ran</code> 才算真实跑通</strong>
+          <p><code>missing_dependency</code>、<code>download_blocked</code>、<code>runtime_failed</code> 只能说明链路未完成，不能作为阶段通过。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. 实施路径</h2>
+      <div class="flow">
+        <article class="step">
+          <span>1</span>
+          <b>结果契约</b>
+          <small>统一状态、指标、失败原因和路线建议。</small>
+        </article>
+        <article class="step">
+          <span>2</span>
+          <b>报告输出</b>
+          <small>把 baseline comparison、cache 状态和模型状态写进 Markdown。</small>
+        </article>
+        <article class="step">
+          <span>3</span>
+          <b>TTM adapter</b>
+          <small>延迟导入依赖，转换 FU13 窗口到 TTM 可预测格式。</small>
+        </article>
+        <article class="step">
+          <span>4</span>
+          <b>Runner 和 CLI</b>
+          <small>统一生成窗口、运行 baseline、运行模型、生成报告。</small>
+        </article>
+        <article class="step">
+          <span>5</span>
+          <b>本机验证</b>
+          <small>安装 optional extras，下载权重，确认 TTM 真实完成推理。</small>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 文件职责</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>文件或目录</th>
+            <th>作用</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>src/b08_model_core/foundation/results.py</code></td>
+            <td>定义 <code>FoundationForecastResult</code>、模型状态、指标比较和路线推荐。</td>
+          </tr>
+          <tr>
+            <td><code>src/b08_model_core/foundation/reporting.py</code></td>
+            <td>渲染实验报告，必须包含 selected model status、Baseline Comparison、Local Model Environment、cache 状态和失败原因。</td>
+          </tr>
+          <tr>
+            <td><code>src/b08_model_core/foundation/runner.py</code></td>
+            <td>负责构建训练和测试窗口，运行 baseline 与 foundation adapter，并合并指标。</td>
+          </tr>
+          <tr>
+            <td><code>src/b08_model_core/adapters/ttm_adapter.py</code></td>
+            <td>封装 TTM 依赖检测、延迟导入、输入转换、真实推理和异常状态。</td>
+          </tr>
+          <tr>
+            <td><code>src/b08_model_core/experiments/forecasting.py</code></td>
+            <td>继续保留 baseline-only 默认行为，同时接入 foundation runner。</td>
+          </tr>
+          <tr>
+            <td><code>src/b08_model_core/cli.py</code></td>
+            <td>新增 CLI 参数，例如 <code>--model ttm</code>、<code>--allow-download</code>、<code>--model-cache-dir</code>。</td>
+          </tr>
+          <tr>
+            <td><code>pyproject.toml</code>、<code>uv.lock</code>、<code>.gitignore</code></td>
+            <td>增加 optional <code>foundation-ttm</code> 依赖，锁定依赖解析，并忽略本机模型 cache。</td>
+          </tr>
+          <tr>
+            <td><code>README.md</code>、<code>details.md</code></td>
+            <td>记录下载、使用、权重不提交 GitHub 的规则，以及项目进展和下一步判断。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>4. 任务拆解</h2>
+
+      <details open>
+        <summary>Task 1: Foundation Result and Metric Contract</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>先把结果对象和指标口径定下来，让模型成功、失败、缺依赖、下载受阻、运行失败都有明确状态。</p>
+              <ul class="compact-list">
+                <li>新增 <code>FoundationModelStatus</code> 和 <code>FoundationForecastResult</code>。</li>
+                <li>给 forecasting metrics 增加 RMSE，并支持只有点预测、没有区间预测的模型。</li>
+                <li>实现 <code>recommend_route</code>，根据模型状态和 baseline 对比给出 direct reuse、fine-tune candidate、no-go 等建议。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li><code>available_and_ran</code> 的 <code>succeeded</code> 为 true。</li>
+                <li><code>missing_dependency</code> 不会被误判为成功。</li>
+                <li>RMSE、MAE、interval coverage 同时可测。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 2: Markdown Report Renderer</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>生成一份能服务路线决策的 Markdown 报告，而不是只输出模型分数。</p>
+              <ul class="compact-list">
+                <li>报告包含 Dataset Summary、Selected Foundation Model、Baseline Comparison、Local Model Environment、Route Recommendation。</li>
+                <li>baseline delta 必须写清楚，例如 TTM 相对 <code>RobustStageForecaster</code> 的 MAE/RMSE 差异。</li>
+                <li>记录 optional dependency、cache 目录、权重状态和失败原因。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>成功报告能看见 <code>available_and_ran</code>。</li>
+                <li>失败报告能看见明确原因，但不被当成完成。</li>
+                <li>报告适合研发和非技术评审共同阅读。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 3: TTM Adapter Dependency and Input Conversion</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>让 TTM 的依赖检查和输入转换先可测，不要求测试阶段真的下载外部权重。</p>
+              <ul class="compact-list">
+                <li>检测 <code>granite-tsfm</code>、<code>torch</code>、<code>transformers</code>、<code>huggingface_hub</code> 是否存在。</li>
+                <li>把 <code>ModelWindow</code> 转成 TTM 能消费的 pandas 格式。</li>
+                <li>保留 sensor/stage/domain 等上下文的可追踪信息，即使第一轮 TTM 只使用数值列。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>缺依赖时返回 <code>missing_dependency</code>。</li>
+                <li>窗口形状、预测长度和通道数能被明确检查。</li>
+                <li>adapter 内部封装 TTM 特有逻辑，不污染 canonical schema。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 4: TTM Lazy Real-Inference Boundary</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>把真实模型加载、权重下载和推理边界放进 adapter，并用 <code>allow_download</code> 明确控制网络行为。</p>
+              <ul class="compact-list">
+                <li>默认不下载权重，避免基础测试被外部网络和 Hugging Face 状态影响。</li>
+                <li>当 <code>--allow-download</code> 开启时，允许本机下载并缓存模型权重。</li>
+                <li>对下载受阻、模型加载失败、推理失败分别给出状态和原因。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>所有重量级 import 都是 lazy import。</li>
+                <li>下载被禁止时返回 <code>download_blocked</code>。</li>
+                <li>adapter 不吞掉错误，报告能看到可诊断的失败原因。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 5: Foundation Runner and Baseline Comparison</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>新增 <code>FoundationForecastRunner</code>，统一运行现有 baseline 和选定 foundation adapter。</p>
+              <ul class="compact-list">
+                <li>复用现有窗口构建和 baseline，不重写数据入口。</li>
+                <li>把 foundation model 和 <code>RobustStageForecaster</code>、<code>StageSeasonalNaiveForecaster</code> 做同口径比较。</li>
+                <li>输出 baseline deltas，支持后续路线判断。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>fake adapter 成功时 runner 能生成完整比较结果。</li>
+                <li>fake adapter 失败时 baseline 指标仍可输出。</li>
+                <li>baseline-only 默认路径不被破坏。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 6: Experiment Entry Point and CLI Options</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>把真实模型实验接进现有 <code>b08-model-core experiment forecasting</code>，并保持老命令可用。</p>
+              <ul class="compact-list">
+                <li>新增 <code>--model baseline</code> 和 <code>--model ttm</code>。</li>
+                <li>新增 <code>--allow-download</code>、<code>--model-cache-dir</code>、<code>--context-length</code>、<code>--prediction-length</code>。</li>
+                <li>模型未成功跑通时，CLI 需要返回非零退出码，防止误把失败报告当完成。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>默认命令仍是 baseline-only。</li>
+                <li>TTM 缺依赖时报告写出，但命令失败。</li>
+                <li>参数校验继续拒绝不合理窗口配置。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 7: Optional Dependencies, Cache Ignore Rules, and Lockfile</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>把 TTM 依赖放到 optional extra 中，并确保本机 cache 不进入 Git。</p>
+              <ul class="compact-list">
+                <li>在 <code>pyproject.toml</code> 增加 <code>foundation-ttm</code> optional dependencies。</li>
+                <li>更新 <code>uv.lock</code>，让依赖解析可复现。</li>
+                <li>在 <code>.gitignore</code> 忽略 <code>hf_cache/</code>、<code>model_cache/</code>、<code>reports/foundation_*.md</code> 等本机产物。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li><code>uv sync --extra dev</code> 不安装大模型依赖。</li>
+                <li><code>uv sync --extra dev --extra foundation-ttm</code> 才安装 TTM 所需包。</li>
+                <li>权重、cache 和生成数据不出现在提交中。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 8: README and Progress Ledger</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>把下载、运行、缓存、本机权重和报告解释写进项目入口。</p>
+              <ul class="compact-list">
+                <li>README 说明如何安装 optional TTM 依赖。</li>
+                <li>README 写清楚模型权重只保存在本机，不上传 GitHub。</li>
+                <li><code>details.md</code> 更新能力、风险和近期进展，让非技术人员能理解阶段变化。</li>
+              </ul>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>文档包含本机 cache 说明。</li>
+                <li>文档包含成功和失败状态解释。</li>
+                <li>当前阶段判断没有被夸大成生产可用。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 9: Manual TTM Local Verification</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>在本机真正安装 optional 依赖、下载权重，并运行 TTM 推理。这个任务是本阶段最关键的实证门槛。</p>
+              <pre><code>uv sync --extra dev --extra foundation-ttm
+HF_HOME=hf_cache uv run b08-model-core experiment forecasting \
+  --dataset data/simulated/furnace_fu13_45d.parquet \
+  --output reports/foundation_ttm_forecasting.md \
+  --model ttm \
+  --allow-download \
+  --model-cache-dir hf_cache \
+  --max-windows 20</code></pre>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>报告中必须出现 <code>available_and_ran</code>。</li>
+                <li>报告中必须出现 Baseline Comparison 和 Local Model Environment。</li>
+                <li>若失败，需要记录原因并把计划状态保留为未完成。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Task 10: Final Verification Gate</summary>
+        <div class="task-body">
+          <div class="task-grid">
+            <div>
+              <p><strong>目标：</strong>在声明完成前运行完整验证，并检查 Git 状态，确保只提交源码、测试和文档。</p>
+              <pre><code>uv run pytest -q
+git diff --check
+git status --short</code></pre>
+            </div>
+            <div>
+              <p><strong>验证重点：</strong></p>
+              <ul class="compact-list">
+                <li>所有测试通过。</li>
+                <li>没有 whitespace error。</li>
+                <li>没有权重、cache、parquet 或临时报告进入提交。</li>
+                <li>最终回复明确 TTM 是否真实跑通，以及报告路径。</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </details>
+    </section>
+
+    <section>
+      <h2>5. 关键命令</h2>
+      <div class="grid">
+        <article class="panel">
+          <strong>基础开发环境</strong>
+          <pre><code>uv sync --extra dev
+uv run pytest -q</code></pre>
+        </article>
+        <article class="panel">
+          <strong>安装 TTM optional 依赖</strong>
+          <pre><code>uv sync --extra dev --extra foundation-ttm</code></pre>
+        </article>
+        <article class="panel">
+          <strong>生成模拟数据</strong>
+          <pre><code>uv run b08-model-core simulate \
+  --days 45 \
+  --seed 42 \
+  --output data/simulated/furnace_fu13_45d.parquet</code></pre>
+        </article>
+        <article class="panel">
+          <strong>运行 TTM 真实推理</strong>
+          <pre><code>HF_HOME=hf_cache uv run b08-model-core experiment forecasting \
+  --dataset data/simulated/furnace_fu13_45d.parquet \
+  --output reports/foundation_ttm_forecasting.md \
+  --model ttm \
+  --allow-download \
+  --model-cache-dir hf_cache \
+  --max-windows 20</code></pre>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>6. 什么情况下不能算完成</h2>
+      <div class="callout danger">
+        <strong>失败报告有价值，但不是完成标准</strong>
+        <p>如果最终状态是 <code>missing_dependency</code>、<code>download_blocked</code>、<code>runtime_failed</code>、<code>shape_mismatch</code> 或其他非 <code>available_and_ran</code> 状态，本阶段只能说明发现了阻塞点，不能宣布“真实基础模型推理已跑通”。</p>
+      </div>
+      <div class="callout warn">
+        <strong>不能只看模型名称</strong>
+        <p>TTM、TimesFM、Chronos、Moirai、FlowState 都需要回到同一批窗口和同一组指标比较。只有真实推理结果优于或接近 baseline，且适配成本可接受，才进入 direct reuse 或轻量微调候选。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>7. 交付物清单</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>交付物</th>
+            <th>完成后应该能回答的问题</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>foundation result contract</td>
+            <td>模型到底是跑通、缺依赖、下载受阻，还是运行失败？</td>
+          </tr>
+          <tr>
+            <td>foundation Markdown report</td>
+            <td>模型结果和 baseline 差多少？本机依赖、cache 和权重状态是什么？</td>
+          </tr>
+          <tr>
+            <td>TTM adapter</td>
+            <td>FU13 模拟窗口能不能被真实开源模型消费？输入输出形状是否可控？</td>
+          </tr>
+          <tr>
+            <td>CLI 参数和退出码</td>
+            <td>研发人员能否一条命令复现实验？失败时 CI 或脚本能否识别？</td>
+          </tr>
+          <tr>
+            <td>README 和 details 更新</td>
+            <td>后来者是否知道如何下载权重、在哪里缓存、哪些文件不能提交？</td>
+          </tr>
+          <tr>
+            <td>本机 TTM 报告</td>
+            <td>真实基础模型是否已经在模拟数据上完成 zero-shot forecasting？</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="footer">
+      本页用于阅读和协作，完整可执行步骤、测试代码和任务勾选仍以 <a href="superpowers/plans/2026-06-01-foundation-model-inference-plan.md">Markdown plan</a> 为准。
+    </div>
+  </main>
+</body>
+</html>
