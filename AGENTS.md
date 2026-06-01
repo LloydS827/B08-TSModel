@@ -1,109 +1,67 @@
 # AGENTS.md
 
-本文件给后续参与本仓库的 Agent 使用。目标是减少上下文误读、避免扩大范围，并确保项目进展被持续记录。
+注意：如果设计到生成方案、计划等，请使用中文。
 
-## 项目定位
+Behavioral guidelines to reduce common LLM coding mistakes. Merge with project-specific instructions as needed.
 
-B08 是设备预测性维护项目中的“时序基础模型核心沙盒”。
+**Tradeoff:** These guidelines bias toward caution over speed. For trivial tasks, use judgment.
 
-当前仓库要解决的是：
+## 1. Think Before Coding
 
-- 设备传感器数据如何整理成模型输入。
-- 模型输入输出边界如何定义。
-- 基础预测 baseline 是否可运行。
-- 真实数据导出能否映射到标准 schema。
-- 开源时序模型是否可以直接引用、轻量微调，或是否需要领域自研。
+**Don't assume. Don't hide confusion. Surface tradeoffs.**
 
-不要把本仓库理解成完整预测性维护系统。当前阶段不负责前端、告警平台、工单系统、日报系统或生产部署闭环。
+Before implementing:
+- State your assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them - don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+- If something is unclear, stop. Name what's confusing. Ask.
 
-## 关键文件
+## 2. Simplicity First
 
-- `README.md`：项目入口，说明项目定位、当前阶段、运行命令和 Agent 维护规则。
-- `details.md`：项目进展台账，面向用户、管理者和非技术人员。
-- `uv.lock`：uv 生成的 Python 依赖锁文件。
-- `docs/index.html`：文档总入口。
-- `configs/real_data_schema_map.template.yaml`：真实数据映射模板。
-- `src/b08_model_core/real_data/`：真实数据 schema map 和 validation。
-- `src/b08_model_core/experiments/`：第一轮模型实验脚手架。
-- `tests/`：回归测试。
+**Minimum code that solves the problem. Nothing speculative.**
 
-## 工作原则
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If you write 200 lines and it could be 50, rewrite it.
 
-### 1. 先理解阶段，再动手
+Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
 
-开始任务前先读：
+## 3. Surgical Changes
 
-1. `README.md`
-2. `details.md`
-3. 与任务相关的 `docs/`、`src/`、`tests/`
+**Touch only what you must. Clean up only your own mess.**
 
-如果任务会改变项目阶段、能力边界或下一步计划，必须同步更新 `details.md`。
+When editing existing code:
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it - don't delete it.
 
-### 2. 保持范围收敛
+When your changes create orphans:
+- Remove imports/variables/functions that YOUR changes made unused.
+- Don't remove pre-existing dead code unless asked.
 
-默认只推进“模型核心”相关工作：
+The test: Every changed line should trace directly to the user's request.
 
-- 数据 schema。
-- 模型输入输出。
-- 模拟数据。
-- 真实数据 validation。
-- baseline 和实验脚手架。
-- 开源模型适配评测。
-- 知识成果规划。
+## 4. Goal-Driven Execution
 
-不要主动扩展到完整业务系统，除非用户明确要求。
+**Define success criteria. Loop until verified.**
 
-### 3. `details.md` 必须持续维护
+Transform tasks into verifiable goals:
+- "Add validation" → "Write tests for invalid inputs, then make them pass"
+- "Fix the bug" → "Write a test that reproduces it, then make it pass"
+- "Refactor X" → "Ensure tests pass before and after"
 
-完成以下任一事项后，都要检查并更新 `details.md`：
+For multi-step tasks, state a brief plan:
+```
+1. [Step] → verify: [check]
+2. [Step] → verify: [check]
+3. [Step] → verify: [check]
+```
 
-- 新增或改变项目能力。
-- 改变当前阶段判断。
-- 改变下一阶段计划、优先级或 Go/No-Go 判断。
-- 发现新的风险、阻塞项、真实数据问题或模型适配问题。
-- 完成关键验证、code review、实验、提交或推送。
+Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-更新要求：
+---
 
-- 使用非技术人员能理解的语言。
-- 明确区分“已经具备的能力”和“后续需要补充的能力”。
-- 更新“下一阶段计划”“当前风险”或“近期更新记录”中受影响的内容。
-- 不要只写提交号或技术缩写。
-- 如果检查后不需要更新，在最终回复中说明原因。
-
-### 4. 小步修改，避免过度设计
-
-- 优先延续现有文件结构和命令风格。
-- Python 环境默认使用 `uv`：同步依赖用 `uv sync --extra dev`，运行命令用 `uv run ...`。
-- 不做与当前任务无关的重构。
-- 不主动引入大型依赖。
-- 开源大模型相关依赖保持 optional，不能让基础测试依赖外部权重下载。
-
-### 5. 验证后再声明完成
-
-完成任务前，根据改动类型选择验证：
-
-- 文档改动：至少运行 Markdown/链接/whitespace 检查。
-- 代码改动：运行相关 targeted tests。
-- 影响核心流程时：运行完整测试，优先使用 `uv run pytest -q`。
-- 提交前：运行 `git diff --check`，确认没有无关文件 staged。
-
-不要把 `.venv/`、`.pytest_cache/`、`__pycache__/`、生成的 parquet 数据或其他忽略产物提交。依赖变更时应更新并提交 `uv.lock`。
-
-## 当前阶段结论
-
-截至 2026-06-01，本阶段已完成到“模型核心沙盒可用”：
-
-- 模拟数据可生成。
-- 模型 schema 和窗口构建可用。
-- baseline 和 benchmark 可运行。
-- 真实数据 validation CLI 可用。
-- forecasting 实验脚手架可用。
-- README、details 和 docs 已形成阶段说明。
-
-下一阶段重点：
-
-1. 接入一份真实 FU13 导出数据。
-2. 完成真实数据 schema map 和 validation。
-3. 用统一指标评测 TTM、TimesFM、Chronos、Moirai、FlowState 等开源模型。
-4. 根据评测结果决定 direct reuse、轻量微调或领域自研。
+**These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.

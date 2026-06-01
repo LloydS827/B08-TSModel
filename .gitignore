@@ -1,4 +1,6 @@
 .worktrees/
+.DS_Store
+**/.DS_Store
 .venv/
 .cache/
 __pycache__/
