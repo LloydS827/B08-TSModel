@@ -1611,12 +1611,14 @@ HF_HOME=hf_cache uv run b08-model-core experiment forecasting \
   --dataset data/simulated/furnace_fu13_45d.parquet \
   --output reports/forecasting_ttm_experiment.md \
   --model ttm \
-  --context-length 512 \
-  --prediction-length 96 \
+  --context-length 90 \
+  --prediction-length 16 \
   --max-windows 40 \
   --model-cache-dir hf_cache \
   --allow-download
 ```
+
+`90/16` is the verified Granite TTM R2 smoke-test shape for FU13 simulated windows. Longer horizons need a matching TTM context/horizon pair or a later rolling-inference adapter.
 
 模型权重、`hf_cache/`、`models/`、生成的 parquet 和临时实验报告只保存在本机，不要提交或上传 GitHub。
 
@@ -1696,8 +1698,8 @@ uv run b08-model-core experiment forecasting \
   --dataset data/simulated/furnace_fu13_45d.parquet \
   --output reports/forecasting_baseline_experiment.md \
   --model baseline \
-  --context-length 128 \
-  --prediction-length 32 \
+  --context-length 90 \
+  --prediction-length 16 \
   --max-windows 40
 ```
 
@@ -1712,9 +1714,9 @@ HF_HOME=hf_cache uv run b08-model-core experiment forecasting \
   --dataset data/simulated/furnace_fu13_45d.parquet \
   --output reports/forecasting_ttm_experiment.md \
   --model ttm \
-  --context-length 512 \
-  --prediction-length 96 \
-  --max-windows 40 \
+  --context-length 90 \
+  --prediction-length 16 \
+  --max-windows 20 \
   --model-cache-dir hf_cache \
   --allow-download
 ```

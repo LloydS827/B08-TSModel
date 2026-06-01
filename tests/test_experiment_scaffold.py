@@ -195,4 +195,6 @@ def test_foundation_ttm_extra_and_local_model_artifacts_are_documented():
     assert "uv sync --extra dev --extra foundation-ttm" in readme
     assert "--allow-download" in readme
     assert "HF_HOME=hf_cache" in readme
+    assert "--context-length 90" in readme
+    assert "--prediction-length 16" in readme
     assert "不要把这些文件上传到 GitHub" in readme

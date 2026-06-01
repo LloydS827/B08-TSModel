@@ -639,7 +639,10 @@ HF_HOME=hf_cache uv run b08-model-core experiment forecasting \
   --model ttm \
   --allow-download \
   --model-cache-dir hf_cache \
-  --max-windows 20</code></pre>
+  --max-windows 20 \
+  --context-length 90 \
+  --prediction-length 16</code></pre>
+              <p>这里的 <code>90/16</code> 是已验证可运行的 Granite TTM R2 smoke-test 窗口配置；更长 horizon 需要匹配的 TTM 子模型或后续 rolling 推理实现。</p>
             </div>
             <div>
               <p><strong>验证重点：</strong></p>
@@ -704,7 +707,9 @@ uv run pytest -q</code></pre>
   --model ttm \
   --allow-download \
   --model-cache-dir hf_cache \
-  --max-windows 20</code></pre>
+  --max-windows 20 \
+  --context-length 90 \
+  --prediction-length 16</code></pre>
         </article>
       </div>
     </section>

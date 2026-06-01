@@ -3,7 +3,6 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 import os
-import tempfile
 from typing import Callable, Iterator, Protocol
 
 import numpy as np
@@ -13,6 +12,7 @@ from b08_model_core.foundation.results import FoundationForecastResult, Foundati
 
 
 DEFAULT_TTM_CHECKPOINT = "ibm-granite/granite-timeseries-ttm-r2"
+DEFAULT_TTM_FREQUENCY_TOKEN = 0
 REQUIRED_TTM_MODULES = ("tsfm_public", "transformers")
 
 
@@ -75,22 +75,7 @@ class TTMRuntime:
     ) -> np.ndarray:
         with hf_runtime_environment(model_cache_dir, allow_download):
             import torch
-            from torch.utils.data import Dataset
-            from transformers import Trainer, TrainingArguments
             from tsfm_public.toolkit.get_model import get_model
-
-            class _PreparedDataset(Dataset):
-                def __len__(self) -> int:
-                    return int(prepared.past_values.shape[0])
-
-                def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
-                    return {
-                        "past_values": torch.tensor(prepared.past_values[index], dtype=torch.float32),
-                        "past_observed_mask": torch.tensor(
-                            prepared.past_observed_mask[index],
-                            dtype=torch.bool,
-                        ),
-                    }
 
             try:
                 model = get_model(
@@ -101,18 +86,28 @@ class TTMRuntime:
             except TypeError:
                 model = get_model(checkpoint)
 
-            training_args = TrainingArguments(
-                output_dir=tempfile.mkdtemp(prefix="b08-ttm-runtime-"),
-                per_device_eval_batch_size=prepared.past_values.shape[0],
-                report_to=[],
+            model.eval()
+            past_values = torch.tensor(prepared.past_values, dtype=torch.float32)
+            past_observed_mask = torch.tensor(prepared.past_observed_mask, dtype=torch.bool)
+            freq_token = torch.full(
+                (int(prepared.past_values.shape[0]),),
+                DEFAULT_TTM_FREQUENCY_TOKEN,
+                dtype=torch.int,
             )
-            trainer = Trainer(model=model, args=training_args)
-            prediction_output = trainer.predict(_PreparedDataset())
-            predictions = prediction_output.predictions
-            if isinstance(predictions, tuple):
-                predictions = predictions[0]
+            with torch.no_grad():
+                prediction_output = model(
+                    past_values=past_values,
+                    past_observed_mask=past_observed_mask,
+                    freq_token=freq_token,
+                    return_loss=False,
+                )
+            predictions = getattr(prediction_output, "prediction_outputs", prediction_output)
             if isinstance(predictions, dict):
                 predictions = predictions.get("prediction_outputs", next(iter(predictions.values())))
+            if isinstance(predictions, tuple):
+                predictions = predictions[0]
+            if hasattr(predictions, "detach"):
+                predictions = predictions.detach().cpu().numpy()
             return np.asarray(predictions, dtype=float)
 
 

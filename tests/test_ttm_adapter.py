@@ -4,6 +4,7 @@ from dataclasses import dataclass
 import importlib
 import os
 import sys
+from types import ModuleType
 
 import numpy as np
 import pytest
@@ -172,6 +173,50 @@ def test_hf_runtime_environment_clears_offline_flag_for_download_and_restores_ab
 
     assert "HF_HOME" not in os.environ
     assert "HF_HUB_OFFLINE" not in os.environ
+
+
+def test_ttm_runtime_model_call_supplies_oov_frequency_token(monkeypatch):
+    torch = pytest.importorskip("torch")
+    captured: dict[str, object] = {}
+    prepared = ttm_adapter.PreparedTTMWindows(
+        past_values=np.ones((1, 3, 2)),
+        past_observed_mask=np.ones((1, 3, 2), dtype=bool),
+        future_values=np.ones((1, 2, 2)),
+        sensor_token=["pressure", "temperature"],
+        channel_center=np.zeros((1, 2)),
+        channel_scale=np.ones((1, 2)),
+    )
+
+    class FakeModel:
+        def eval(self):
+            captured["eval_called"] = True
+
+        def __call__(self, **kwargs):
+            captured["kwargs"] = kwargs
+            return type("PredictionOutput", (), {"prediction_outputs": torch.zeros((1, 2, 2))})()
+
+    fake_tsfm = ModuleType("tsfm_public")
+    fake_toolkit = ModuleType("tsfm_public.toolkit")
+    fake_get_model = ModuleType("tsfm_public.toolkit.get_model")
+    fake_get_model.get_model = lambda *args, **kwargs: FakeModel()
+    monkeypatch.setitem(sys.modules, "tsfm_public", fake_tsfm)
+    monkeypatch.setitem(sys.modules, "tsfm_public.toolkit", fake_toolkit)
+    monkeypatch.setitem(sys.modules, "tsfm_public.toolkit.get_model", fake_get_model)
+
+    output = ttm_adapter.TTMRuntime().predict(
+        prepared,
+        checkpoint="local-ttm",
+        prediction_length=2,
+        allow_download=False,
+        model_cache_dir=None,
+    )
+
+    kwargs = captured["kwargs"]
+    assert captured["eval_called"] is True
+    assert kwargs["return_loss"] is False
+    assert int(kwargs["freq_token"][0].item()) == 0
+    assert kwargs["freq_token"].dtype == torch.int
+    np.testing.assert_array_equal(output, np.zeros_like(prepared.future_values))
 
 
 def test_top_level_import_does_not_require_heavy_runtime_modules(monkeypatch):
