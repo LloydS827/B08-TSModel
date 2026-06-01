@@ -69,6 +69,7 @@ Fallback rule:
 
 - If the first candidate cannot be installed, cannot download weights, or cannot adapt to `ModelWindow`, the report should record the reason and select the next candidate rather than blocking the whole stage.
 - If the first candidate runs but performs poorly, it still remains useful evidence. Poor performance should trigger route judgement, not silent replacement.
+- In the first implementation plan, fallback selection means a report recommendation for the next adapter to try. It does not require the first pass to implement and run every fallback model automatically.
 
 ## Architecture
 
@@ -132,6 +133,15 @@ Recommended CLI options:
 | `--allow-download` | whether model weights may be downloaded | enabled for user-run model experiments, disabled in tests |
 
 If dependency or weight setup is missing, the command should still write a report and exit with a status that makes the problem clear. Core baseline-only mode should keep returning success.
+
+Recommended exit-code behavior:
+
+- Baseline-only mode returns `0` when the baseline report is written successfully.
+- Foundation-model mode returns `0` when the selected model runs successfully and the report is written.
+- Foundation-model mode returns `1` when validation, dependency, weight, unsupported-shape, or runtime failure is captured in the report.
+- Invalid CLI arguments, such as non-positive lengths, continue to be rejected by `argparse` with exit code `2`.
+
+This keeps automation honest: a failed model run is visible to scripts, while still leaving a useful diagnostic report on disk.
 
 ## Dependency and Weight Management
 
