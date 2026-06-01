@@ -1,11 +1,16 @@
 import subprocess
 import sys
+import tomllib
+from pathlib import Path
 
 import pytest
 
 from b08_model_core.experiments import forecasting as forecasting_module
 from b08_model_core.simulation.export_dataset import simulate_dataset
 from b08_model_core.evaluation.open_source_matrix import candidate_matrix
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_default_forecasting_cli_runs_baseline_only_without_external_weights(tmp_path):
@@ -169,3 +174,15 @@ def test_forecasting_experiment_rejects_non_positive_lengths(tmp_path, option):
 def test_forecasting_candidate_matrix_includes_current_forecast_first_models():
     names = {candidate.name for candidate in candidate_matrix()}
     assert {"FlowState", "TTM", "TimesFM", "Chronos", "Moirai"} <= names
+
+
+def test_foundation_ttm_extra_and_local_model_artifacts_are_documented():
+    pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    foundation_ttm = set(pyproject["project"]["optional-dependencies"]["foundation-ttm"])
+    assert {"granite-tsfm", "torch", "transformers", "huggingface_hub"} <= foundation_ttm
+
+    ignore_rules = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
+    assert "hf_cache/" in ignore_rules
+    assert "model_cache/" in ignore_rules
+    assert ".cache/" in ignore_rules
+    assert "reports/*.md" in ignore_rules

@@ -1,5 +1,6 @@
 .worktrees/
 .venv/
+.cache/
 __pycache__/
 .pytest_cache/
 *.pyc
@@ -8,3 +9,8 @@ data/simulated/*.parquet
 reports/*.md
 !reports/model_core_evaluation.md
 !reports/model_route_decision.md
+
+# Local model weights and Hugging Face caches must stay off GitHub.
+hf_cache/
+model_cache/
+models/
