@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 真实基础模型推理验证方案</title>
+  <style>
+    :root {
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #17202a;
+      --muted: #5d6872;
+      --line: #d9e0e7;
+      --accent: #0f766e;
+      --accent-soft: #e4f3ef;
+      --blue: #2454a6;
+      --blue-soft: #eaf1ff;
+      --warn: #925f00;
+      --warn-soft: #fff6d7;
+      --ok: #147348;
+      --ok-soft: #e7f6ee;
+      --danger: #9f3030;
+      --danger-soft: #fdecec;
+      --code: #eef1f4;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.68 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1160px, calc(100% - 40px));
+      margin: 28px auto 52px;
+    }
+    a {
+      color: var(--accent);
+      font-weight: 650;
+      text-decoration: none;
+    }
+    a:hover { text-decoration: underline; }
+    header {
+      padding: 26px 0 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 31px;
+      letter-spacing: 0;
+      line-height: 1.24;
+    }
+    h2 {
+      margin: 30px 0 12px;
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 17px;
+      letter-spacing: 0;
+    }
+    p { margin: 0 0 12px; }
+    ul, ol { margin: 8px 0 0; padding-left: 22px; }
+    li { margin: 4px 0; }
+    code {
+      background: var(--code);
+      border-radius: 4px;
+      padding: 1px 5px;
+      font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    pre {
+      margin: 12px 0 0;
+      overflow: auto;
+      background: #111827;
+      color: #f7fafc;
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--blue-soft);
+      color: #17315e;
+      font-weight: 700;
+    }
+    tr:last-child td { border-bottom: 0; }
+    .lead {
+      max-width: 900px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .meta {
+      margin: 16px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .panel strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 16px;
+    }
+    .tag {
+      display: inline-block;
+      margin: 0 7px 8px 0;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 650;
+    }
+    .tag.blue {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+    .tag.warn {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+    .callout {
+      border: 1px solid #b7ddd5;
+      background: var(--accent-soft);
+      border-radius: var(--radius);
+      padding: 15px 16px;
+      margin: 16px 0;
+    }
+    .callout.warn {
+      border-color: #f0cf74;
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+    .callout.ok {
+      border-color: #b9e0ca;
+      background: var(--ok-soft);
+      color: var(--ok);
+    }
+    .callout.danger {
+      border-color: #f1b6b6;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(120px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .step {
+      position: relative;
+      min-height: 88px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .step span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 750;
+      margin-bottom: 7px;
+    }
+    .step b {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 4px;
+    }
+    .step small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .two-col {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .footer {
+      margin-top: 30px;
+      color: var(--muted);
+      font-size: 13px;
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+    @media (max-width: 880px) {
+      main { width: min(100% - 28px, 1160px); margin-top: 18px; }
+      h1 { font-size: 25px; }
+      .flow, .two-col { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <p><a href="index.html">返回文档入口</a></p>
+    <header>
+      <h1>B08 真实基础模型推理验证方案</h1>
+      <p class="lead">本页把新阶段方案整理成中文可读版：先用可控的 FU13 模拟数据，在本机真正跑通一个开源时序基础模型，再用同一套指标判断直接引用、轻量微调、备用模型或自研路线。</p>
+      <p class="meta">更新日期：2026-06-01 ｜ 对应正式 spec：<a href="superpowers/specs/2026-06-01-foundation-model-inference-design.md">foundation model inference design</a></p>
+    </header>
+
+    <section class="callout ok">
+      <strong>一句话结论</strong>
+      <p>TTM 可以作为第一条最小可行链路，但项目架构不绑定 TTM、IBM、Hugging Face 或任何单一模型生态。真正要沉淀的是“模型无关的推理评测框架”：同一批窗口、同一组 baseline、同一套报告和同一套路线判断。</p>
+    </section>
+
+    <section>
+      <h2>1. 为什么进入这个阶段</h2>
+      <div class="grid">
+        <article class="panel">
+          <span class="tag">已经完成</span>
+          <strong>模型核心沙盒已经可用</strong>
+          <p>项目已经具备模拟数据、标准 schema、模型窗口、baseline、benchmark、真实数据 validation 和 forecasting 实验脚手架。</p>
+        </article>
+        <article class="panel">
+          <span class="tag blue">当前缺口</span>
+          <strong>还没有真正运行外部模型权重</strong>
+          <p>现有实验入口能检查候选模型依赖状态，但还没有完成真实 foundation model 的 zero-shot 推理。</p>
+        </article>
+        <article class="panel">
+          <span class="tag warn">新阶段目标</span>
+          <strong>让模型路线判断有证据</strong>
+          <p>只有模型真实跑起来，并和 baseline 同口径比较，才能判断是直接引用、轻量微调，还是继续寻找备用模型。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>2. 本阶段做什么，不做什么</h2>
+      <div class="two-col">
+        <article class="panel">
+          <h3>做什么</h3>
+          <ul>
+            <li>使用已有 FU13 模拟数据构建模型窗口。</li>
+            <li>本机安装可选依赖并下载开源模型权重。</li>
+            <li>优先跑通一个轻量 forecasting 模型，例如 TTM。</li>
+            <li>与 <code>RobustStageForecaster</code> 和 <code>StageSeasonalNaiveForecaster</code> 对比。</li>
+            <li>输出包含指标、失败原因、依赖状态和路线建议的实验报告。</li>
+            <li>在 README 中说明安装、下载、缓存和运行方法。</li>
+          </ul>
+        </article>
+        <article class="panel">
+          <h3>不做什么</h3>
+          <ul>
+            <li>不扩展到告警平台、工单系统、日报系统或生产部署。</li>
+            <li>第一版不要求一次性跑完所有候选模型。</li>
+            <li>第一版不训练自研设备时序基础模型。</li>
+            <li>不把模型权重、缓存、生成 parquet 或临时报表提交到 GitHub。</li>
+            <li>不把 TTM 的输入格式写进 canonical schema。</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>3. 模型选择：首选一条链路，保留多条备用</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>优先级</th>
+            <th>候选模型</th>
+            <th>第一用途</th>
+            <th>价值</th>
+            <th>注意点</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>TTM / TinyTimeMixer</td>
+            <td>zero-shot forecasting</td>
+            <td>轻量、forecasting 路线清晰、适合第一条本机推理链路。</td>
+            <td>偏预测任务，阶段/物理域语义覆盖有限。</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>FlowState / Granite Time Series</td>
+            <td>forecast-first 备用</td>
+            <td>可作为 TTM 阻塞时的同类备用方案。</td>
+            <td>生态可能仍与 TTM 重叠。</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>TimesFM</td>
+            <td>强 forecasting 对照</td>
+            <td>适合检查趋势预测能力。</td>
+            <td>依赖和模型 API 不同，需要独立 adapter。</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Chronos</td>
+            <td>概率预测对照</td>
+            <td>适合检查不确定性预测。</td>
+            <td>可能需要单变量或特定 reshape 策略。</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Moirai / Uni2TS</td>
+            <td>多变量概率预测</td>
+            <td>适合后续作为多变量 forecasting 对照。</td>
+            <td>集成成本可能更高。</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>MOMENT / TSPulse / UniTS</td>
+            <td>表征、补全、异常后续评测</td>
+            <td>更贴近多任务基础模型能力。</td>
+            <td>不是最短的第一条 forecasting 链路。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout warn">
+        <strong>关键约束</strong>
+        <p>备用模型不是第一版自动全部实现，而是在报告中形成“下一步该试哪个 adapter”的建议。这样既保留弹性，也避免第一阶段被多个生态的依赖问题拖住。</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>4. 推荐架构</h2>
+      <p>保留现有标准数据链路，把模型差异隔离在 adapter 内部。这样后续换模型时，不需要重写数据 schema 和窗口构建。</p>
+      <div class="flow" aria-label="推理评测流程">
+        <div class="step"><span>1</span><b>模拟数据</b><small>FU13 观测表 parquet</small></div>
+        <div class="step"><span>2</span><b>窗口构建</b><small><code>ModelWindow</code> 列表</small></div>
+        <div class="step"><span>3</span><b>Baseline</b><small>稳健预测与季节 naive</small></div>
+        <div class="step"><span>4</span><b>Adapter</b><small>转换为模型输入</small></div>
+        <div class="step"><span>5</span><b>模型推理</b><small>本机权重 zero-shot</small></div>
+        <div class="step"><span>6</span><b>报告决策</b><small>指标、失败原因、路线建议</small></div>
+      </div>
+      <table>
+        <thead>
+          <tr><th>模块</th><th>职责</th><th>边界</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>FoundationForecastRunner</code></td>
+            <td>组织 baseline 对比、模型执行、状态处理和指标汇总。</td>
+            <td>不写模型私有逻辑。</td>
+          </tr>
+          <tr>
+            <td><code>FoundationForecastAdapter</code></td>
+            <td>定义依赖检查、模型加载、输入转换、预测和元数据接口。</td>
+            <td>不同模型通过不同 adapter 接入。</td>
+          </tr>
+          <tr>
+            <td><code>TTMForecastAdapter</code></td>
+            <td>第一版具体 adapter，负责 TTM 的导入、权重加载和推理。</td>
+            <td>不得污染 <code>ModelWindow</code> 和 canonical schema。</td>
+          </tr>
+          <tr>
+            <td><code>ForecastingExperimentReport</code></td>
+            <td>输出 Markdown 报告，服务研发和非技术评审。</td>
+            <td>既记录成功指标，也记录失败原因。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>5. 命令形态</h2>
+      <p>现有 forecasting 命令继续保留，新增模型选择、上下文长度、预测长度和缓存目录等参数。</p>
+      <pre><code>uv run b08-model-core experiment forecasting \
+  --dataset data/simulated/furnace_fu13_45d.parquet \
+  --output reports/forecasting_ttm_experiment.md \
+  --model ttm \
+  --context-length 512 \
+  --prediction-length 96 \
+  --max-windows 40</code></pre>
+      <table>
+        <thead>
+          <tr><th>场景</th><th>退出码</th><th>说明</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>baseline-only 成功</td><td><code>0</code></td><td>基础报告写出成功。</td></tr>
+          <tr><td>foundation model 成功</td><td><code>0</code></td><td>模型完成推理并写出报告。</td></tr>
+          <tr><td>缺依赖、缺权重、窗口不支持或运行失败</td><td><code>1</code></td><td>报告仍应写出，并记录失败原因。</td></tr>
+          <tr><td>非法命令参数</td><td><code>2</code></td><td>由 <code>argparse</code> 拒绝，例如长度小于等于 0。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>6. 权重与缓存规则</h2>
+      <div class="grid">
+        <article class="panel">
+          <span class="tag">允许</span>
+          <strong>本机下载和使用模型权重</strong>
+          <p>为了真正跑通模型推理，本阶段允许安装可选依赖，并把权重下载到 Hugging Face 默认缓存或指定本地目录。</p>
+        </article>
+        <article class="panel">
+          <span class="tag warn">禁止</span>
+          <strong>模型权重不得进入 GitHub</strong>
+          <p>需要忽略 <code>models/</code>、<code>hf_cache/</code>、<code>.cache/</code>、生成数据和临时报表。</p>
+        </article>
+        <article class="panel">
+          <span class="tag blue">README</span>
+          <strong>必须写清楚安装和运行方法</strong>
+          <p>包括 optional extra、缓存位置、下载行为、运行命令和报告解读方式。</p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>7. 报告应该回答什么</h2>
+      <table>
+        <thead>
+          <tr><th>报告内容</th><th>为什么重要</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>数据集、窗口数、传感器数、上下文长度、预测长度</td><td>确认不同模型是在同一任务上比较。</td></tr>
+          <tr><td>baseline 指标</td><td>给开源模型提供最低对照线。</td></tr>
+          <tr><td>模型名称、adapter、checkpoint、缓存位置、依赖状态</td><td>确保结果可复现，也能定位环境问题。</td></tr>
+          <tr><td>MAE、RMSE、覆盖率或分位数指标</td><td>判断模型预测能力是否有实际价值。</td></tr>
+          <tr><td>失败状态和原因</td><td>依赖失败、权重失败、窗口不支持也是路线判断证据。</td></tr>
+          <tr><td>IO 覆盖说明</td><td>说明模型是否只吃数值序列，是否能表达阶段、传感器和物理域。</td></tr>
+          <tr><td>路线建议</td><td>给出 direct reuse、few-shot、备用模型或 no-go 判断。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>8. 如何做路线判断</h2>
+      <table>
+        <thead>
+          <tr><th>实验结果</th><th>下一步判断</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>真实模型明显优于 baseline，依赖成本可接受</td><td>进入直接引用候选。</td></tr>
+          <tr><td>真实模型接近 baseline，运行稳定</td><td>进入 few-shot 或冻结 backbone 轻量适配候选。</td></tr>
+          <tr><td>真实模型弱于 baseline，但成本低、链路稳定</td><td>保留为对照模型，继续测试备用模型。</td></tr>
+          <tr><td>模型无法处理窗口形状或多传感器结构</td><td>不适合作为直接引用路线，转测备用 adapter。</td></tr>
+          <tr><td>模型无法使用阶段、传感器、物理域信息</td><td>只能算 forecast-only 候选，不能代表完整 B08 基础模型能力。</td></tr>
+          <tr><td>多个 forecasting 模型都失败或弱于 baseline</td><td>优先补做表征、补全、异常模型评估，再考虑领域自研。</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>9. 第一版验收口径</h2>
+      <div class="callout">
+        <strong>最小可交付结果</strong>
+        <p>至少完成一条真实 foundation model 推理链路，或输出清楚、可复现、可定位的失败报告。无论成功或失败，报告都必须能支持下一步模型路线判断。</p>
+      </div>
+      <ul>
+        <li>baseline-only 模式仍可不依赖外部权重运行。</li>
+        <li><code>--model ttm</code> 缺依赖时能写出清晰报告。</li>
+        <li>adapter 转换保持窗口数、上下文长度、预测长度和传感器顺序。</li>
+        <li>报告包含状态、checkpoint、baseline 指标和路线建议。</li>
+        <li>README 写明权重本机保存、不提交 GitHub。</li>
+        <li><code>.gitignore</code> 覆盖模型缓存和生成产物。</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>10. 关键风险</h2>
+      <div class="grid">
+        <article class="panel">
+          <span class="tag warn">依赖变化</span>
+          <strong>开源包和模型 API 可能变化</strong>
+          <p>实现时需要再次核对官方安装说明，把模型私有逻辑封装在 adapter 内。</p>
+        </article>
+        <article class="panel">
+          <span class="tag warn">产物过大</span>
+          <strong>模型权重可能很大</strong>
+          <p>必须使用本地缓存，并通过 ignore 规则避免误提交。</p>
+        </article>
+        <article class="panel">
+          <span class="tag warn">预测成功不等于模型核心完成</span>
+          <strong>forecast-only 不能覆盖全部任务</strong>
+          <p>即使预测效果好，也要继续检查阶段、传感器、物理域、补全、表征和退化响应能力。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="callout danger">
+      <strong>边界提醒</strong>
+      <p>本页描述的是“底层时序模型能否真正跑起来并形成路线判断”。它不是完整预测性维护系统方案，也不承诺第一版直接产生生产告警、维修建议或工单。</p>
+    </section>
+
+    <p class="footer">参考资料：<a href="https://www.ibm.com/granite/docs/models/time-series/">IBM Granite Time Series</a>、<a href="https://huggingface.co/ibm-granite/granite-timeseries-ttm-r2">Granite TTM R2</a>、<a href="https://github.com/ibm-granite/granite-tsfm/blob/main/notebooks/hfdemo/ttm_getting_started.ipynb">Granite TSFM getting-started notebook</a>。</p>
+  </main>
+</body>
+</html>

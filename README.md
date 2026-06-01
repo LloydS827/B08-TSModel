@@ -182,6 +182,7 @@ configs/
 docs/
   index.html                           # 文档总入口
   model-io-definition.html             # 模型输入输出定义
+  foundation-model-inference-design.html # 真实基础模型推理验证方案
   model-route-decision.html            # 直接引用/微调/自训路线决策
   reviews/real-data-schema-map.md      # 真实数据对齐检查表
 src/b08_model_core/
@@ -200,6 +201,7 @@ tests/                                 # 回归测试
 - [项目进展说明](details.md)
 - [docs/index.html](docs/index.html)
 - [模型输入输出定义](docs/model-io-definition.html)
+- [真实基础模型推理验证方案](docs/foundation-model-inference-design.html)
 - [模型路线决策](docs/model-route-decision.html)
 - [开源时序基础模型调研](docs/调研资料/开源时序基础模型调研.md)
 - [真实数据 Schema Map](docs/reviews/real-data-schema-map.md)
