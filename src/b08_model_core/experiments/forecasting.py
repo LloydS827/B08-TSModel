@@ -2,26 +2,59 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pandas as pd
-
-from b08_model_core.adapters.chronos_adapter import build_adapter as build_chronos_adapter
-from b08_model_core.adapters.timesfm_adapter import build_adapter as build_timesfm_adapter
-from b08_model_core.adapters.ttm_adapter import build_adapter as build_ttm_adapter
-from b08_model_core.baselines.robust_forecaster import RobustStageForecaster
-from b08_model_core.evaluation.metrics import forecasting_metrics
-from b08_model_core.evaluation.open_source_matrix import candidate_matrix
-from b08_model_core.tasks.window_builder import build_model_windows
+from b08_model_core.adapters.ttm_adapter import TTMForecastAdapter
+from b08_model_core.foundation import (
+    FoundationForecastResult,
+    FoundationForecastRunner,
+    FoundationModelStatus,
+    render_foundation_report,
+)
 
 
-FORECASTING_CANDIDATES = {"FlowState", "TTM", "TimesFM", "Chronos", "Moirai"}
+SUPPORTED_EXPERIMENT_MODELS = {"baseline", "ttm"}
 
 
-def _adapter_status() -> dict[str, str]:
-    adapters = [build_ttm_adapter(), build_timesfm_adapter(), build_chronos_adapter()]
-    return {
-        adapter.name: ("available" if adapter.available else f"skipped_optional_dependency: {adapter.reason}")
-        for adapter in adapters
-    }
+class BaselineOnlyAdapter:
+    name = "BaselineOnly"
+    adapter_name = "baseline"
+
+    def predict(
+        self,
+        windows: list[object],
+        *,
+        context_length: int,
+        prediction_length: int,
+        allow_download: bool,
+        model_cache_dir: str | None,
+    ) -> FoundationForecastResult:
+        return FoundationForecastResult(
+            model_name=self.name,
+            adapter_name=self.adapter_name,
+            status=FoundationModelStatus.SKIPPED_BY_USER,
+            reason="foundation model was not selected; baseline comparison only",
+            metadata={
+                "context_length": context_length,
+                "prediction_length": prediction_length,
+                "allow_download": allow_download,
+                "window_count": len(windows),
+            },
+            io_coverage={
+                "point_forecast": False,
+                "prediction_interval": False,
+                "sensor_token_preserved": True,
+            },
+            dependency_status="not_required",
+            weight_status="not_attempted",
+            cache_dir=model_cache_dir,
+        )
+
+
+def _adapter_for_model(model: str) -> object:
+    if model == "baseline":
+        return BaselineOnlyAdapter()
+    if model == "ttm":
+        return TTMForecastAdapter()
+    raise ValueError(f"unsupported forecasting experiment model: {model}")
 
 
 def run_forecasting_experiment(
@@ -30,36 +63,69 @@ def run_forecasting_experiment(
     context_length: int = 128,
     prediction_length: int = 32,
     max_windows: int = 120,
+    model: str = "baseline",
+    model_cache_dir: str | None = None,
+    allow_download: bool = False,
 ) -> Path:
-    df = pd.read_parquet(dataset_path)
-    windows = build_model_windows(df, context_length=context_length, prediction_length=prediction_length, stride=prediction_length)
-    windows = windows[:max_windows]
-    split = max(1, int(len(windows) * 0.7))
-    train = windows[:split]
-    test = windows[split:] or windows[-1:]
+    output, _ = run_forecasting_experiment_with_status(
+        dataset_path=dataset_path,
+        output_path=output_path,
+        context_length=context_length,
+        prediction_length=prediction_length,
+        max_windows=max_windows,
+        model=model,
+        model_cache_dir=model_cache_dir,
+        allow_download=allow_download,
+    )
+    return output
 
-    preds = RobustStageForecaster().fit(train).predict(test)
-    metrics = forecasting_metrics(preds, test)
-    adapters = _adapter_status()
 
-    lines = [
-        "# Forecasting Experiment",
-        "",
-        f"Dataset: {dataset_path}",
-        f"Windows: train={len(train)}, test={len(test)}",
-        f"RobustStageForecaster MAE: {metrics['mae']:.6f}",
-        f"RobustStageForecaster interval_coverage: {metrics['interval_coverage']:.6f}",
-        "",
-        "| candidate | route | status | reason |",
-        "| --- | --- | --- | --- |",
-    ]
-    for candidate in candidate_matrix():
-        if candidate.name not in FORECASTING_CANDIDATES:
-            continue
-        status = adapters.get(candidate.name, "skipped_optional_dependency: no local adapter implemented yet")
-        lines.append(f"| {candidate.name} | {candidate.route} | {status} | {candidate.reason} |")
+def run_forecasting_experiment_with_status(
+    dataset_path: str | Path,
+    output_path: str | Path,
+    context_length: int = 128,
+    prediction_length: int = 32,
+    max_windows: int = 120,
+    model: str = "baseline",
+    model_cache_dir: str | None = None,
+    allow_download: bool = False,
+) -> tuple[Path, FoundationModelStatus]:
+    if context_length <= 0:
+        raise ValueError("context_length must be greater than 0")
+    if prediction_length <= 0:
+        raise ValueError("prediction_length must be greater than 0")
+    if max_windows <= 0:
+        raise ValueError("max_windows must be greater than 0")
+    if model not in SUPPORTED_EXPERIMENT_MODELS:
+        raise ValueError(f"unsupported forecasting experiment model: {model}")
 
+    adapter = _adapter_for_model(model)
+    runner_result = FoundationForecastRunner().run(
+        dataset_path=dataset_path,
+        model_name=adapter.name,
+        adapter=adapter,
+        context_length=context_length,
+        prediction_length=prediction_length,
+        max_windows=max_windows,
+        allow_download=allow_download,
+        model_cache_dir=model_cache_dir,
+    )
+    dataset_summary = {
+        "dataset": runner_result.dataset_path,
+        "train_windows": runner_result.train_count,
+        "test_windows": runner_result.test_count,
+        "context_length": runner_result.context_length,
+        "prediction_length": runner_result.prediction_length,
+        "sensors": runner_result.sensor_count,
+    }
+    report = render_foundation_report(
+        dataset_summary=dataset_summary,
+        baseline_metrics=runner_result.baseline_metrics,
+        foundation_result=runner_result.foundation_result,
+        route_recommendation=runner_result.route_recommendation,
+        fallback_candidates=runner_result.fallback_candidates,
+    )
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    return output
+    output.write_text(report, encoding="utf-8")
+    return output, runner_result.foundation_result.status

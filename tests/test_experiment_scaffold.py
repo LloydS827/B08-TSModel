@@ -1,11 +1,14 @@
 import subprocess
 import sys
 
+import pytest
+
+from b08_model_core.experiments import forecasting as forecasting_module
 from b08_model_core.simulation.export_dataset import simulate_dataset
 from b08_model_core.evaluation.open_source_matrix import candidate_matrix
 
 
-def test_forecasting_experiment_scaffold_runs_without_external_weights(tmp_path):
+def test_default_forecasting_cli_runs_baseline_only_without_external_weights(tmp_path):
     dataset = tmp_path / "fu13.parquet"
     report = tmp_path / "forecasting_experiment.md"
     simulate_dataset(days=3, seed=23, output_path=dataset)
@@ -30,14 +33,80 @@ def test_forecasting_experiment_scaffold_runs_without_external_weights(tmp_path)
 
     assert result.returncode == 0, result.stderr
     text = report.read_text(encoding="utf-8")
-    assert "Forecasting Experiment" in text
+    assert "Forecasting Foundation Model Experiment" in text
     assert "RobustStageForecaster" in text
-    assert "FlowState" in text
+    assert "StageSeasonalNaiveForecaster" in text
+    assert "Route Recommendation" in text
+    assert "BaselineOnly" in text
+    assert "baseline" in text
+    assert "skipped_by_user" in text
+
+
+def test_baseline_forecasting_experiment_does_not_instantiate_ttm(tmp_path, monkeypatch):
+    dataset = tmp_path / "fu13.parquet"
+    report = tmp_path / "forecasting_experiment.md"
+    simulate_dataset(days=3, seed=23, output_path=dataset)
+
+    def fail_if_used(*args, **kwargs):
+        raise AssertionError("baseline mode must not instantiate TTMForecastAdapter")
+
+    monkeypatch.setattr(forecasting_module, "TTMForecastAdapter", fail_if_used, raising=False)
+
+    output = forecasting_module.run_forecasting_experiment(
+        dataset_path=dataset,
+        output_path=report,
+        max_windows=40,
+        model="baseline",
+    )
+
+    assert output == report
+    assert "skipped_by_user" in report.read_text(encoding="utf-8")
+
+
+def test_ttm_forecasting_cli_returns_nonzero_for_non_success_but_writes_report(tmp_path):
+    dataset = tmp_path / "fu13.parquet"
+    report = tmp_path / "ttm_forecasting_experiment.md"
+    empty_cache = tmp_path / "empty_hf_cache"
+    empty_cache.mkdir()
+    simulate_dataset(days=3, seed=23, output_path=dataset)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "experiment",
+            "forecasting",
+            "--dataset",
+            str(dataset),
+            "--output",
+            str(report),
+            "--max-windows",
+            "40",
+            "--model",
+            "ttm",
+            "--model-cache-dir",
+            str(empty_cache),
+            "--no-download",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert report.exists()
+    text = report.read_text(encoding="utf-8")
     assert "TTM" in text
-    assert "TimesFM" in text
-    assert "Chronos" in text
-    assert "Moirai" in text
-    assert "skipped_optional_dependency" in text
+    assert "Foundation Model Status" in text
+    assert result.returncode == 1, text
+    assert any(
+        status in text
+        for status in [
+            "missing_dependency",
+            "missing_or_blocked_weights",
+            "unsupported_window_shape",
+            "runtime_failed",
+        ]
+    )
 
 
 def test_forecasting_experiment_rejects_non_positive_max_windows(tmp_path):
@@ -57,6 +126,35 @@ def test_forecasting_experiment_rejects_non_positive_max_windows(tmp_path):
             "--output",
             str(report),
             "--max-windows",
+            "0",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 2
+    assert "must be greater than 0" in result.stderr
+    assert not report.exists()
+
+
+@pytest.mark.parametrize("option", ["--context-length", "--prediction-length"])
+def test_forecasting_experiment_rejects_non_positive_lengths(tmp_path, option):
+    dataset = tmp_path / "fu13.parquet"
+    report = tmp_path / "forecasting_experiment.md"
+    simulate_dataset(days=3, seed=23, output_path=dataset)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "experiment",
+            "forecasting",
+            "--dataset",
+            str(dataset),
+            "--output",
+            str(report),
+            option,
             "0",
         ],
         text=True,

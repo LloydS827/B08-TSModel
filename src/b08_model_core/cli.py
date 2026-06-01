@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import argparse
-from pathlib import Path
 
 from b08_model_core.evaluation.benchmark import run_benchmark
-from b08_model_core.experiments.forecasting import run_forecasting_experiment
+from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
+from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.validation_report import validate_real_data_file
 from b08_model_core.simulation.export_dataset import simulate_dataset
 
@@ -43,6 +43,14 @@ def main(argv: list[str] | None = None) -> int:
     forecasting.add_argument("--dataset", required=True)
     forecasting.add_argument("--output", required=True)
     forecasting.add_argument("--max-windows", type=_positive_int, default=120)
+    forecasting.add_argument("--model", choices=["baseline", "ttm"], default="baseline")
+    forecasting.add_argument("--context-length", type=_positive_int, default=128)
+    forecasting.add_argument("--prediction-length", type=_positive_int, default=32)
+    forecasting.add_argument("--model-cache-dir")
+    download = forecasting.add_mutually_exclusive_group()
+    download.add_argument("--allow-download", action="store_true", dest="allow_download")
+    download.add_argument("--no-download", action="store_false", dest="allow_download")
+    forecasting.set_defaults(allow_download=False)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -55,7 +63,18 @@ def main(argv: list[str] | None = None) -> int:
         report = validate_real_data_file(args.input, args.schema_map, args.output)
         return 0 if report.schema_valid else 1
     if args.command == "experiment" and args.experiment_command == "forecasting":
-        run_forecasting_experiment(args.dataset, args.output, max_windows=args.max_windows)
+        _, status = run_forecasting_experiment_with_status(
+            args.dataset,
+            args.output,
+            context_length=args.context_length,
+            prediction_length=args.prediction_length,
+            max_windows=args.max_windows,
+            model=args.model,
+            model_cache_dir=args.model_cache_dir,
+            allow_download=args.allow_download,
+        )
+        if args.model != "baseline" and status != FoundationModelStatus.AVAILABLE_AND_RAN:
+            return 1
         return 0
     raise ValueError(args.command)
 
