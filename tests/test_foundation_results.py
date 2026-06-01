@@ -1,5 +1,7 @@
 import numpy as np
+import pytest
 
+from b08_model_core.foundation import render_foundation_report
 from b08_model_core.evaluation.metrics import forecasting_metrics
 from b08_model_core.foundation.results import (
     FoundationForecastResult,
@@ -35,7 +37,7 @@ def test_forecasting_metrics_keep_interval_coverage_when_quantiles_exist():
     metrics = forecasting_metrics(preds, windows)
 
     assert metrics["mae"] == 0.25
-    assert metrics["rmse"] == 0.3535533905932738
+    assert metrics["rmse"] == pytest.approx(0.3535533905932738)
     assert metrics["interval_coverage"] == 1.0
 
 
@@ -182,3 +184,140 @@ def test_route_recommendation_uses_baseline_comparison_when_successful():
         )
         == "fallback_comparator"
     )
+
+
+def test_render_foundation_report_includes_successful_model_comparison():
+    dataset_summary = {
+        "dataset": "FU13 simulated 45d",
+        "windows": 24,
+        "horizon": 12,
+        "sensors": 5,
+    }
+    baseline_metrics = {
+        "RobustStageForecaster": {
+            "mae": 2.5,
+            "rmse": 3.0,
+            "interval_coverage": None,
+        }
+    }
+    foundation_result = FoundationForecastResult(
+        model_name="TTM",
+        adapter_name="ttm",
+        status=FoundationModelStatus.AVAILABLE_AND_RAN,
+        reason="ran on local simulated windows",
+        metrics={"mae": 2.0, "rmse": 2.75, "interval_coverage": None},
+        io_coverage={"point_forecast": True, "prediction_interval": False},
+        dependency_status="installed",
+        weight_status="cached",
+        cache_dir="/private/tmp/b08-model-cache",
+    )
+
+    report = render_foundation_report(
+        dataset_summary=dataset_summary,
+        baseline_metrics=baseline_metrics,
+        foundation_result=foundation_result,
+        route_recommendation="direct_reuse_candidate",
+        fallback_candidates=["FlowState", "TimesFM"],
+    )
+
+    assert "# Forecasting Foundation Model Experiment" in report
+    for section in [
+        "Dataset Summary",
+        "Selected Foundation Model",
+        "Foundation Model Status",
+        "Baseline Comparison",
+        "Local Model Environment",
+        "IO Coverage",
+        "Route Recommendation",
+    ]:
+        assert section in report
+    assert "TTM" in report
+    assert "available_and_ran" in report
+    assert "RobustStageForecaster" in report
+    assert "mae: 2.500000" in report
+    assert "rmse: 3.000000" in report
+    assert "foundation mae: 2.000000" in report
+    assert "foundation rmse: 2.750000" in report
+    assert "MAE delta: -0.500000" in report
+    assert "RMSE delta: -0.250000" in report
+    assert "interval_coverage: not_available" in report
+    assert "cache_dir: /private/tmp/b08-model-cache" in report
+    assert "dependency_status: installed" in report
+    assert "weight_status: cached" in report
+    assert "fallback candidates: FlowState, TimesFM" in report
+
+
+def test_render_foundation_report_includes_missing_dependency_reason():
+    foundation_result = FoundationForecastResult(
+        model_name="TimesFM",
+        adapter_name="timesfm",
+        status=FoundationModelStatus.MISSING_DEPENDENCY,
+        reason="timesfm package is not installed",
+        dependency_status="missing: timesfm",
+        weight_status="not_checked",
+        cache_dir=None,
+    )
+
+    report = render_foundation_report(
+        dataset_summary={"dataset": "FU13 simulated smoke"},
+        baseline_metrics={"RobustStageForecaster": {"mae": 1.0, "rmse": None}},
+        foundation_result=foundation_result,
+        route_recommendation="no_go_missing_dependency",
+        fallback_candidates=["TTM"],
+    )
+
+    assert "TimesFM" in report
+    assert "missing_dependency" in report
+    assert "reason: timesfm package is not installed" in report
+    assert "cache_dir: not_available" in report
+    assert "dependency_status: missing: timesfm" in report
+    assert "weight_status: not_checked" in report
+    assert "Route Recommendation" in report
+    assert "no_go_missing_dependency" in report
+
+
+def test_render_foundation_report_handles_empty_and_missing_sections():
+    foundation_result = FoundationForecastResult(
+        model_name="BaselineOnly",
+        adapter_name="baseline",
+        status=FoundationModelStatus.SKIPPED_BY_USER,
+    )
+
+    report = render_foundation_report(
+        dataset_summary={},
+        baseline_metrics={},
+        foundation_result=foundation_result,
+        route_recommendation="baseline_only",
+        fallback_candidates=[],
+    )
+
+    assert "Dataset Summary\n- not_available" in report
+    assert "Baseline Comparison\n- not_available" in report
+    assert "MAE delta: not_available" in report
+    assert "RMSE delta: not_available" in report
+    assert "fallback candidates: not_available" in report
+    assert "IO Coverage\n- not_available" in report
+
+
+def test_render_foundation_report_handles_none_baseline_metrics():
+    foundation_result = FoundationForecastResult(
+        model_name="TTM",
+        adapter_name="ttm",
+        status=FoundationModelStatus.MISSING_OR_BLOCKED_WEIGHTS,
+        reason="offline cache miss",
+        dependency_status="installed",
+        weight_status="blocked_or_unknown",
+    )
+
+    report = render_foundation_report(
+        dataset_summary=None,
+        baseline_metrics={"RobustStageForecaster": None},
+        foundation_result=foundation_result,
+        route_recommendation="no_go_missing_or_blocked_weights",
+        fallback_candidates=[],
+    )
+
+    assert "Dataset Summary\n- not_available" in report
+    assert "- RobustStageForecaster\n  - not_available" in report
+    assert "missing_or_blocked_weights" in report
+    assert "reason: offline cache miss" in report
