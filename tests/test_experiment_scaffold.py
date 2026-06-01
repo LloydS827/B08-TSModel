@@ -186,3 +186,9 @@ def test_foundation_ttm_extra_and_local_model_artifacts_are_documented():
     assert "model_cache/" in ignore_rules
     assert ".cache/" in ignore_rules
     assert "reports/*.md" in ignore_rules
+
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert "uv sync --extra dev --extra foundation-ttm" in readme
+    assert "--allow-download" in readme
+    assert "HF_HOME=hf_cache" in readme
+    assert "不要把这些文件上传到 GitHub" in readme

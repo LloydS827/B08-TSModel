@@ -128,6 +128,58 @@ uv run b08-model-core experiment forecasting \
   --max-windows 40
 ```
 
+默认 forecasting 实验是 `baseline` 模式，只运行本仓库内置 baseline，不需要外部模型依赖，也不会下载模型权重。
+
+### 可选：运行 TTM 真实基础模型推理
+
+TTM 推理分为三层，不要混在一起理解：
+
+1. 安装 optional Python 依赖：`granite-tsfm`、`torch`、`transformers`、`huggingface_hub`。
+2. 指定本机模型 cache 目录，例如 `hf_cache/`。
+3. 用 `--allow-download` 明确允许本次运行从 Hugging Face 下载缺失的模型权重。
+
+安装 optional 依赖：
+
+```bash
+uv sync --extra dev --extra foundation-ttm
+```
+
+运行 TTM，并把权重保存在本机 `hf_cache/`：
+
+```bash
+HF_HOME=hf_cache uv run b08-model-core experiment forecasting \
+  --dataset data/simulated/furnace_fu13_45d.parquet \
+  --output reports/foundation_ttm_forecasting.md \
+  --model ttm \
+  --allow-download \
+  --model-cache-dir hf_cache \
+  --max-windows 20
+```
+
+离线或只读本机 cache 时使用 `--no-download`：
+
+```bash
+HF_HOME=hf_cache uv run b08-model-core experiment forecasting \
+  --dataset data/simulated/furnace_fu13_45d.parquet \
+  --output reports/foundation_ttm_forecasting.md \
+  --model ttm \
+  --no-download \
+  --model-cache-dir hf_cache \
+  --max-windows 20
+```
+
+TTM 命令的退出码约定：
+
+| 情况 | 报告状态 | 退出码 |
+| --- | --- | --- |
+| baseline 默认模式 | `skipped_by_user` | `0` |
+| TTM 依赖未安装 | `missing_dependency` | `1` |
+| TTM cache 命中并完成推理 | `available_and_ran` | `0` |
+| TTM cache 未命中且禁止下载 | `missing_or_blocked_weights` | `1` |
+| TTM 下载、加载或推理失败 | `missing_or_blocked_weights`、`unsupported_window_shape` 或 `runtime_failed` | `1` |
+
+模型权重、Hugging Face cache、生成的 parquet 数据和临时实验报告只保存在本机。仓库已经忽略 `hf_cache/`、`model_cache/`、`models/`、`data/simulated/*.parquet` 和 `reports/*.md`，不要把这些文件上传到 GitHub。
+
 ## 真实数据对齐流程
 
 真实数据入口使用 schema map，而不是直接把原始导出喂给模型。
