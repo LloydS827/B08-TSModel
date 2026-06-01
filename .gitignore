@@ -14,3 +14,4 @@ reports/*.md
 hf_cache/
 model_cache/
 models/
+ttm_finetuned_models/

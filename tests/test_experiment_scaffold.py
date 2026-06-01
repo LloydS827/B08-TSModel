@@ -178,13 +178,17 @@ def test_forecasting_candidate_matrix_includes_current_forecast_first_models():
 
 def test_foundation_ttm_extra_and_local_model_artifacts_are_documented():
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    foundation_ttm = set(pyproject["project"]["optional-dependencies"]["foundation-ttm"])
-    assert {"granite-tsfm", "torch", "transformers", "huggingface_hub"} <= foundation_ttm
+    foundation_ttm = pyproject["project"]["optional-dependencies"]["foundation-ttm"]
+    assert any(item.startswith("granite-tsfm>=") for item in foundation_ttm)
+    assert any(item.startswith("torch>=") for item in foundation_ttm)
+    assert any(item.startswith("transformers>=") for item in foundation_ttm)
+    assert any(item.startswith("huggingface_hub>=") for item in foundation_ttm)
 
     ignore_rules = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
     assert "hf_cache/" in ignore_rules
     assert "model_cache/" in ignore_rules
     assert ".cache/" in ignore_rules
+    assert "ttm_finetuned_models/" in ignore_rules
     assert "reports/*.md" in ignore_rules
 
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
