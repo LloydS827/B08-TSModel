@@ -21,7 +21,7 @@ class FU13DiagnosticsReport:
 def build_fu13_diagnostics(df: pd.DataFrame, cfg: FU13RealDataConfig) -> FU13DiagnosticsReport:
     sensor_scenario = {sensor.sensor_id: sensor.scenario for sensor in cfg.sensors}
     enriched = df.copy()
-    enriched["scenario"] = enriched["sensor_id"].map(sensor_scenario)
+    enriched["scenario"] = enriched["sensor_id"].map(sensor_scenario).fillna("unmapped_sensor")
     sensor_summary = (
         enriched.groupby("sensor_id")["value"]
         .agg(["count", "min", "median", "max"])
@@ -45,14 +45,18 @@ def build_fu13_diagnostics(df: pd.DataFrame, cfg: FU13RealDataConfig) -> FU13Dia
 
 
 def _to_markdown(df: pd.DataFrame) -> str:
-    headers = [str(column) for column in df.columns]
+    headers = [_format_markdown_cell(column) for column in df.columns]
     separator = ["---"] * len(headers)
-    rows = [[str(value) for value in row] for row in df.itertuples(index=False, name=None)]
+    rows = [[_format_markdown_cell(value) for value in row] for row in df.itertuples(index=False, name=None)]
 
     def render_row(values: list[str]) -> str:
         return "| " + " | ".join(values) + " |"
 
     return "\n".join([render_row(headers), render_row(separator), *(render_row(row) for row in rows)])
+
+
+def _format_markdown_cell(value: object) -> str:
+    return str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").replace("|", "\\|")
 
 
 def render_fu13_diagnostics(report: FU13DiagnosticsReport) -> str:

@@ -24,26 +24,34 @@ def _cfg():
 def test_render_fu13_diagnostics_mentions_scenarios_and_quality():
     df = pd.DataFrame(
         {
-            "timestamp": pd.to_datetime(["2026-05-01T00:00:00Z"] * 5, utc=True),
-            "device_id": ["FU13"] * 5,
-            "batch_id": ["cycle_0001"] * 5,
-            "stage": ["溶解", "浇筑", "抽真空", "浇筑", "溶解"],
-            "sensor_id": ["O2Content", "O2Content2", "PumpShake1", "SysSelfPressure", "LeakElec"],
-            "value": [-20, -19, 4, 14, 61],
-            "unit": ["%", "%", "um", "MPa", "ma"],
-            "domain": ["atmosphere", "atmosphere", "mechanical", "hydraulic", "electrical"],
-            "quality_flag": ["good", "good", "good", "good", "invalid"],
-            "degradation_label": ["normal"] * 5,
-            "failure_proxy": [False] * 5,
+            "timestamp": pd.to_datetime(["2026-05-01T00:00:00Z"] * 6, utc=True),
+            "device_id": ["FU13"] * 6,
+            "batch_id": ["cycle_0001"] * 6,
+            "stage": ["溶解", "浇筑", "抽真空", "浇筑", "溶解", "line\nbreak"],
+            "sensor_id": ["O2Content", "O2Content2", "PumpShake1", "SysSelfPressure", "LeakElec", "x|y"],
+            "value": [-20, -19, 4, 14, 61, 7],
+            "unit": ["%", "%", "um", "MPa", "ma", "C"],
+            "domain": ["atmosphere", "atmosphere", "mechanical", "hydraulic", "electrical", "unknown"],
+            "quality_flag": ["good", "good", "good", "good", "invalid", "invalid"],
+            "degradation_label": ["normal"] * 6,
+            "failure_proxy": [False] * 6,
         }
     )
 
     report = build_fu13_diagnostics(df, _cfg())
     text = render_fu13_diagnostics(report)
+    scenario_rows = report.scenario_summary.set_index("scenario")
 
     assert "Real FU13 Data Diagnostics" in text
-    assert "invalid" in text
+    assert report.quality_counts == {"good": 4, "invalid": 2}
+    assert scenario_rows.loc["leak_current_monitoring", "invalid_rows"] == 1
+    assert scenario_rows.loc["unmapped_sensor", "rows"] == 1
+    assert scenario_rows.loc["unmapped_sensor", "invalid_rows"] == 1
     assert "atmosphere_detection" in text
     assert "pump_vibration" in text
     assert "hydraulic_system_detection" in text
     assert "leak_current_monitoring" in text
+    assert "unmapped_sensor" in text
+    assert "x\\|y" in text
+    assert "line break" in text
+    assert "line\nbreak" not in text
