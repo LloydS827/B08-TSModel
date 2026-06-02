@@ -401,6 +401,8 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 
 ## Git 安全边界
 
+真实数据、生成 parquet、临时报告和模型 cache 都是本机验证资产。不要把这些文件上传到 GitHub。
+
 不要提交：
 
 - `data/real/`
