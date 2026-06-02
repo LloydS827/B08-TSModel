@@ -90,7 +90,9 @@ sensors:
     assert assemble.returncode == 0, assemble.stderr
     assert output_parquet.exists()
     assert validation_report.exists()
-    assert "Real FU13 Data Validation" in validation_report.read_text(encoding="utf-8")
+    validation_text = validation_report.read_text(encoding="utf-8")
+    assert "Real FU13 Data Validation" in validation_text
+    assert "np.int" not in validation_text
 
     diagnose = subprocess.run(
         [

@@ -102,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         output.parent.mkdir(parents=True, exist_ok=True)
         observations.to_parquet(output, index=False)
         validation = validate_observation_frame(observations)
+        quality_counts = {str(k): int(v) for k, v in observations["quality_flag"].value_counts().items()}
         report = [
             "# Real FU13 Data Validation",
             "",
@@ -110,7 +111,7 @@ def main(argv: list[str] | None = None) -> int:
             f"- sensors: {observations['sensor_id'].nunique()}",
             f"- stages: {observations['stage'].nunique()}",
             f"- cycle_summary: {cycle_summary}",
-            f"- quality_counts: {dict(observations['quality_flag'].value_counts())}",
+            f"- quality_counts: {quality_counts}",
         ]
         report_path = Path(args.report)
         report_path.parent.mkdir(parents=True, exist_ok=True)
