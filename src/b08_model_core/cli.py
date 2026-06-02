@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import argparse
+from pathlib import Path
+
+import pandas as pd
 
 from b08_model_core.evaluation.benchmark import run_benchmark
 from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
+from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
+from b08_model_core.real_data.fu13_config import load_fu13_real_data_config
+from b08_model_core.real_data.fu13_loader import assemble_fu13_observations
 from b08_model_core.real_data.validation_report import validate_real_data_file
 from b08_model_core.simulation.export_dataset import simulate_dataset
+from b08_model_core.tasks.schema import validate_observation_frame
 
 
 def _positive_int(value: str) -> int:
@@ -36,6 +43,15 @@ def main(argv: list[str] | None = None) -> int:
     validate.add_argument("--input", required=True)
     validate.add_argument("--schema-map", required=True)
     validate.add_argument("--output", required=True)
+    assemble_fu13 = real_data_sub.add_parser("assemble-fu13")
+    assemble_fu13.add_argument("--input-dir", required=True)
+    assemble_fu13.add_argument("--config", required=True)
+    assemble_fu13.add_argument("--output", required=True)
+    assemble_fu13.add_argument("--report", required=True)
+    diagnose_fu13 = real_data_sub.add_parser("diagnose-fu13")
+    diagnose_fu13.add_argument("--dataset", required=True)
+    diagnose_fu13.add_argument("--config", required=True)
+    diagnose_fu13.add_argument("--output", required=True)
 
     experiment = sub.add_parser("experiment")
     experiment_sub = experiment.add_subparsers(dest="experiment_command", required=True)
@@ -62,6 +78,34 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "real-data" and args.real_data_command == "validate":
         report = validate_real_data_file(args.input, args.schema_map, args.output)
         return 0 if report.schema_valid else 1
+    if args.command == "real-data" and args.real_data_command == "assemble-fu13":
+        observations, cycle_summary = assemble_fu13_observations(args.input_dir, args.config)
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        observations.to_parquet(output, index=False)
+        validation = validate_observation_frame(observations)
+        report = [
+            "# Real FU13 Data Validation",
+            "",
+            f"- schema_valid: {validation.valid}",
+            f"- rows: {len(observations)}",
+            f"- sensors: {observations['sensor_id'].nunique()}",
+            f"- stages: {observations['stage'].nunique()}",
+            f"- cycle_summary: {cycle_summary}",
+            f"- quality_counts: {dict(observations['quality_flag'].value_counts())}",
+        ]
+        report_path = Path(args.report)
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        report_path.write_text("\n".join(report) + "\n", encoding="utf-8")
+        return 0 if validation.valid else 1
+    if args.command == "real-data" and args.real_data_command == "diagnose-fu13":
+        cfg = load_fu13_real_data_config(args.config)
+        df = pd.read_parquet(args.dataset)
+        report = build_fu13_diagnostics(df, cfg)
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(render_fu13_diagnostics(report), encoding="utf-8")
+        return 0
     if args.command == "experiment" and args.experiment_command == "forecasting":
         _, status = run_forecasting_experiment_with_status(
             args.dataset,
