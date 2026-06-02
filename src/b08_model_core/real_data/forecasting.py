@@ -28,6 +28,7 @@ class RealForecastingResult:
     test_windows: int
     baseline_metrics: dict[str, dict[str, float | None]]
     foundation_result: FoundationForecastResult
+    grouped_metrics_source: str
     sensor_metrics: dict[str, dict[str, float | int | None]]
     scenario_metrics: dict[str, dict[str, float | int | None]]
 
@@ -92,6 +93,7 @@ def run_real_data_forecasting(
         foundation_result.metrics = forecasting_metrics(foundation_result.predictions(), test)
 
     metrics_predictions = foundation_result.predictions() if foundation_result.succeeded else {}
+    grouped_metrics_source = "foundation_model" if metrics_predictions else "RobustStageForecaster fallback"
     if not metrics_predictions:
         metrics_predictions = robust_predictions
     domain_by_sensor = df.drop_duplicates("sensor_id").set_index("sensor_id")["domain"].to_dict()
@@ -103,6 +105,7 @@ def run_real_data_forecasting(
         test_windows=len(test),
         baseline_metrics=baseline_metrics,
         foundation_result=foundation_result,
+        grouped_metrics_source=grouped_metrics_source,
         sensor_metrics=_metrics_by_sensor(metrics_predictions, test),
         scenario_metrics=_metrics_by_scenario(
             metrics_predictions,
@@ -136,9 +139,9 @@ def render_real_data_forecasting_report(result: RealForecastingResult) -> str:
     if result.foundation_result.metrics:
         lines.extend(["", "## Foundation Metrics"])
         lines.extend(_metric_table({"foundation": result.foundation_result.metrics}, label_name="model"))
-    lines.extend(["", "## Sensor Metrics"])
+    lines.extend(["", "## Sensor Metrics", f"- grouped_metrics_source: {result.grouped_metrics_source}", ""])
     lines.extend(_metric_table(result.sensor_metrics, label_name="sensor"))
-    lines.extend(["", "## Scenario Metrics"])
+    lines.extend(["", "## Scenario Metrics", f"- grouped_metrics_source: {result.grouped_metrics_source}", ""])
     lines.extend(_metric_table(result.scenario_metrics, label_name="scenario"))
     return "\n".join(lines) + "\n"
 
@@ -201,16 +204,29 @@ def _error_metrics(error: np.ndarray, *, count: int) -> dict[str, float | int | 
 def _metric_table(metrics: Mapping[str, Mapping[str, float | int | None] | None], *, label_name: str) -> list[str]:
     if not metrics:
         return ["- not_available"]
-    rows = [f"| {label_name} | mae | rmse | interval_coverage | count |", "| --- | --- | --- | --- | --- |"]
+    headers = [_format_markdown_cell(value) for value in [label_name, "mae", "rmse", "interval_coverage", "count"]]
+    rows = ["| " + " | ".join(headers) + " |", "| --- | --- | --- | --- | --- |"]
     for label, values in metrics.items():
         if not values:
-            rows.append(f"| {label} | not_available | not_available | not_available | not_available |")
+            rows.append(
+                "| "
+                + " | ".join(
+                    [
+                        _format_markdown_cell(label),
+                        "not_available",
+                        "not_available",
+                        "not_available",
+                        "not_available",
+                    ]
+                )
+                + " |"
+            )
             continue
         rows.append(
             "| "
             + " | ".join(
                 [
-                    str(label),
+                    _format_markdown_cell(label),
                     _format_metric(values.get("mae")),
                     _format_metric(values.get("rmse")),
                     _format_metric(values.get("interval_coverage")),
@@ -228,6 +244,10 @@ def _format_metric(value: float | int | None) -> str:
     if isinstance(value, int):
         return str(value)
     return f"{value:.6f}"
+
+
+def _format_markdown_cell(value: object) -> str:
+    return str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").replace("|", "\\|")
 
 
 def _format_value(value: object) -> str:
