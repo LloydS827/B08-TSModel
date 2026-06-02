@@ -1,0 +1,105 @@
+device_id: FU13
+timezone_policy: UTC
+stage_file: stage_data.csv
+cycle_rules:
+  start_stage: 上盖关闭
+  required_order:
+    - 上盖关闭
+    - 溶解
+    - 浇筑
+  optional_stages:
+    - 抽真空
+    - 氩气导入
+    - 测温
+    - 冷却
+  waiting_stages:
+    - 上盖开启
+sensors:
+  - parameter_name: 下料口氧含量
+    collector: FU13_Record
+    source_tag: O2Content2
+    sensor_id: O2Content2
+    source_file: FU13_Record_O2Content2.csv
+    lower_limit: -21
+    upper_limit: 0
+    unit: "%"
+    domain: atmosphere
+    scenario: atmosphere_detection
+    related_stages: [浇筑]
+  - parameter_name: 坩埚前倾压力
+    collector: FU13
+    source_tag: CrucibleForwardPressure
+    sensor_id: CrucibleForwardPressure
+    source_file: FU13_CrucibleForwardPressure.csv
+    lower_limit: 0
+    upper_limit: 12
+    unit: MPa
+    domain: hydraulic
+    scenario: hydraulic_system_detection
+    related_stages: [浇筑]
+  - parameter_name: 坩埚回程压力
+    collector: FU13
+    source_tag: CrucibleReturnPressure
+    sensor_id: CrucibleReturnPressure
+    source_file: FU13_CrucibleReturnPressure.csv
+    lower_limit: 0
+    upper_limit: 12
+    unit: MPa
+    domain: hydraulic
+    scenario: hydraulic_system_detection
+    related_stages: [浇筑]
+  - parameter_name: 机械泵振动1
+    collector: FU13_Pump_01
+    source_tag: PumpShake1
+    sensor_id: PumpShake1
+    source_file: FU13_Pump_01_PumpShake1.csv
+    lower_limit: 0
+    upper_limit: 10
+    unit: um
+    domain: mechanical
+    scenario: pump_vibration
+    related_stages: [抽真空]
+  - parameter_name: 机械泵振动2
+    collector: FU13_Pump_02
+    source_tag: PumpShake2
+    sensor_id: PumpShake2
+    source_file: FU13_Pump_02_PumpShake2.csv
+    lower_limit: 0
+    upper_limit: 7
+    unit: um
+    domain: mechanical
+    scenario: pump_vibration
+    related_stages: [抽真空]
+  - parameter_name: 泄漏电流
+    collector: FU13_Record
+    source_tag: LeakElec
+    sensor_id: LeakElec
+    source_file: FU13_Record_LeakElec.csv
+    lower_limit: 0
+    upper_limit: 60
+    unit: ma
+    domain: electrical
+    scenario: leak_current_monitoring
+    related_stages: [抽真空, 氩气导入, 溶解, 测温, 浇筑, 冷却]
+  - parameter_name: 真空管氧含量
+    collector: FU13_Record
+    source_tag: O2Content
+    sensor_id: O2Content
+    source_file: FU13_Record_O2Content.csv
+    lower_limit: -21
+    upper_limit: 0
+    unit: "%"
+    domain: atmosphere
+    scenario: atmosphere_detection
+    related_stages: [溶解]
+  - parameter_name: 系统压力
+    collector: FU13
+    source_tag: SysSelfPressure
+    sensor_id: SysSelfPressure
+    source_file: FU13_SysSelfPressure.csv
+    lower_limit: 0
+    upper_limit: 15
+    unit: MPa
+    domain: hydraulic
+    scenario: hydraulic_system_detection
+    related_stages: [浇筑]
