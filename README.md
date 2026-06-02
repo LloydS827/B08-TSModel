@@ -89,6 +89,22 @@ data/real/
 
 如果在 worktree 中没有 `data/real/`，可以使用原工作区的绝对路径作为 `--input-dir`，但仍不要把真实数据复制进 Git 跟踪范围。
 
+当前文件名来自 `configs/fu13_real_data_schema.yaml`。装配命令会按配置读取这些 CSV：
+
+| 文件 | 必需列 | 说明 |
+| --- | --- | --- |
+| `stage_data.csv` | `time`, `stage_name` | 工艺阶段时间线 |
+| `FU13_Record_O2Content2.csv` | `time`, `value` | 下料口氧含量 |
+| `FU13_CrucibleForwardPressure.csv` | `time`, `value` | 坩埚前倾压力 |
+| `FU13_CrucibleReturnPressure.csv` | `time`, `value` | 坩埚回程压力 |
+| `FU13_Pump_01_PumpShake1.csv` | `time`, `value` | 机械泵振动1 |
+| `FU13_Pump_02_PumpShake2.csv` | `time`, `value` | 机械泵振动2 |
+| `FU13_Record_LeakElec.csv` | `time`, `value` | 泄漏电流 |
+| `FU13_Record_O2Content.csv` | `time`, `value` | 真空管氧含量 |
+| `FU13_SysSelfPressure.csv` | `time`, `value` | 系统压力 |
+
+`time` 需要能被 pandas 解析为时间；当前配置使用 `timezone_policy: UTC`。CSV 建议使用 UTF-8 编码。
+
 ## 3. 装配 canonical observations
 
 运行 FU13 多 CSV 装配：
@@ -219,6 +235,52 @@ TTM 命令的退出码和报告状态约定：
 | TTM cache 命中并完成推理 | `available_and_ran` | 0 |
 | TTM cache 未命中且禁止下载 | `missing_or_blocked_weights` | 1 |
 | TTM 下载、加载或推理失败 | `missing_or_blocked_weights`、`unsupported_window_shape` 或 `runtime_failed` | 1 |
+
+常用参数边界：
+
+| 参数 | 当前可用值或约束 | 说明 |
+| --- | --- | --- |
+| `--model` | `baseline` 或 `ttm` | `baseline` 不需要 TTM 依赖；`ttm` 会加载基础模型 |
+| `--window-mode` | `stage-local` 或 `cross-stage` | 当前真实数据标准评测使用 `cross-stage` |
+| `--context-length` | 正整数 | 当前标准值为 `90` |
+| `--prediction-length` | 正整数 | 当前标准值为 `16` |
+| `--max-windows` | 正整数 | 按当前窗口构建顺序取 first-N，再做 70/30 顺序切分 |
+
+如果需要复跑本阶段 first-N `20/40/80` 口径，可以使用下面的完整命令。baseline：
+
+```bash
+for n in 20 40 80
+do
+  uv run b08-model-core real-data forecast-fu13 \
+    --dataset data/processed/fu13_real_observations.parquet \
+    --config configs/fu13_real_data_schema.yaml \
+    --output "reports/real_baseline_forecasting_w${n}.md" \
+    --model baseline \
+    --window-mode cross-stage \
+    --context-length 90 \
+    --prediction-length 16 \
+    --max-windows "$n"
+done
+```
+
+TTM 离线 cache：
+
+```bash
+for n in 20 40 80
+do
+  HF_HOME=hf_cache uv run b08-model-core real-data forecast-fu13 \
+    --dataset data/processed/fu13_real_observations.parquet \
+    --config configs/fu13_real_data_schema.yaml \
+    --output "reports/real_ttm_forecasting_w${n}.md" \
+    --model ttm \
+    --window-mode cross-stage \
+    --context-length 90 \
+    --prediction-length 16 \
+    --max-windows "$n" \
+    --model-cache-dir hf_cache \
+    --no-download
+done
+```
 
 ## 7. 如何阅读报告
 
