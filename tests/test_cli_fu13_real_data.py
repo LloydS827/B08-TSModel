@@ -1,6 +1,7 @@
 import subprocess
 import sys
 
+import numpy as np
 import pandas as pd
 
 
@@ -112,3 +113,114 @@ sensors:
     assert diagnose.returncode == 0, diagnose.stderr
     assert diagnostics_report.exists()
     assert "Real FU13 Data Diagnostics" in diagnostics_report.read_text(encoding="utf-8")
+
+
+def test_cli_forecasts_fu13_real_data_baseline(tmp_path):
+    timestamps = pd.date_range("2026-05-01", periods=220, freq="5s", tz="UTC")
+    rows = []
+    for i, ts in enumerate(timestamps):
+        stage = "溶解" if i < 110 else "浇筑"
+        rows.append(
+            {
+                "timestamp": ts,
+                "device_id": "FU13",
+                "batch_id": "cycle_0001",
+                "stage": stage,
+                "sensor_id": "O2Content",
+                "value": -20 + np.sin(i / 10),
+                "unit": "%",
+                "domain": "atmosphere",
+                "quality_flag": "good",
+                "degradation_label": "normal",
+                "failure_proxy": False,
+            }
+        )
+        rows.append(
+            {
+                "timestamp": ts,
+                "device_id": "FU13",
+                "batch_id": "cycle_0001",
+                "stage": stage,
+                "sensor_id": "SysSelfPressure",
+                "value": 10 + np.cos(i / 10),
+                "unit": "%",
+                "domain": "hydraulic",
+                "quality_flag": "good",
+                "degradation_label": "normal",
+                "failure_proxy": False,
+            }
+        )
+    dataset = tmp_path / "real.parquet"
+    pd.DataFrame(rows).to_parquet(dataset, index=False)
+
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        """
+device_id: FU13
+timezone_policy: UTC
+stage_file: stage_data.csv
+cycle_rules:
+  start_stage: 上盖关闭
+  required_order: [上盖关闭, 溶解, 浇筑]
+  optional_stages: []
+  waiting_stages: []
+sensors:
+  - parameter_name: 真空管氧含量
+    collector: FU13_Record
+    source_tag: O2Content
+    sensor_id: O2Content
+    source_file: FU13_Record_O2Content.csv
+    lower_limit: -21
+    upper_limit: 0
+    unit: "%"
+    domain: atmosphere
+    scenario: atmosphere_detection
+    related_stages: [溶解]
+  - parameter_name: 系统自压
+    collector: FU13_Record
+    source_tag: SysSelfPressure
+    sensor_id: SysSelfPressure
+    source_file: FU13_Record_SysSelfPressure.csv
+    lower_limit: 0
+    upper_limit: 60
+    unit: "%"
+    domain: hydraulic
+    scenario: hydraulic_system_detection
+    related_stages: [浇筑]
+""".strip(),
+        encoding="utf-8",
+    )
+    output = tmp_path / "forecast.md"
+
+    forecast = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "real-data",
+            "forecast-fu13",
+            "--dataset",
+            str(dataset),
+            "--config",
+            str(config),
+            "--output",
+            str(output),
+            "--model",
+            "baseline",
+            "--context-length",
+            "32",
+            "--prediction-length",
+            "8",
+            "--max-windows",
+            "8",
+            "--no-download",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert forecast.returncode == 0, forecast.stderr
+    text = output.read_text(encoding="utf-8")
+    assert "Real FU13 Forecasting" in text
+    assert "atmosphere_detection" in text
+    assert "hydraulic_system_detection" in text

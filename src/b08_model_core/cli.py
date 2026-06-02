@@ -9,6 +9,10 @@ from b08_model_core.evaluation.benchmark import run_benchmark
 from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
+from b08_model_core.real_data.forecasting import (
+    render_real_data_forecasting_report,
+    run_real_data_forecasting,
+)
 from b08_model_core.real_data.fu13_config import load_fu13_real_data_config
 from b08_model_core.real_data.fu13_loader import assemble_fu13_observations
 from b08_model_core.real_data.validation_report import validate_real_data_file
@@ -52,6 +56,20 @@ def main(argv: list[str] | None = None) -> int:
     diagnose_fu13.add_argument("--dataset", required=True)
     diagnose_fu13.add_argument("--config", required=True)
     diagnose_fu13.add_argument("--output", required=True)
+    forecast_fu13 = real_data_sub.add_parser("forecast-fu13")
+    forecast_fu13.add_argument("--dataset", required=True)
+    forecast_fu13.add_argument("--config", required=True)
+    forecast_fu13.add_argument("--output", required=True)
+    forecast_fu13.add_argument("--model", choices=["baseline", "ttm"], required=True)
+    forecast_fu13.add_argument("--window-mode", choices=["stage-local", "cross-stage"], default="cross-stage")
+    forecast_fu13.add_argument("--context-length", type=_positive_int, default=90)
+    forecast_fu13.add_argument("--prediction-length", type=_positive_int, default=16)
+    forecast_fu13.add_argument("--max-windows", type=_positive_int, default=40)
+    forecast_fu13.add_argument("--model-cache-dir")
+    forecast_download = forecast_fu13.add_mutually_exclusive_group()
+    forecast_download.add_argument("--allow-download", action="store_true", dest="allow_download")
+    forecast_download.add_argument("--no-download", action="store_false", dest="allow_download")
+    forecast_fu13.set_defaults(allow_download=False)
 
     experiment = sub.add_parser("experiment")
     experiment_sub = experiment.add_subparsers(dest="experiment_command", required=True)
@@ -105,6 +123,26 @@ def main(argv: list[str] | None = None) -> int:
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(render_fu13_diagnostics(report), encoding="utf-8")
+        return 0
+    if args.command == "real-data" and args.real_data_command == "forecast-fu13":
+        cfg = load_fu13_real_data_config(args.config)
+        sensor_scenario = {sensor.sensor_id: sensor.scenario for sensor in cfg.sensors}
+        result = run_real_data_forecasting(
+            args.dataset,
+            model=args.model,
+            window_mode=args.window_mode,
+            context_length=args.context_length,
+            prediction_length=args.prediction_length,
+            max_windows=args.max_windows,
+            allow_download=args.allow_download,
+            model_cache_dir=args.model_cache_dir,
+            sensor_scenario=sensor_scenario,
+        )
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(render_real_data_forecasting_report(result), encoding="utf-8")
+        if args.model == "ttm" and result.foundation_result.status != FoundationModelStatus.AVAILABLE_AND_RAN:
+            return 1
         return 0
     if args.command == "experiment" and args.experiment_command == "forecasting":
         _, status = run_forecasting_experiment_with_status(
