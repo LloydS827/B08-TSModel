@@ -102,7 +102,7 @@
   <main>
     <header>
       <h1>B08 设备时序基础模型</h1>
-      <p class="lead">面向 B08 核心时序基础模型课题。当前文档已经从完整预测性维护系统收束到模型本体：模拟数据、模型输入输出、开源引用/微调/自训判断，以及专利论文等知识成果。</p>
+      <p class="lead">面向 B08 核心时序基础模型课题。当前 FU13 真实数据 pipeline 已跑通，文档主线进入 TTM 真实数据能力复核、标准评测口径和开发者 workflow 固化阶段，为后续模型选择、微调或训练做准备。</p>
     </header>
 
     <section class="grid" aria-label="主要文档">
@@ -172,6 +172,11 @@
         <p>汇总 mock 数据治理规范、TTM 验证效果、后续模型研发路线和成果规划。</p>
       </article>
       <article class="card">
+        <span class="tag">真实数据评测</span>
+        <strong><a href="ttm-real-data-evaluation.md">TTM 真实数据能力复核报告</a></strong>
+        <p>记录 FU13 真实窗口上的 baseline/TTM 同口径 forecasting 结果、复现命令、边界和下一阶段模型开发任务。</p>
+      </article>
+      <article class="card">
         <span class="tag">真实数据</span>
         <strong><a href="real-data-request-guide.md">FU13 真实数据提供说明</a></strong>
         <p>面向现场的数据交付说明：原始数据可以直接提供，同时补充字段、测点、阶段和导出背景。</p>
@@ -210,10 +215,10 @@
     </section>
 
     <div class="note">
-      当前主线已经收束为：先模拟一个完整真空速凝炉时序场景，用它倒推模型输入输出和任务，再判断开源模型能否直接引用、是否需要微调，或是否需要自训小型领域模型。
+      当前主线已经收束为：FU13 真实数据 pipeline 已跑通，正在固化 TTM 真实数据能力复核、标准开发流程和评测边界；待窗口质量、scenario 过滤、质量标记和 baseline 对照口径清楚后，再进入模型选择、微调或训练。
     </div>
 
-    <footer>更新日期：2026-06-01</footer>
+    <footer>更新日期：2026-06-02</footer>
   </main>
 </body>
 </html>
