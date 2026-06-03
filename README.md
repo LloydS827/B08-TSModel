@@ -305,6 +305,27 @@ done
 - first-N `max-windows=20/40/80` 结果中，TTM 整体 MAE/RMSE 均低于 `RobustStageForecaster` 和 `StageSeasonalNaiveForecaster`。
 - `max-windows=20/40/80` 是按当前窗口构建顺序取前 N 个窗口的嵌套规模敏感性证据，不是随机抽样，也不是统计稳健性证明。
 
+## 漏液电流场景评测
+
+`leak_current_monitoring` 是下一阶段业务场景评测口径固化的第一个最小闭环。它只使用 `LeakElec` 作为核心传感器，并比较 related stages、waiting stage、质量标记过滤和 baseline/TTM 同口径 forecasting residual。
+
+baseline 复跑命令：
+
+```bash
+uv run b08-model-core real-data evaluate-scenario \
+  --dataset data/processed/fu13_real_observations.parquet \
+  --config configs/fu13_real_data_schema.yaml \
+  --output reports/real_leak_current_scenario_evaluation_baseline.md \
+  --scenario leak_current_monitoring \
+  --model baseline \
+  --context-length 90 \
+  --prediction-length 16 \
+  --max-windows 40 \
+  --rolling-window-size 8
+```
+
+完整本地报告仍写入 ignored 的 `reports/real_*.md`，不要提交；tracked 文档只汇总关键结论和业务边界。摘要见 [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)。
+
 ## 不能得出的结论
 
 当前报告是 forecasting 能力复核，不是故障预测验收。
@@ -360,6 +381,7 @@ data/
 docs/
   index.html                            # 文档总入口
   ttm-real-data-evaluation.md           # TTM 真实数据能力复核报告
+  leak-current-scenario-evaluation.md   # 漏液电流监测场景评测摘要
   reviews/real-data-schema-map.md       # 真实数据对齐检查表
 reports/
   model_core_evaluation.md              # 仓库白名单报告
@@ -382,6 +404,7 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 - [项目进展说明](details.md)
 - [docs/index.html](docs/index.html)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
+- [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)
 - [模型输入输出定义](docs/model-io-definition.html)
 - [真实基础模型推理验证方案](docs/foundation-model-inference-design.html)
 - [真实基础模型推理实施计划](docs/foundation-model-inference-plan.html)
