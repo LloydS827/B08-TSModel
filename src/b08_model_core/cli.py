@@ -16,6 +16,8 @@ from b08_model_core.real_data.forecasting import (
 from b08_model_core.real_data.fu13_config import load_fu13_real_data_config
 from b08_model_core.real_data.fu13_loader import assemble_fu13_observations, missing_fu13_source_files
 from b08_model_core.real_data.scenario_evaluation import (
+    QUALITY_MODES,
+    STAGE_SCOPES,
     render_scenario_evaluation_report,
     run_scenario_evaluation,
 )
@@ -80,8 +82,18 @@ def main(argv: list[str] | None = None) -> int:
     evaluate_scenario.add_argument("--output", required=True)
     evaluate_scenario.add_argument("--scenario", choices=["leak_current_monitoring"], required=True)
     evaluate_scenario.add_argument("--model", choices=["baseline", "ttm"], required=True)
-    evaluate_scenario.add_argument("--quality-mode", action="append", dest="quality_modes")
-    evaluate_scenario.add_argument("--stage-scope", action="append", dest="stage_scopes")
+    evaluate_scenario.add_argument(
+        "--quality-mode",
+        action="append",
+        dest="quality_modes",
+        choices=sorted(QUALITY_MODES),
+    )
+    evaluate_scenario.add_argument(
+        "--stage-scope",
+        action="append",
+        dest="stage_scopes",
+        choices=sorted(STAGE_SCOPES),
+    )
     evaluate_scenario.add_argument("--context-length", type=_positive_int, default=90)
     evaluate_scenario.add_argument("--prediction-length", type=_positive_int, default=16)
     evaluate_scenario.add_argument("--max-windows", type=_positive_int, default=40)
@@ -207,12 +219,12 @@ def main(argv: list[str] | None = None) -> int:
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(render_scenario_evaluation_report(result), encoding="utf-8")
-        if args.model == "ttm" and any(
-            run.foundation_result.status != FoundationModelStatus.AVAILABLE_AND_RAN
-            for run in result.runs
-            if run.test_windows
-        ):
-            return 1
+        if args.model == "ttm":
+            runs_with_tests = [run for run in result.runs if run.test_windows]
+            if not runs_with_tests or any(
+                run.foundation_result.status != FoundationModelStatus.AVAILABLE_AND_RAN for run in runs_with_tests
+            ):
+                return 1
         return 0
     if args.command == "experiment" and args.experiment_command == "forecasting":
         _, status = run_forecasting_experiment_with_status(
