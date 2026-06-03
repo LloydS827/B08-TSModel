@@ -1,7 +1,12 @@
+import numpy as np
 import pandas as pd
 
 from b08_model_core.real_data.fu13_config import load_fu13_real_data_config
-from b08_model_core.real_data.scenario_evaluation import select_scenario_observations
+from b08_model_core.real_data.scenario_evaluation import (
+    render_scenario_evaluation_report,
+    run_scenario_evaluation,
+    select_scenario_observations,
+)
 
 
 def _frame():
@@ -30,6 +35,32 @@ def _frame():
                 }
             )
     return pd.DataFrame(rows)
+
+
+def _long_leak_frame(path):
+    timestamps = pd.date_range("2026-05-01", periods=220, freq="5s", tz="UTC")
+    rows = []
+    for i, ts in enumerate(timestamps):
+        stage = "溶解" if i < 110 else "浇筑"
+        value = 10 + np.sin(i / 8)
+        if i in {150, 151, 152}:
+            value += 15
+        rows.append(
+            {
+                "timestamp": ts,
+                "device_id": "FU13",
+                "batch_id": "cycle_0001",
+                "stage": stage,
+                "sensor_id": "LeakElec",
+                "value": value,
+                "unit": "ma",
+                "domain": "electrical",
+                "quality_flag": "good",
+                "degradation_label": "normal",
+                "failure_proxy": False,
+            }
+        )
+    pd.DataFrame(rows).to_parquet(path, index=False)
 
 
 def test_select_scenario_observations_uses_leakelec_related_stages():
@@ -158,3 +189,81 @@ def test_select_scenario_observations_counts_waiting_rows_after_quality_filterin
 
     assert "上盖开启" not in set(selected["stage"])
     assert summary.waiting_rows == 0
+
+
+def test_run_scenario_evaluation_reports_rolling_baseline_and_candidate_signals(tmp_path):
+    dataset = tmp_path / "leak.parquet"
+    _long_leak_frame(dataset)
+    cfg = load_fu13_real_data_config("configs/fu13_real_data_schema.yaml")
+
+    result = run_scenario_evaluation(
+        dataset,
+        cfg,
+        scenario="leak_current_monitoring",
+        model="baseline",
+        quality_modes=["good_only"],
+        stage_scopes=["related"],
+        context_length=32,
+        prediction_length=8,
+        max_windows=8,
+        rolling_window_size=4,
+        allow_download=False,
+        model_cache_dir=None,
+    )
+    text = render_scenario_evaluation_report(result)
+
+    assert result.scenario == "leak_current_monitoring"
+    assert result.model == "BaselineOnly"
+    assert "RollingSensorForecaster" in result.runs[0].metrics
+    assert "candidate residual signals" in text
+    assert "not a failure prediction" in text
+    assert "候选异常信号" in text
+    assert "residual_mae" in text
+    assert "residual_rmse" in text
+    assert "top_window_stage_summary" in text
+    assert result.runs[0].candidate_signal["abs_residual_p95"] >= 0
+    assert result.runs[0].candidate_signal["residual_mae"] >= 0
+    assert result.runs[0].candidate_signal["residual_rmse"] >= 0
+    assert result.runs[0].candidate_signal["top_windows"]
+
+
+def test_run_scenario_evaluation_reports_not_enough_windows(tmp_path):
+    dataset = tmp_path / "short.parquet"
+    timestamps = pd.date_range("2026-05-01", periods=20, freq="5s", tz="UTC")
+    pd.DataFrame(
+        [
+            {
+                "timestamp": ts,
+                "device_id": "FU13",
+                "batch_id": "cycle_0001",
+                "stage": "溶解",
+                "sensor_id": "LeakElec",
+                "value": float(i),
+                "unit": "ma",
+                "domain": "electrical",
+                "quality_flag": "good",
+                "degradation_label": "normal",
+                "failure_proxy": False,
+            }
+            for i, ts in enumerate(timestamps)
+        ]
+    ).to_parquet(dataset, index=False)
+    cfg = load_fu13_real_data_config("configs/fu13_real_data_schema.yaml")
+
+    result = run_scenario_evaluation(
+        dataset,
+        cfg,
+        scenario="leak_current_monitoring",
+        model="baseline",
+        quality_modes=["good_only"],
+        stage_scopes=["related"],
+        context_length=32,
+        prediction_length=8,
+        max_windows=8,
+        rolling_window_size=4,
+        allow_download=False,
+        model_cache_dir=None,
+    )
+
+    assert result.runs[0].candidate_signal["status"] == "not_enough_windows"
+    assert result.runs[0].test_windows == 0
