@@ -322,14 +322,28 @@ done
 
 ## 下一阶段开发任务
 
-下一阶段顺序建议：
+下一阶段主线是 **业务场景评测口径固化**。项目已经证明真实数据可以进入基础模型评测链路，但还没有证明模型输出可以直接变成维修建议、故障概率或生产告警。
 
-1. window quality governance：治理窗口构建质量，记录跨阶段、等待态、异常时间间隔和质量标记分布。
-2. scenario-filtered evaluation：把 hydraulic、leak、atmosphere、pump 等从指标聚合升级为场景内窗口评测。
-3. quality-flag filtering：比较 `good` only、去除 `invalid`、去除 `unassigned_cycle` 后的指标变化。
-4. waiting-stage handling：评估等待态保留、剔除和单独建模对 forecasting 误差的影响。
-5. stronger baselines：增加按传感器/阶段的 rolling、lag、分位数或轻量机器学习 baseline。
-6. then model selection/fine-tuning：在评测口径稳定后，再进入模型选择、轻量微调或领域模型训练。
+推荐先做一个业务场景的最小闭环，而不是马上横向接入更多模型。第一场景选定为 `leak_current_monitoring`，原因是它只有 `LeakElec` 一个核心传感器，更适合先验证残差、趋势和尖峰能否形成候选异常信号。`atmosphere_detection` 作为第二候选场景保留。
+
+```text
+业务场景定义
+  -> 相关传感器和工艺阶段
+  -> 有效窗口规则
+  -> baseline/TTM 同口径评测
+  -> 残差、趋势或尖峰候选信号
+  -> 专家复核或维修记录对齐需求
+```
+
+几个下一步术语在本项目里的含义如下：
+
+- window quality governance：确认模型窗口是否是有业务意义的片段，避免把等待态、无效值、未分配 cycle 或异常采样间隔误判为模型能力问题。
+- scenario-filtered evaluation：先按业务场景筛选相关传感器、阶段和窗口，再评测模型，而不是只在模型跑完后按 scenario 汇总指标。
+- quality-flag filtering：比较 `good only`、去除 `invalid`、去除 `unassigned_cycle` 等数据质量口径下的指标变化。
+- waiting-stage handling：评估 `上盖开启` 等等待态应保留、剔除还是单独建模。
+- stronger baselines：本阶段先增加一个 rolling 或 lag baseline，确认基础模型确实超过合理工程对照；轻量机器学习 baseline 留到后续。
+
+下一阶段完成标准不是“多接几个模型”，而是能围绕一个具体业务场景说明：模型该看哪些数据、输出如何转成候选异常信号、还缺哪些业务证据才能进入维护决策。
 
 ## 关键目录
 
@@ -372,6 +386,7 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 - [真实基础模型推理验证方案](docs/foundation-model-inference-design.html)
 - [真实基础模型推理实施计划](docs/foundation-model-inference-plan.html)
 - [基础模型验证分析报告](docs/foundation-model-verification-report.html)
+- [业务场景评测口径固化设计](docs/superpowers/specs/2026-06-03-business-scenario-evaluation-design.md)
 - [模型路线决策](docs/model-route-decision.html)
 - [开源时序基础模型调研](docs/调研资料/开源时序基础模型调研.md)
 - [真实数据 Schema Map](docs/reviews/real-data-schema-map.md)

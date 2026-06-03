@@ -159,8 +159,15 @@ TTM 是有意义的 forecasting 候选模型。当前最强证据是：在同一
 
 ## 下一阶段模型开发任务
 
-1. 增加 scenario 过滤建窗，让 hydraulic、leak、atmosphere、pump 等评测口径从指标聚合升级为场景内窗口评测。
-2. 增加质量标记过滤，分别比较 `good` only、去除 `invalid`、去除 `unassigned_cycle` 后的指标变化。
-3. 增加等待阶段处理，评估等待态保留、剔除和单独建模对 forecasting 误差的影响。
-4. 引入更强 baseline，例如按传感器/阶段的 rolling、lag、分位数或轻量机器学习 baseline，避免只与简单 fallback 比较。
-5. 在上述评测口径固化后，再进入模型选择、轻量微调或领域模型训练。
+下一阶段主线是业务场景评测口径固化。当前 TTM 报告证明 forecasting 链路可以运行，但它还没有证明模型输出能直接变成故障概率、RUL、维护建议或生产告警。
+
+推荐先选一个业务场景做最小闭环。第一场景选定为 `leak_current_monitoring`，因为它只有 `LeakElec` 一个核心传感器，更适合先验证 forecasting 残差、趋势和尖峰能否形成候选异常信号。`atmosphere_detection` 作为第二候选场景保留。
+
+1. 定义业务场景所需的传感器、工艺阶段和有效窗口。
+2. 比较 `good only`、去除 `invalid`、去除 `unassigned_cycle` 等质量口径下的指标变化。
+3. 评估等待态保留、剔除或单独建模对 forecasting 误差的影响。
+4. 引入一个 rolling 或 lag baseline，并与现有 baseline、TTM 同口径比较。
+5. 将 TTM 输出转化为残差、趋势、尖峰或分位数候选信号。
+6. 说明这些候选信号还需要哪些维修记录、专家复核或真实故障标签才能进入维护决策。
+
+在上述评测桥梁稳定后，再进入更多模型选择、轻量微调或领域模型训练。
