@@ -4,6 +4,11 @@ import numpy as np
 
 
 class RollingSensorForecaster:
+    """Stateless per-window rolling baseline for sensor forecasts.
+
+    Sensor channels with no observed values in the rolling tail fall back to 0.0.
+    """
+
     def __init__(self, window_size: int = 8) -> None:
         if window_size <= 0:
             raise ValueError("window_size must be greater than 0")

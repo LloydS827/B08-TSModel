@@ -39,3 +39,14 @@ def test_rolling_sensor_forecaster_ignores_masked_context_values():
     predictions = RollingSensorForecaster(window_size=2).fit([]).predict([window])
 
     np.testing.assert_allclose(predictions["y_hat"][0], [[4.0, 30.0], [4.0, 30.0], [4.0, 30.0]])
+
+
+def test_rolling_sensor_forecaster_fully_masked_tail_sensor_falls_back_to_zero():
+    window = _window(
+        [[1, 10], [2, 20], [3, 30], [4, 40]],
+        mask=[[True, True], [True, True], [False, True], [False, True]],
+    )
+
+    predictions = RollingSensorForecaster(window_size=2).fit([]).predict([window])
+
+    np.testing.assert_allclose(predictions["y_hat"][0], [[0.0, 35.0], [0.0, 35.0], [0.0, 35.0]])
