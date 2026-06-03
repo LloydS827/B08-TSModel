@@ -1478,8 +1478,8 @@ Do not claim this stage is complete until all of the following are true:
 
 After this plan is reviewed and approved:
 
-**Option 1: Subagent-Driven (recommended)**  
+**Option 1: Subagent-Driven (recommended)**
 Use `superpowers:subagent-driven-development`. Dispatch task-sized workers, review after each task, and keep write scopes disjoint.
 
-**Option 2: Inline Execution**  
+**Option 2: Inline Execution**
 Use `superpowers:executing-plans`. Execute the plan in this session with checkpoints between tasks.

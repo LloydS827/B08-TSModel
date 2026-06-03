@@ -14,7 +14,7 @@ from b08_model_core.real_data.forecasting import (
     run_real_data_forecasting,
 )
 from b08_model_core.real_data.fu13_config import load_fu13_real_data_config
-from b08_model_core.real_data.fu13_loader import assemble_fu13_observations
+from b08_model_core.real_data.fu13_loader import assemble_fu13_observations, missing_fu13_source_files
 from b08_model_core.real_data.validation_report import validate_real_data_file
 from b08_model_core.simulation.export_dataset import simulate_dataset
 from b08_model_core.tasks.schema import validate_observation_frame
@@ -97,6 +97,28 @@ def main(argv: list[str] | None = None) -> int:
         report = validate_real_data_file(args.input, args.schema_map, args.output)
         return 0 if report.schema_valid else 1
     if args.command == "real-data" and args.real_data_command == "assemble-fu13":
+        missing_source_files = missing_fu13_source_files(args.input_dir, args.config)
+        if missing_source_files:
+            report_path = Path(args.report)
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            report_path.write_text(
+                "\n".join(
+                    [
+                        "# Real FU13 Data Validation",
+                        "",
+                        "- schema_valid: False",
+                        "- rows: 0",
+                        "- sensors: 0",
+                        "- stages: 0",
+                        "- cycle_summary: not_available",
+                        "- quality_counts: {}",
+                        f"- missing_source_files: {missing_source_files}",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            return 1
         observations, cycle_summary = assemble_fu13_observations(args.input_dir, args.config)
         output = Path(args.output)
         output.parent.mkdir(parents=True, exist_ok=True)

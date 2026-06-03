@@ -117,6 +117,73 @@ sensors:
     assert "Real FU13 Data Diagnostics" in diagnostics_report.read_text(encoding="utf-8")
 
 
+def test_cli_assemble_fu13_missing_sensor_file_returns_nonzero_but_writes_report(tmp_path):
+    (tmp_path / "stage_data.csv").write_text(
+        "time,stage_name\n"
+        "2026-05-01T00:00:00Z,上盖关闭\n"
+        "2026-05-01T00:00:05Z,溶解\n"
+        "2026-05-01T00:00:10Z,浇筑\n",
+        encoding="utf-8",
+    )
+
+    config = tmp_path / "config.yaml"
+    config.write_text(
+        """
+device_id: FU13
+timezone_policy: UTC
+stage_file: stage_data.csv
+cycle_rules:
+  start_stage: 上盖关闭
+  required_order: [上盖关闭, 溶解, 浇筑]
+  optional_stages: []
+  waiting_stages: []
+sensors:
+  - parameter_name: 真空管氧含量
+    collector: FU13_Record
+    source_tag: O2Content
+    sensor_id: O2Content
+    source_file: FU13_Record_O2Content.csv
+    lower_limit: -21
+    upper_limit: 0
+    unit: "%"
+    domain: atmosphere
+    scenario: atmosphere_detection
+    related_stages: [溶解]
+""".strip(),
+        encoding="utf-8",
+    )
+    output_parquet = tmp_path / "fu13_observations.parquet"
+    validation_report = tmp_path / "validation.md"
+
+    assemble = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "real-data",
+            "assemble-fu13",
+            "--input-dir",
+            str(tmp_path),
+            "--config",
+            str(config),
+            "--output",
+            str(output_parquet),
+            "--report",
+            str(validation_report),
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert assemble.returncode == 1
+    assert validation_report.exists()
+    report_text = validation_report.read_text(encoding="utf-8")
+    assert "schema_valid: False" in report_text
+    assert "missing_source_files: ['FU13_Record_O2Content.csv']" in report_text
+    assert not output_parquet.exists()
+    assert "Traceback" not in assemble.stderr
+
+
 def test_cli_forecasts_fu13_real_data_baseline(tmp_path):
     timestamps = pd.date_range("2026-05-01", periods=220, freq="5s", tz="UTC")
     rows = []

@@ -45,6 +45,13 @@ def assemble_fu13_observations(input_dir: str | Path, config_path: str | Path) -
     return observations[CANONICAL_COLUMNS], summarize_cycles(cycles)
 
 
+def missing_fu13_source_files(input_dir: str | Path, config_path: str | Path) -> list[str]:
+    root = Path(input_dir)
+    cfg = load_fu13_real_data_config(config_path)
+    expected = [cfg.stage_file, *(sensor.source_file for sensor in cfg.sensors)]
+    return [source_file for source_file in expected if not (root / source_file).exists()]
+
+
 def _read_stage_events(path: Path) -> pd.DataFrame:
     events = pd.read_csv(path, encoding="utf-8-sig")
     events["time"] = pd.to_datetime(events["time"], utc=True, format="mixed")
