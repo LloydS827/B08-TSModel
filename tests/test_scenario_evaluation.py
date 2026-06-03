@@ -217,6 +217,7 @@ def test_run_scenario_evaluation_reports_rolling_baseline_and_candidate_signals(
     assert result.model == "BaselineOnly"
     assert "RollingSensorForecaster" in result.runs[0].metrics
     assert "candidate residual signals" in text
+    assert "- candidate_signal_source: RollingSensorForecaster" in text
     assert "candidate_signal_source" in text
     assert "not a failure prediction" in text
     assert "候选异常信号" in text
@@ -229,7 +230,16 @@ def test_run_scenario_evaluation_reports_rolling_baseline_and_candidate_signals(
     assert result.runs[0].candidate_signal["abs_residual_p95"] >= 0
     assert result.runs[0].candidate_signal["residual_mae"] >= 0
     assert result.runs[0].candidate_signal["residual_rmse"] >= 0
+    assert result.runs[0].metrics["RollingSensorForecaster"]["count"] == 24
     assert result.runs[0].candidate_signal["top_windows"]
+    top_window = result.runs[0].candidate_signal["top_windows"][0]
+    assert top_window["batch_id"] == "cycle_0001"
+    assert str(top_window["context_start"]).startswith("2026-05-01T")
+    assert str(top_window["context_end"]).startswith("2026-05-01T")
+    assert str(top_window["target_start"]).startswith("2026-05-01T")
+    assert str(top_window["target_end"]).startswith("2026-05-01T")
+    assert "batch_id" in text
+    assert "context_start" in text
 
 
 def test_run_scenario_evaluation_reports_not_enough_windows(tmp_path):

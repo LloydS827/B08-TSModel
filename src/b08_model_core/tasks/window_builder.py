@@ -16,6 +16,12 @@ class ModelWindow:
     device_token: str
     y: np.ndarray
     degradation_label: str
+    batch_token: str = ""
+    window_index: int | None = None
+    context_start: str | None = None
+    context_end: str | None = None
+    target_start: str | None = None
+    target_end: str | None = None
 
 
 def build_model_windows(
@@ -68,6 +74,12 @@ def build_model_windows(
                     device_token=device_id,
                     y=values[end:y_end],
                     degradation_label=label,
+                    batch_token=batch_id,
+                    window_index=len(windows),
+                    context_start=timestamps[start].isoformat(),
+                    context_end=timestamps[end - 1].isoformat(),
+                    target_start=timestamps[end].isoformat(),
+                    target_end=timestamps[y_end - 1].isoformat(),
                 )
             )
     return windows

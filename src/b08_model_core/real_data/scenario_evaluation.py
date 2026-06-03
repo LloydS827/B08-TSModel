@@ -239,6 +239,12 @@ def render_scenario_evaluation_report(result: ScenarioEvaluationResult) -> str:
                 "",
                 f"## Run: quality={_format_value(run.quality_mode)}, stage_scope={_format_value(run.stage_scope)}",
                 "",
+                f"- candidate_signal_source: {_format_value(run.candidate_signal.get('candidate_signal_source'))}",
+                (
+                    "- candidate_signal_source_reason: "
+                    f"{_format_value(run.candidate_signal.get('candidate_signal_source_reason'))}"
+                ),
+                "",
                 "### Selection",
                 f"- input_rows: {run.selection.input_rows}",
                 f"- selected_rows: {run.selection.selected_rows}",
@@ -363,12 +369,19 @@ def _candidate_signal_summary(
     p50, p90, p95, p99 = np.percentile(abs_residual, [50, 90, 95, 99])
     window_scores = []
     for index, window_abs_residual in enumerate(abs_residual):
+        window = windows[index]
         window_scores.append(
             {
-                "window_index": index,
+                "window_index": getattr(window, "window_index", None),
+                "test_window_index": index,
+                "batch_id": getattr(window, "batch_token", ""),
+                "context_start": getattr(window, "context_start", None),
+                "context_end": getattr(window, "context_end", None),
+                "target_start": getattr(window, "target_start", None),
+                "target_end": getattr(window, "target_end", None),
                 "max_abs_residual": float(np.max(window_abs_residual)),
                 "mean_abs_residual": float(np.mean(window_abs_residual)),
-                "top_window_stage_summary": _stage_summary(windows[index]),
+                "top_window_stage_summary": _stage_summary(window),
             }
         )
     window_scores.sort(key=lambda item: item["max_abs_residual"], reverse=True)
@@ -427,8 +440,11 @@ def _top_windows_table(top_windows: object) -> list[str]:
     if not top_windows:
         return ["- not_available"]
     rows = [
-        "| window_index | max_abs_residual | mean_abs_residual | top_window_stage_summary |",
-        "| --- | --- | --- | --- |",
+        (
+            "| window_index | test_window_index | batch_id | context_start | context_end | target_start | "
+            "target_end | max_abs_residual | mean_abs_residual | top_window_stage_summary |"
+        ),
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for item in top_windows:
         if not isinstance(item, Mapping):
@@ -436,11 +452,17 @@ def _top_windows_table(top_windows: object) -> list[str]:
         rows.append(
             "| "
             + " | ".join(
-                [
-                    _format_metric_or_value(item.get("window_index")),
-                    _format_metric_or_value(item.get("max_abs_residual")),
-                    _format_metric_or_value(item.get("mean_abs_residual")),
-                    _format_markdown_cell(item.get("top_window_stage_summary", "")),
+                    [
+                        _format_metric_or_value(item.get("window_index")),
+                        _format_metric_or_value(item.get("test_window_index")),
+                        _format_metric_or_value(item.get("batch_id")),
+                        _format_metric_or_value(item.get("context_start")),
+                        _format_metric_or_value(item.get("context_end")),
+                        _format_metric_or_value(item.get("target_start")),
+                        _format_metric_or_value(item.get("target_end")),
+                        _format_metric_or_value(item.get("max_abs_residual")),
+                        _format_metric_or_value(item.get("mean_abs_residual")),
+                        _format_markdown_cell(item.get("top_window_stage_summary", "")),
                 ]
             )
             + " |"
