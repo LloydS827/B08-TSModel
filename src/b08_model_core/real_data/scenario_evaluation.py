@@ -176,11 +176,15 @@ def run_scenario_evaluation(
                 model_cache_dir=model_cache_dir,
             )
             candidate_predictions = rolling_predictions
+            candidate_signal_source = "RollingSensorForecaster"
+            candidate_signal_source_reason = "foundation skipped or unavailable; rolling fallback used"
             if foundation_result.succeeded and foundation_result.predictions():
                 foundation_metrics = forecasting_metrics(foundation_result.predictions(), test)
                 foundation_result.metrics = foundation_metrics
                 metrics[foundation_result.model_name] = foundation_metrics
                 candidate_predictions = foundation_result.predictions()
+                candidate_signal_source = foundation_result.model_name
+                candidate_signal_source_reason = "foundation predictions used"
 
             runs.append(
                 ScenarioRunResult(
@@ -191,7 +195,12 @@ def run_scenario_evaluation(
                     test_windows=len(test),
                     metrics=metrics,
                     foundation_result=foundation_result,
-                    candidate_signal=_candidate_signal_summary(candidate_predictions, test),
+                    candidate_signal=_candidate_signal_summary(
+                        candidate_predictions,
+                        test,
+                        candidate_signal_source=candidate_signal_source,
+                        candidate_signal_source_reason=candidate_signal_source_reason,
+                    ),
                 )
             )
 
@@ -238,6 +247,13 @@ def render_scenario_evaluation_report(result: ScenarioEvaluationResult) -> str:
                 f"- train_windows: {run.train_windows}",
                 f"- test_windows: {run.test_windows}",
                 "",
+                "### Foundation Model Status",
+                f"- foundation_status: {_format_value(run.foundation_result.status.value)}",
+                f"- foundation_status_reason: {_format_value(run.foundation_result.reason)}",
+                f"- dependency_status: {_format_value(run.foundation_result.dependency_status)}",
+                f"- weight_status: {_format_value(run.foundation_result.weight_status)}",
+                f"- cache_dir: {_format_value(run.foundation_result.cache_dir)}",
+                "",
                 "### Metrics",
             ]
         )
@@ -250,10 +266,15 @@ def render_scenario_evaluation_report(result: ScenarioEvaluationResult) -> str:
                 "",
                 "### Candidate Residual Signals",
                 "candidate residual signal only.",
+                (
+                    "p95/p99 and points_above_p95/p99 are computed from this run's within-run empirical "
+                    "residual distribution and are not independent alarm thresholds."
+                ),
             ]
         )
         lines.extend(_candidate_signal_table(run.candidate_signal))
         lines.extend(["", "### Top Residual Windows"])
+        lines.extend(["top_window_stage_summary is context window only."])
         lines.extend(_top_windows_table(run.candidate_signal.get("top_windows")))
         lines.extend(["", "Boundary note: candidate residual signal only."])
     return "\n".join(lines) + "\n"
@@ -320,11 +341,21 @@ def _not_enough_windows_run(
         test_windows=0,
         metrics={},
         foundation_result=foundation_result,
-        candidate_signal={"status": "not_enough_windows"},
+        candidate_signal={
+            "status": "not_enough_windows",
+            "candidate_signal_source": "not_available",
+            "candidate_signal_source_reason": "not enough windows for scenario evaluation",
+        },
     )
 
 
-def _candidate_signal_summary(predictions: Mapping[str, np.ndarray], windows: list[object]) -> dict[str, object]:
+def _candidate_signal_summary(
+    predictions: Mapping[str, np.ndarray],
+    windows: list[object],
+    *,
+    candidate_signal_source: str,
+    candidate_signal_source_reason: str,
+) -> dict[str, object]:
     truth = np.stack([window.y for window in windows], axis=0)
     y_hat = np.asarray(predictions["y_hat"], dtype=float)
     residual = y_hat - truth
@@ -343,6 +374,8 @@ def _candidate_signal_summary(predictions: Mapping[str, np.ndarray], windows: li
     window_scores.sort(key=lambda item: item["max_abs_residual"], reverse=True)
     return {
         "status": "available",
+        "candidate_signal_source": candidate_signal_source,
+        "candidate_signal_source_reason": candidate_signal_source_reason,
         "residual_mae": float(np.mean(abs_residual)),
         "residual_rmse": float(np.sqrt(np.mean(residual**2))),
         "abs_residual_p50": float(p50),
@@ -358,12 +391,14 @@ def _candidate_signal_summary(predictions: Mapping[str, np.ndarray], windows: li
 def _stage_summary(window: object) -> str:
     stages = np.asarray(getattr(window, "stage_token"), dtype=object)
     values, counts = np.unique(stages.astype(str), return_counts=True)
-    return ", ".join(f"{value}:{int(count)}" for value, count in zip(values, counts, strict=True))
+    return "context_stages=" + ", ".join(f"{value}:{int(count)}" for value, count in zip(values, counts, strict=True))
 
 
 def _candidate_signal_table(candidate_signal: Mapping[str, object]) -> list[str]:
     keys = [
         "status",
+        "candidate_signal_source",
+        "candidate_signal_source_reason",
         "residual_mae",
         "residual_rmse",
         "abs_residual_p50",

@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from b08_model_core.foundation import FoundationForecastResult, FoundationModelStatus
 from b08_model_core.real_data.fu13_config import load_fu13_real_data_config
 from b08_model_core.real_data.scenario_evaluation import (
     render_scenario_evaluation_report,
@@ -216,11 +217,15 @@ def test_run_scenario_evaluation_reports_rolling_baseline_and_candidate_signals(
     assert result.model == "BaselineOnly"
     assert "RollingSensorForecaster" in result.runs[0].metrics
     assert "candidate residual signals" in text
+    assert "candidate_signal_source" in text
     assert "not a failure prediction" in text
     assert "候选异常信号" in text
     assert "residual_mae" in text
     assert "residual_rmse" in text
     assert "top_window_stage_summary" in text
+    assert "within-run empirical residual distribution" in text
+    assert "context window only" in text
+    assert result.runs[0].candidate_signal["candidate_signal_source"] == "RollingSensorForecaster"
     assert result.runs[0].candidate_signal["abs_residual_p95"] >= 0
     assert result.runs[0].candidate_signal["residual_mae"] >= 0
     assert result.runs[0].candidate_signal["residual_rmse"] >= 0
@@ -267,3 +272,58 @@ def test_run_scenario_evaluation_reports_not_enough_windows(tmp_path):
 
     assert result.runs[0].candidate_signal["status"] == "not_enough_windows"
     assert result.runs[0].test_windows == 0
+
+
+def test_run_scenario_evaluation_reports_ttm_failure_rolling_fallback(tmp_path, monkeypatch):
+    class FakeTTMForecastAdapter:
+        name = "TTM"
+
+        def predict(
+            self,
+            windows,
+            *,
+            context_length,
+            prediction_length,
+            allow_download,
+            model_cache_dir,
+        ):
+            return FoundationForecastResult(
+                model_name="TTM",
+                adapter_name="ttm",
+                status=FoundationModelStatus.RUNTIME_FAILED,
+                reason="forced failure",
+                dependency_status="installed",
+                weight_status="available",
+            )
+
+    monkeypatch.setattr(
+        "b08_model_core.real_data.scenario_evaluation.TTMForecastAdapter",
+        FakeTTMForecastAdapter,
+    )
+    dataset = tmp_path / "leak.parquet"
+    _long_leak_frame(dataset)
+    cfg = load_fu13_real_data_config("configs/fu13_real_data_schema.yaml")
+
+    result = run_scenario_evaluation(
+        dataset,
+        cfg,
+        scenario="leak_current_monitoring",
+        model="ttm",
+        quality_modes=["good_only"],
+        stage_scopes=["related"],
+        context_length=32,
+        prediction_length=8,
+        max_windows=8,
+        rolling_window_size=4,
+        allow_download=False,
+        model_cache_dir=None,
+    )
+    report = render_scenario_evaluation_report(result)
+    run = result.runs[0]
+
+    assert result.model == "TTM"
+    assert run.foundation_result.status is FoundationModelStatus.RUNTIME_FAILED
+    assert "runtime_failed" in report
+    assert "forced failure" in report
+    assert run.candidate_signal["candidate_signal_source"] == "RollingSensorForecaster"
+    assert "rolling fallback used" in report
