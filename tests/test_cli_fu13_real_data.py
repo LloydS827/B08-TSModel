@@ -293,3 +293,184 @@ sensors:
     assert "Real FU13 Forecasting" in text
     assert "atmosphere_detection" in text
     assert "hydraulic_system_detection" in text
+
+
+def test_cli_evaluate_leak_current_scenario_writes_report(tmp_path):
+    dataset = tmp_path / "leak.parquet"
+    timestamps = pd.date_range("2026-05-01", periods=220, freq="5s", tz="UTC")
+    rows = []
+    for i, ts in enumerate(timestamps):
+        rows.append(
+            {
+                "timestamp": ts,
+                "device_id": "FU13",
+                "batch_id": "cycle_0001",
+                "stage": "溶解",
+                "sensor_id": "LeakElec",
+                "value": float(i % 20),
+                "unit": "ma",
+                "domain": "electrical",
+                "quality_flag": "good",
+                "degradation_label": "normal",
+                "failure_proxy": False,
+            }
+        )
+    pd.DataFrame(rows).to_parquet(dataset, index=False)
+    output = tmp_path / "report.md"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "real-data",
+            "evaluate-scenario",
+            "--dataset",
+            str(dataset),
+            "--config",
+            "configs/fu13_real_data_schema.yaml",
+            "--output",
+            str(output),
+            "--scenario",
+            "leak_current_monitoring",
+            "--model",
+            "baseline",
+            "--quality-mode",
+            "good_only",
+            "--stage-scope",
+            "related",
+            "--context-length",
+            "32",
+            "--prediction-length",
+            "8",
+            "--max-windows",
+            "8",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    text = output.read_text(encoding="utf-8")
+    assert "Leak Current Scenario Evaluation" in text
+    assert "RollingSensorForecaster" in text
+    assert "not a failure prediction" in text
+
+
+def test_cli_evaluate_leak_current_scenario_rejects_invalid_quality_mode(tmp_path):
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "real-data",
+            "evaluate-scenario",
+            "--dataset",
+            str(tmp_path / "missing.parquet"),
+            "--config",
+            str(tmp_path / "missing.yaml"),
+            "--output",
+            str(tmp_path / "report.md"),
+            "--scenario",
+            "leak_current_monitoring",
+            "--model",
+            "baseline",
+            "--quality-mode",
+            "bogus",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 2
+    assert "invalid choice" in completed.stderr
+
+
+def test_cli_evaluate_leak_current_scenario_rejects_invalid_stage_scope(tmp_path):
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "real-data",
+            "evaluate-scenario",
+            "--dataset",
+            str(tmp_path / "missing.parquet"),
+            "--config",
+            str(tmp_path / "missing.yaml"),
+            "--output",
+            str(tmp_path / "report.md"),
+            "--scenario",
+            "leak_current_monitoring",
+            "--model",
+            "baseline",
+            "--stage-scope",
+            "bogus",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 2
+    assert "invalid choice" in completed.stderr
+
+
+def test_cli_evaluate_leak_current_scenario_ttm_without_test_windows_returns_nonzero(tmp_path):
+    dataset = tmp_path / "short_leak.parquet"
+    timestamps = pd.date_range("2026-05-01", periods=32, freq="5s", tz="UTC")
+    rows = []
+    for i, ts in enumerate(timestamps):
+        rows.append(
+            {
+                "timestamp": ts,
+                "device_id": "FU13",
+                "batch_id": "cycle_0001",
+                "stage": "溶解",
+                "sensor_id": "LeakElec",
+                "value": float(i % 20),
+                "unit": "ma",
+                "domain": "electrical",
+                "quality_flag": "good",
+                "degradation_label": "normal",
+                "failure_proxy": False,
+            }
+        )
+    pd.DataFrame(rows).to_parquet(dataset, index=False)
+    output = tmp_path / "report.md"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "real-data",
+            "evaluate-scenario",
+            "--dataset",
+            str(dataset),
+            "--config",
+            "configs/fu13_real_data_schema.yaml",
+            "--output",
+            str(output),
+            "--scenario",
+            "leak_current_monitoring",
+            "--model",
+            "ttm",
+            "--quality-mode",
+            "good_only",
+            "--stage-scope",
+            "related",
+            "--context-length",
+            "32",
+            "--prediction-length",
+            "8",
+            "--max-windows",
+            "8",
+            "--no-download",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert completed.returncode == 1, completed.stderr
+    assert output.exists()
+    assert "not_enough_windows" in output.read_text(encoding="utf-8")

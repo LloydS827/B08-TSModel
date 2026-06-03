@@ -15,6 +15,12 @@ from b08_model_core.real_data.forecasting import (
 )
 from b08_model_core.real_data.fu13_config import load_fu13_real_data_config
 from b08_model_core.real_data.fu13_loader import assemble_fu13_observations, missing_fu13_source_files
+from b08_model_core.real_data.scenario_evaluation import (
+    QUALITY_MODES,
+    STAGE_SCOPES,
+    render_scenario_evaluation_report,
+    run_scenario_evaluation,
+)
 from b08_model_core.real_data.validation_report import validate_real_data_file
 from b08_model_core.simulation.export_dataset import simulate_dataset
 from b08_model_core.tasks.schema import validate_observation_frame
@@ -70,6 +76,33 @@ def main(argv: list[str] | None = None) -> int:
     forecast_download.add_argument("--allow-download", action="store_true", dest="allow_download")
     forecast_download.add_argument("--no-download", action="store_false", dest="allow_download")
     forecast_fu13.set_defaults(allow_download=False)
+    evaluate_scenario = real_data_sub.add_parser("evaluate-scenario")
+    evaluate_scenario.add_argument("--dataset", required=True)
+    evaluate_scenario.add_argument("--config", required=True)
+    evaluate_scenario.add_argument("--output", required=True)
+    evaluate_scenario.add_argument("--scenario", choices=["leak_current_monitoring"], required=True)
+    evaluate_scenario.add_argument("--model", choices=["baseline", "ttm"], required=True)
+    evaluate_scenario.add_argument(
+        "--quality-mode",
+        action="append",
+        dest="quality_modes",
+        choices=sorted(QUALITY_MODES),
+    )
+    evaluate_scenario.add_argument(
+        "--stage-scope",
+        action="append",
+        dest="stage_scopes",
+        choices=sorted(STAGE_SCOPES),
+    )
+    evaluate_scenario.add_argument("--context-length", type=_positive_int, default=90)
+    evaluate_scenario.add_argument("--prediction-length", type=_positive_int, default=16)
+    evaluate_scenario.add_argument("--max-windows", type=_positive_int, default=40)
+    evaluate_scenario.add_argument("--rolling-window-size", type=_positive_int, default=8)
+    evaluate_scenario.add_argument("--model-cache-dir")
+    scenario_download = evaluate_scenario.add_mutually_exclusive_group()
+    scenario_download.add_argument("--allow-download", action="store_true", dest="allow_download")
+    scenario_download.add_argument("--no-download", action="store_false", dest="allow_download")
+    evaluate_scenario.set_defaults(allow_download=False)
 
     experiment = sub.add_parser("experiment")
     experiment_sub = experiment.add_subparsers(dest="experiment_command", required=True)
@@ -166,6 +199,32 @@ def main(argv: list[str] | None = None) -> int:
         output.write_text(render_real_data_forecasting_report(result), encoding="utf-8")
         if args.model == "ttm" and result.foundation_result.status != FoundationModelStatus.AVAILABLE_AND_RAN:
             return 1
+        return 0
+    if args.command == "real-data" and args.real_data_command == "evaluate-scenario":
+        cfg = load_fu13_real_data_config(args.config)
+        result = run_scenario_evaluation(
+            args.dataset,
+            cfg,
+            scenario=args.scenario,
+            model=args.model,
+            quality_modes=args.quality_modes or ["all", "good_only", "drop_invalid", "drop_unassigned_cycle"],
+            stage_scopes=args.stage_scopes or ["related", "with_waiting"],
+            context_length=args.context_length,
+            prediction_length=args.prediction_length,
+            max_windows=args.max_windows,
+            rolling_window_size=args.rolling_window_size,
+            allow_download=args.allow_download,
+            model_cache_dir=args.model_cache_dir,
+        )
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(render_scenario_evaluation_report(result), encoding="utf-8")
+        if args.model == "ttm":
+            runs_with_tests = [run for run in result.runs if run.test_windows]
+            if not runs_with_tests or any(
+                run.foundation_result.status != FoundationModelStatus.AVAILABLE_AND_RAN for run in runs_with_tests
+            ):
+                return 1
         return 0
     if args.command == "experiment" and args.experiment_command == "forecasting":
         _, status = run_forecasting_experiment_with_status(
