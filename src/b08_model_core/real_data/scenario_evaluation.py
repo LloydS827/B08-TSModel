@@ -47,7 +47,12 @@ def select_scenario_observations(
     waiting_stages = list(cfg.cycle_rules.waiting_stages)
     allowed_stages = related_stages if stage_scope == "related" else _ordered_unique([*related_stages, *waiting_stages])
 
-    selected = df[df["sensor_id"].isin(sensor_ids) & df["stage"].isin(allowed_stages)].copy()
+    mask = (
+        (df["device_id"] == cfg.device_id)
+        & df["sensor_id"].isin(sensor_ids)
+        & df["stage"].isin(allowed_stages)
+    )
+    selected = df[mask].copy()
     selected = _apply_quality_mode(selected, quality_mode)
     waiting_rows = int(selected["stage"].isin(waiting_stages).sum())
     summary = ScenarioSelectionSummary(

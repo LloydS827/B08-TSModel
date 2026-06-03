@@ -66,6 +66,27 @@ def test_select_scenario_observations_can_include_waiting_stage_for_comparison()
     assert summary.waiting_rows == 1
 
 
+def test_select_scenario_observations_excludes_other_devices():
+    cfg = load_fu13_real_data_config("configs/fu13_real_data_schema.yaml")
+    frame = _frame()
+    other_device = frame.iloc[[0]].copy()
+    other_device["device_id"] = "FU14"
+    other_device["value"] = 99.0
+    frame = pd.concat([frame, other_device], ignore_index=True)
+
+    selected, summary = select_scenario_observations(
+        frame,
+        cfg,
+        scenario="leak_current_monitoring",
+        quality_mode="all",
+        stage_scope="related",
+    )
+
+    assert set(selected["device_id"]) == {"FU13"}
+    assert 99.0 not in set(selected["value"])
+    assert summary.input_rows == len(frame)
+
+
 def test_select_scenario_observations_applies_quality_modes():
     cfg = load_fu13_real_data_config("configs/fu13_real_data_schema.yaml")
 
@@ -94,6 +115,32 @@ def test_select_scenario_observations_applies_quality_modes():
     assert set(good_only["quality_flag"]) == {"good"}
     assert "invalid" not in set(drop_invalid["quality_flag"])
     assert "unassigned_cycle" not in set(drop_unassigned["quality_flag"])
+
+
+def test_drop_invalid_keeps_missing_and_reports_quality_counts():
+    cfg = load_fu13_real_data_config("configs/fu13_real_data_schema.yaml")
+    frame = _frame()
+    missing_mask = (frame["sensor_id"] == "LeakElec") & (frame["stage"] == "溶解")
+    frame.loc[missing_mask, "quality_flag"] = "missing"
+
+    drop_invalid, summary = select_scenario_observations(
+        frame,
+        cfg,
+        scenario="leak_current_monitoring",
+        quality_mode="drop_invalid",
+        stage_scope="with_waiting",
+    )
+    good_only, _ = select_scenario_observations(
+        frame,
+        cfg,
+        scenario="leak_current_monitoring",
+        quality_mode="good_only",
+        stage_scope="with_waiting",
+    )
+
+    assert "missing" in set(drop_invalid["quality_flag"])
+    assert summary.quality_counts["missing"] == 1
+    assert "missing" not in set(good_only["quality_flag"])
 
 
 def test_select_scenario_observations_counts_waiting_rows_after_quality_filtering():
