@@ -29,7 +29,7 @@ baseline 报告模型为 `BaselineOnly`，基础模型状态为 `skipped_by_user
 
 在 `with_waiting` stage scope 下，`all` 和 `drop_invalid` 的 baseline 候选信号为 `residual_mae=0.898438`、`residual_rmse=1.029512`、`abs_residual_p95=2.000000`、`abs_residual_p99=2.000000`；等待态上下文的 top residual windows 主要来自 `上盖开启:90`。`good_only` 和 `drop_unassigned_cycle` 在本轮数据中回到 related 口径的指标，说明质量过滤会改变等待态窗口是否进入评测。
 
-TTM 使用 `HF_HOME=hf_cache`、`--model-cache-dir hf_cache`、`--no-download` 本地离线运行成功，报告状态为 `foundation_status=available_and_ran`、`dependency_status=installed`、`weight_status=available`，候选残差信号来源为 `TTM`。运行日志提示 TTM R2 会以支持的 `prediction_length=30` 加载模型，再过滤到本次请求的 `prediction_length=16`；本轮命令退出码为 0。
+TTM 使用 `HF_HOME=hf_cache`、`--model-cache-dir hf_cache`、`--no-download` 本地离线运行成功，报告状态为 `foundation_status=available_and_ran`、`dependency_status=installed`、`weight_status=available`，候选残差信号来源为 `TTM`。本地运行记录显示 TTM R2 以支持的 `prediction_length=30` 加载模型，再过滤到本次请求的 `prediction_length=16`；本轮命令退出码为 0。
 
 在 `related` stage scope 下，TTM 四种 quality mode 的结果一致：`residual_mae=0.513041`、`residual_rmse=0.684900`、`abs_residual_p95=1.381422`、`abs_residual_p99=1.870826`。在 `with_waiting` stage scope 下，`all` 和 `drop_invalid` 为 `residual_mae=0.677300`、`residual_rmse=0.891807`、`abs_residual_p95=2.035048`、`abs_residual_p99=2.191932`；`good_only` 和 `drop_unassigned_cycle` 与 related 口径一致。
 
