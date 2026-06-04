@@ -215,6 +215,8 @@ A. 学术 / 行业 / 模型路线调研
     -> B. 自研设备时序基础模型训练方案设计
 ```
 
+A 阶段短期第一目标是**知识成果**：凝练论文主线、专利方向、学术综述、开源模型论文矩阵、预测性维护数据矩阵和模型训练路线。第二目标是**工程化产品**成果：把研究主线沉淀为统一数据语料、模型 adapter、训练/评测 workflow 和可复现研发工作台；这些工程化成果是承接路线，不应写成已经完成的生产系统能力。
+
 A 先做，因为项目要先判断设备时序基础模型应该学什么、评测什么，以及它与通用时间序列模型和业务告警系统的差异。产物应包括任务谱系、数据特点、学术/行业资料综述、开源模型能力矩阵、训练目标候选和数据规模判断。
 
 C 第二，因为要先系统验证开源 foundation models，再决定是否自研。这里要在同一批设备窗口、同一套指标、同一套报告口径下比较 TTM、MOMENT、Chronos、TimesFM、Moirai、UniTS 等候选模型，并解释失败原因是依赖问题、窗口形状问题、任务不匹配，还是模型能力不足。
@@ -235,6 +237,7 @@ data/
   processed/                            # 生成 parquet，ignored
 docs/
   index.html                            # 文档总入口
+  research/                             # A 阶段研究资产：知识成果优先线与工程化产品承接线
   ttm-real-data-evaluation.md           # TTM 真实数据能力复核报告
   leak-current-scenario-evaluation.md   # 漏液电流监测场景评测摘要
   reviews/real-data-schema-map.md       # 真实数据对齐检查表
@@ -257,12 +260,12 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 
 - [项目进展说明](details.md)
 - [docs/index.html](docs/index.html)
+- [A 阶段研究资产索引](docs/research/index.md)
 - [项目主线与研发路线收束设计](docs/superpowers/specs/2026-06-04-project-mainline-roadmap-refactor-design.md)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
 - [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)
 - [开源时序基础模型调研](docs/调研资料/开源时序基础模型调研.md)
 - [真实数据 Schema Map](docs/reviews/real-data-schema-map.md)
-- [模型路线决策](docs/model-route-decision.html)
 
 ## Agent 维护规则
 
