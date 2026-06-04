@@ -277,6 +277,16 @@ def test_c_stage_minimum_evidence_report_template_has_overclaim_boundaries():
         assert term in section
 
 
+def test_default_docs_reference_c_stage_evidence_assets():
+    readme = Path("README.md").read_text(encoding="utf-8")
+    docs_index = Path("docs/index.html").read_text(encoding="utf-8")
+    details = Path("details.md").read_text(encoding="utf-8")
+
+    assert "configs/c_stage_minimum_evidence.yaml" in readme
+    assert "c-stage-minimum-evidence-register.html" in docs_index
+    assert "C 阶段最小证据" in details
+
+
 def test_c_stage_minimum_evidence_register_wraps_wide_tables():
     html = Path("docs/research/c-stage-minimum-evidence-register.html").read_text(
         encoding="utf-8"
