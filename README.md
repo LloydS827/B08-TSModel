@@ -174,6 +174,23 @@ uv run b08-model-core real-data evaluate-scenario \
   --rolling-window-size 8
 ```
 
+TTM 离线 cache 复跑命令：
+
+```bash
+HF_HOME=hf_cache uv run b08-model-core real-data evaluate-scenario \
+  --dataset data/processed/fu13_real_observations.parquet \
+  --config configs/fu13_real_data_schema.yaml \
+  --output reports/real_leak_current_scenario_evaluation_ttm.md \
+  --scenario leak_current_monitoring \
+  --model ttm \
+  --context-length 90 \
+  --prediction-length 16 \
+  --max-windows 40 \
+  --rolling-window-size 8 \
+  --model-cache-dir hf_cache \
+  --no-download
+```
+
 完整本地报告仍写入 ignored 的 `reports/real_*.md`，不要提交；tracked 文档只汇总关键结论和业务边界。
 
 ## 6. 阅读报告与边界
