@@ -191,3 +191,32 @@ def test_contract_validation_rejects_non_dict_data_label_audit():
 def test_contract_validation_accepts_current_contract():
     contract = load_c_stage_contract(CONFIG_PATH)
     validate_c_stage_contract(contract)
+
+
+def test_c_stage_minimum_evidence_report_template_contains_required_static_terms():
+    template = Path("reports/c_stage_minimum_evidence_template.md").read_text(
+        encoding="utf-8"
+    )
+    required_terms = {
+        "E1_forecasting_residual",
+        "E2_representation",
+        "E3_imputation",
+        "E4_open_data_pm",
+        "E5_patent_effect",
+        "CT4_decision_gate",
+        "C -> B",
+        "数据与标签核对",
+        "primary_task",
+        "strong_baseline",
+        "minimum_gain",
+        "seed_policy",
+        "confidence_interval_policy",
+        "failure_conditions",
+        "P1_stage_sensor_encoding",
+        "P2_small_sample_pretraining",
+        "P3_weak_label_anomaly_signal",
+        "P4_real_open_data_fusion",
+        "P5_multitask_health_evaluation",
+    }
+    missing_terms = sorted(term for term in required_terms if term not in template)
+    assert missing_terms == []
