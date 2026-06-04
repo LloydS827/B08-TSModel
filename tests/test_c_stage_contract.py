@@ -1,4 +1,5 @@
 from pathlib import Path
+from copy import deepcopy
 
 import pytest
 import yaml
@@ -134,6 +135,56 @@ def test_contract_validation_rejects_missing_invalid_claims():
     contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     contract["experiments"][0]["invalid_claims"] = []
     with pytest.raises(CStageContractError):
+        validate_c_stage_contract(contract)
+
+
+def test_contract_validation_rejects_extra_experiment_count():
+    contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    contract["experiments"].append(deepcopy(contract["experiments"][0]))
+    with pytest.raises(CStageContractError, match="exactly 5 experiments"):
+        validate_c_stage_contract(contract)
+
+
+def test_contract_validation_rejects_duplicate_evidence_id():
+    contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    contract["experiments"][1]["evidence_id"] = "E1_forecasting_residual"
+    with pytest.raises(CStageContractError, match="duplicate evidence ids"):
+        validate_c_stage_contract(contract)
+
+
+def test_contract_validation_reports_missing_and_extra_evidence_ids():
+    contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    contract["experiments"][0]["evidence_id"] = "E6_unplanned"
+    with pytest.raises(
+        CStageContractError,
+        match="missing .*E1_forecasting_residual.*extra .*E6_unplanned",
+    ):
+        validate_c_stage_contract(contract)
+
+
+def test_contract_validation_rejects_missing_decision_gate_requirements():
+    contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    contract["decision_gate"]["requires"].remove("E5_patent_effect")
+    with pytest.raises(CStageContractError, match="decision_gate.requires"):
+        validate_c_stage_contract(contract)
+
+
+def test_contract_validation_rejects_non_dict_contract():
+    with pytest.raises(CStageContractError, match="contract must be a dict"):
+        validate_c_stage_contract([])
+
+
+def test_contract_validation_rejects_non_dict_experiment():
+    contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    contract["experiments"][0] = "not a dict"
+    with pytest.raises(CStageContractError, match="each experiment must be a dict"):
+        validate_c_stage_contract(contract)
+
+
+def test_contract_validation_rejects_non_dict_data_label_audit():
+    contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    contract["experiments"][0]["data_label_audit"] = []
+    with pytest.raises(CStageContractError, match="data_label_audit must be a dict"):
         validate_c_stage_contract(contract)
 
 

@@ -18,7 +18,8 @@ experiments:
       - P3_weak_label_anomaly_signal
       - P5_multitask_health_evaluation
     dataset:
-      name: FU13
+      name:
+        - FU13
       role: real_pipeline_validation
       license_status: internal_boundary_to_confirm
       mapping_status: planned
@@ -36,7 +37,8 @@ experiments:
       leakage_guard: future observations and review labels excluded from model inputs
     comparison:
       required_baseline: rolling_or_seasonal_naive
-      candidate_model: TTM
+      candidate_model:
+        - TTM
       same_split_required: true
     valid_when:
       - window_horizon_target_and_missing_rules_are_fixed_before_run
@@ -69,7 +71,8 @@ experiments:
       - P1_stage_sensor_encoding
       - P2_small_sample_pretraining
     dataset:
-      name: FU13
+      name:
+        - FU13
       role: real_pipeline_validation
       license_status: internal_boundary_to_confirm
       mapping_status: planned
@@ -122,7 +125,8 @@ experiments:
     patent_ids:
       - P5_multitask_health_evaluation
     dataset:
-      name: FU13
+      name:
+        - FU13
       role: real_pipeline_validation
       license_status: internal_boundary_to_confirm
       mapping_status: planned
@@ -197,7 +201,8 @@ experiments:
       leakage_guard: same_unit_run_or_fault_trajectory_must_not_cross_splits
     comparison:
       required_baseline: dataset_specific_engineering_baseline
-      candidate_model: shared_adapter_candidate
+      candidate_model:
+        - shared_adapter_candidate
       same_split_required: true
     valid_when:
       - official_source_license_label_and_split_policy_are_recorded
@@ -250,8 +255,10 @@ experiments:
       leakage_guard: no_post_hoc_task_selection_for_go_decision
     comparison:
       required_baseline: e1_to_e4_baseline_outputs
-      candidate_model: e1_to_e4_candidate_outputs
-      same_split_required: inherited_where_applicable
+      candidate_model:
+        - e1_to_e4_candidate_outputs
+      same_split_required: true
+      split_policy_note: inherited_where_applicable
     valid_when:
       - e1_to_e4_outputs_or_failure_reasons_are_available
       - prior_art_risk_entries_are_recorded_for_p1_to_p5

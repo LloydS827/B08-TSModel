@@ -76,13 +76,35 @@ def load_c_stage_contract(path: str | Path) -> dict[str, Any]:
 
 
 def validate_c_stage_contract(contract: dict[str, Any]) -> None:
+    if not isinstance(contract, dict):
+        raise CStageContractError("contract must be a dict")
+
     experiments = contract.get("experiments")
     if not isinstance(experiments, list) or not experiments:
         raise CStageContractError("experiments must be a non-empty list")
+    if len(experiments) != 5:
+        raise CStageContractError("contract must declare exactly 5 experiments")
 
-    evidence_ids = {item.get("evidence_id") for item in experiments}
+    for item in experiments:
+        if not isinstance(item, dict):
+            raise CStageContractError("each experiment must be a dict")
+
+    evidence_id_list = [item.get("evidence_id") for item in experiments]
+    duplicate_evidence_ids = sorted(
+        evidence_id
+        for evidence_id in set(evidence_id_list)
+        if evidence_id_list.count(evidence_id) > 1
+    )
+    if duplicate_evidence_ids:
+        raise CStageContractError(f"duplicate evidence ids: {duplicate_evidence_ids}")
+
+    evidence_ids = set(evidence_id_list)
     if evidence_ids != REQUIRED_EVIDENCE_IDS:
-        raise CStageContractError("contract must declare exactly E1-E5 evidence ids")
+        missing = sorted(REQUIRED_EVIDENCE_IDS - evidence_ids)
+        extra = sorted(evidence_ids - REQUIRED_EVIDENCE_IDS)
+        raise CStageContractError(
+            f"contract evidence ids missing {missing}; extra {extra}"
+        )
 
     contribution_ids = {
         contribution
@@ -102,21 +124,61 @@ def validate_c_stage_contract(contract: dict[str, Any]) -> None:
             "comparison",
             "valid_when",
             "no_go_when",
-            "data_label_audit",
             "invalid_claims",
         ]:
             if not item[field]:
                 raise CStageContractError(f"{item['experiment_id']} has empty {field}")
 
-        missing_audit_fields = REQUIRED_DATA_LABEL_AUDIT_FIELDS - set(item["data_label_audit"])
+        dataset = item["dataset"]
+        if not isinstance(dataset, dict):
+            raise CStageContractError(f"{item['experiment_id']} dataset must be a dict")
+        if not isinstance(dataset.get("name"), list) or not dataset["name"]:
+            raise CStageContractError(f"{item['experiment_id']} dataset.name must be a list")
+
+        comparison = item["comparison"]
+        if not isinstance(comparison, dict):
+            raise CStageContractError(f"{item['experiment_id']} comparison must be a dict")
+        if not isinstance(comparison.get("candidate_model"), list) or not comparison["candidate_model"]:
+            raise CStageContractError(
+                f"{item['experiment_id']} comparison.candidate_model must be a list"
+            )
+        if not isinstance(comparison.get("same_split_required"), bool):
+            raise CStageContractError(
+                f"{item['experiment_id']} comparison.same_split_required must be a bool"
+            )
+
+        data_label_audit = item["data_label_audit"]
+        if not isinstance(data_label_audit, dict):
+            raise CStageContractError(
+                f"{item['experiment_id']} data_label_audit must be a dict"
+            )
+        if not data_label_audit:
+            raise CStageContractError(f"{item['experiment_id']} has empty data_label_audit")
+
+        missing_audit_fields = REQUIRED_DATA_LABEL_AUDIT_FIELDS - set(data_label_audit)
         if missing_audit_fields:
             raise CStageContractError(
                 f"{item['experiment_id']} missing audit fields {sorted(missing_audit_fields)}"
             )
 
     decision_gate = contract.get("decision_gate", {})
+    if not isinstance(decision_gate, dict):
+        raise CStageContractError("decision_gate must be a dict")
     if set(decision_gate.get("allowed_decisions", [])) != ALLOWED_DECISIONS:
         raise CStageContractError("decision_gate.allowed_decisions must match the allowed set")
+
+    requires = decision_gate.get("requires")
+    requires_set = set(requires) if isinstance(requires, list) else set()
+    if (
+        not isinstance(requires, list)
+        or len(requires) != len(REQUIRED_EVIDENCE_IDS)
+        or requires_set != REQUIRED_EVIDENCE_IDS
+    ):
+        missing = sorted(REQUIRED_EVIDENCE_IDS - requires_set)
+        extra = sorted(requires_set - REQUIRED_EVIDENCE_IDS)
+        raise CStageContractError(
+            f"decision_gate.requires must exactly cover E1-E5; missing {missing}; extra {extra}"
+        )
 
     criteria = decision_gate.get("criteria", {})
     for field in REQUIRED_DECISION_CRITERIA:
