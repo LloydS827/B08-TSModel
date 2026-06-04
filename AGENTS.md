@@ -62,6 +62,22 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. Always Keep The System Usable
+
+**The default project state should remain usable for a user who downloads it at any time.**
+
+Treat this like a product invariant, similar to systems such as Codex: even while research and iteration continue, the checked-in default path should be installable, runnable, and verifiable.
+
+When changing the project:
+- Do not leave the default branch in a broken, half-migrated, or demo-only state.
+- Keep the documented default workflow working unless the task explicitly changes that workflow.
+- Preserve existing acceptance paths while adding new ones; do not replace a working baseline with an unproven experiment.
+- Keep unfinished or exploratory capabilities behind non-default paths, clear flags, separate docs, or isolated plans.
+- After changes, run verification that matches the blast radius, and record any known limitation honestly.
+- If a task cannot be completed safely in one pass, leave the system in the last known usable state and document the remaining work.
+
+The test: A new user should be able to read the README, follow the default commands, and get a working local system without needing hidden context from the development discussion.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
