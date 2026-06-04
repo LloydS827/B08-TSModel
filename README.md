@@ -1,19 +1,29 @@
 # B08 设备时序基础模型
 
-B08 是设备时序基础模型的研发沙盒。当前重点不是搭一个完整业务系统，而是把真实设备数据转换为可复现的 canonical observations，并用同一套窗口、指标和报告口径验证 baseline 与时序基础模型候选。
+## 项目定位
 
-FU13 是本阶段选定的第一台示例设备编号，指一台真空速凝炉。它不是算法名称，也不是模型名称，而是当前用于定义和验证时序模型输入输出的业务对象。
+本项目是面向设备时序数据的基础模型研发与评测项目。当前 FU13 真实数据 pipeline、TTM 真实推理和漏液电流场景评测，是为了验证基础模型研发所需的数据标准化、窗口构建、模型输入输出、评测指标和候选信号映射能力。
 
-## 当前状态
+FU13 是当前第一台真实设备样例，用于把现场多 CSV 数据装配为 canonical observations，并在统一窗口、统一指标和统一报告口径下评测 baseline 与基础时序模型候选。`leak_current_monitoring` 是模型输出进入业务语境的验证样例，不是项目终点，也不能被解释为生产告警或维修决策闭环已经完成。
 
-当前阶段为 **FU13 real data pipeline + TTM real-data forecasting validation**。
+项目主线：
 
-已经跑通：
+```text
+设备时序数据
+  -> canonical observations
+  -> 模型窗口
+  -> baseline / foundation model 评测
+  -> residual / trend / spike / representation 等候选信号
+  -> 支撑开源模型适配、轻量微调或自研训练 Go / No-Go 决策
+```
+
+## 当前可复现资产
 
 - FU13 真实多 CSV 数据装配为 `data/processed/fu13_real_observations.parquet`。
-- canonical observation schema 验证、连续炉 cycle 重构和 scenario 诊断。
+- canonical observation schema 验证、连续炉 cycle 重构和数据诊断报告。
 - baseline 与 TTM 在 FU13 真实数据窗口上的同口径 forecasting 验证。
-- TTM 本机 cache 离线推理链路，当前真实数据报告状态为 `available_and_ran`。
+- `leak_current_monitoring` 场景评测验证样例：比较质量过滤、等待态、rolling baseline 与 baseline/TTM residual candidate signal。
+- `uv` + `pytest` 的本地研发验证路径。
 
 当前事实基础：
 
@@ -28,17 +38,7 @@ FU13 是本阶段选定的第一台示例设备编号，指一台真空速凝炉
 | `unassigned_cycle` rows | 529,790 |
 | `invalid` rows | 205,176 |
 
-下一步是固化评测口径并为模型开发做准备：先治理窗口质量、scenario 过滤、质量标记、等待态和 baseline 对照，再进入模型选择或轻量微调；不是马上横向堆更多模型名字。
-
-## 适用读者
-
-- 内部研发人员：按标准流程复现真实数据 pipeline，修改配置，阅读 baseline/TTM 报告，并开展下一阶段模型开发。
-- 项目管理者：理解当前已经证明了什么、还没有证明什么，以及为什么下一阶段先做评测口径固化。
-- 现场数据方：知道真实数据放在哪里、哪些数据质量问题会被报告、以及原始数据不会进入 Git。
-
-## 标准开发流程
-
-标准流程如下：
+## 标准研发流程
 
 ```text
 data/real/
@@ -50,14 +50,13 @@ data/real/
   -> reports/real_baseline_forecasting.md
   -> real-data forecast-fu13 --model ttm
   -> reports/real_ttm_forecasting.md
-  -> docs/ttm-real-data-evaluation.md
+  -> real-data evaluate-scenario
+  -> reports/real_leak_current_scenario_evaluation_*.md
 ```
 
 ## 1. 准备环境
 
 需要 Python 3.11+。项目 Python 环境建议使用 `uv` 管理，依赖锁定在 `uv.lock`。
-
-开发环境：
 
 ```bash
 uv sync --extra dev
@@ -77,51 +76,19 @@ uv sync --extra dev --extra foundation-ttm
 
 TTM 权重和 Hugging Face cache 放在本机目录，例如 `hf_cache/`。本项目不会把 cache 上传到 Git。
 
-## 2. 放置真实数据
+## 2. 装配 FU13 canonical observations
 
-把 FU13 现场导出的多 CSV 文件放在：
+把 FU13 现场导出的多 CSV 文件放在 ignored 的本机目录：
 
 ```text
 data/real/
 ```
 
-`data/real/` 是本机数据目录，必须保持 ignored。真实原始数据不提交、不上传。
-
-如果在 worktree 中没有 `data/real/`，可以使用原工作区的绝对路径作为 `--input-dir`，但仍不要把真实数据复制进 Git 跟踪范围。
-
-当前文件名来自 `configs/fu13_real_data_schema.yaml`。装配命令会按配置读取这些 CSV：
-
-| 文件 | 必需列 | 说明 |
-| --- | --- | --- |
-| `stage_data.csv` | `time`, `stage_name` | 工艺阶段时间线 |
-| `FU13_Record_O2Content2.csv` | `time`, `value` | 下料口氧含量 |
-| `FU13_CrucibleForwardPressure.csv` | `time`, `value` | 坩埚前倾压力 |
-| `FU13_CrucibleReturnPressure.csv` | `time`, `value` | 坩埚回程压力 |
-| `FU13_Pump_01_PumpShake1.csv` | `time`, `value` | 机械泵振动1 |
-| `FU13_Pump_02_PumpShake2.csv` | `time`, `value` | 机械泵振动2 |
-| `FU13_Record_LeakElec.csv` | `time`, `value` | 泄漏电流 |
-| `FU13_Record_O2Content.csv` | `time`, `value` | 真空管氧含量 |
-| `FU13_SysSelfPressure.csv` | `time`, `value` | 系统压力 |
-
-`time` 需要能被 pandas 解析为时间；当前配置使用 `timezone_policy: UTC`。CSV 建议使用 UTF-8 编码。
-
-## 3. 装配 canonical observations
-
-运行 FU13 多 CSV 装配：
+当前文件名来自 `configs/fu13_real_data_schema.yaml`。装配命令会按配置读取 CSV，并生成 canonical observations：
 
 ```bash
 uv run b08-model-core real-data assemble-fu13 \
   --input-dir data/real \
-  --config configs/fu13_real_data_schema.yaml \
-  --output data/processed/fu13_real_observations.parquet \
-  --report reports/real_data_validation.md
-```
-
-如果本 worktree 没有 `data/real/`，使用原工作区真实数据目录：
-
-```bash
-uv run b08-model-core real-data assemble-fu13 \
-  --input-dir "/Users/lloyd/Nutstore Files/Nutstore/CavLAB/P00-Projects/分类0-核心研发/B08-设备时序基础模型/data/real" \
   --config configs/fu13_real_data_schema.yaml \
   --output data/processed/fu13_real_observations.parquet \
   --report reports/real_data_validation.md
@@ -143,7 +110,7 @@ canonical observation schema 摘要：
 | `degradation_label` | 弱退化标签，默认 `normal` |
 | `failure_proxy` | 弱故障代理标签 |
 
-## 4. 运行数据诊断
+## 3. 运行数据诊断
 
 ```bash
 uv run b08-model-core real-data diagnose-fu13 \
@@ -154,38 +121,28 @@ uv run b08-model-core real-data diagnose-fu13 \
 
 诊断报告用于检查 scenario 行数、invalid 行数、传感器覆盖和阶段覆盖。当前 scenario 是指标分组，不是 scenario-filtered 建窗。
 
-## 5. 运行 baseline
+## 4. 运行 baseline / TTM forecasting
+
+baseline 命令：
 
 ```bash
-uv run b08-model-core real-data forecast-fu13 \
+uv run b08-model-core real-data forecast-fu13 --model baseline \
   --dataset data/processed/fu13_real_observations.parquet \
   --config configs/fu13_real_data_schema.yaml \
   --output reports/real_baseline_forecasting.md \
-  --model baseline \
   --window-mode cross-stage \
   --context-length 90 \
   --prediction-length 16 \
   --max-windows 40
 ```
 
-baseline 报告用于给 TTM 和后续模型开发提供同口径对照。当前标准配置是 `window-mode=cross-stage`、`context-length=90`、`prediction-length=16`、`max-windows=40`。
-
-## 6. 运行 TTM
-
-先确认 optional dependency 已安装：
+TTM 离线 cache 命令：
 
 ```bash
-uv sync --extra dev --extra foundation-ttm
-```
-
-如果本机已经有 `hf_cache/`，使用离线 cache 运行：
-
-```bash
-HF_HOME=hf_cache uv run b08-model-core real-data forecast-fu13 \
+HF_HOME=hf_cache uv run b08-model-core real-data forecast-fu13 --model ttm \
   --dataset data/processed/fu13_real_observations.parquet \
   --config configs/fu13_real_data_schema.yaml \
   --output reports/real_ttm_forecasting.md \
-  --model ttm \
   --window-mode cross-stage \
   --context-length 90 \
   --prediction-length 16 \
@@ -194,120 +151,13 @@ HF_HOME=hf_cache uv run b08-model-core real-data forecast-fu13 \
   --no-download
 ```
 
-如果 worktree 中没有 `hf_cache/`，可以指向原工作区 cache：
+如果需要首次下载权重，必须显式允许下载，把 `--no-download` 改为 `--allow-download`。
 
-```bash
-HF_HOME="/Users/lloyd/Nutstore Files/Nutstore/CavLAB/P00-Projects/分类0-核心研发/B08-设备时序基础模型/hf_cache" uv run b08-model-core real-data forecast-fu13 \
-  --dataset data/processed/fu13_real_observations.parquet \
-  --config configs/fu13_real_data_schema.yaml \
-  --output reports/real_ttm_forecasting.md \
-  --model ttm \
-  --window-mode cross-stage \
-  --context-length 90 \
-  --prediction-length 16 \
-  --max-windows 40 \
-  --model-cache-dir "/Users/lloyd/Nutstore Files/Nutstore/CavLAB/P00-Projects/分类0-核心研发/B08-设备时序基础模型/hf_cache" \
-  --no-download
-```
+当前标准口径是 `window-mode=cross-stage`、`context-length=90`、`prediction-length=16`、`max-windows=40`。baseline 用于提供同口径工程对照；TTM 用于验证开源基础时序模型候选是否能在真实 FU13 窗口上运行并输出可比较指标。
 
-如果需要首次下载权重，必须显式允许下载：
+## 5. 运行业务场景评测样例
 
-```bash
-HF_HOME=hf_cache uv run b08-model-core real-data forecast-fu13 \
-  --dataset data/processed/fu13_real_observations.parquet \
-  --config configs/fu13_real_data_schema.yaml \
-  --output reports/real_ttm_forecasting.md \
-  --model ttm \
-  --window-mode cross-stage \
-  --context-length 90 \
-  --prediction-length 16 \
-  --max-windows 40 \
-  --model-cache-dir hf_cache \
-  --allow-download
-```
-
-TTM 命令的退出码和报告状态约定：
-
-| 情况 | 报告状态 | 退出码 |
-| --- | --- | ---: |
-| baseline 默认模式 | `skipped_by_user` | 0 |
-| TTM 依赖未安装 | `missing_dependency` | 1 |
-| TTM cache 命中并完成推理 | `available_and_ran` | 0 |
-| TTM cache 未命中且禁止下载 | `missing_or_blocked_weights` | 1 |
-| TTM 下载、加载或推理失败 | `missing_or_blocked_weights`、`unsupported_window_shape` 或 `runtime_failed` | 1 |
-
-常用参数边界：
-
-| 参数 | 当前可用值或约束 | 说明 |
-| --- | --- | --- |
-| `--model` | `baseline` 或 `ttm` | `baseline` 不需要 TTM 依赖；`ttm` 会加载基础模型 |
-| `--window-mode` | `stage-local` 或 `cross-stage` | 当前真实数据标准评测使用 `cross-stage` |
-| `--context-length` | 正整数 | 当前标准值为 `90` |
-| `--prediction-length` | 正整数 | 当前标准值为 `16` |
-| `--max-windows` | 正整数 | 按当前窗口构建顺序取 first-N，再做 70/30 顺序切分 |
-
-如果需要复跑本阶段 first-N `20/40/80` 口径，可以使用下面的完整命令。baseline：
-
-```bash
-for n in 20 40 80
-do
-  uv run b08-model-core real-data forecast-fu13 \
-    --dataset data/processed/fu13_real_observations.parquet \
-    --config configs/fu13_real_data_schema.yaml \
-    --output "reports/real_baseline_forecasting_w${n}.md" \
-    --model baseline \
-    --window-mode cross-stage \
-    --context-length 90 \
-    --prediction-length 16 \
-    --max-windows "$n"
-done
-```
-
-TTM 离线 cache：
-
-```bash
-for n in 20 40 80
-do
-  HF_HOME=hf_cache uv run b08-model-core real-data forecast-fu13 \
-    --dataset data/processed/fu13_real_observations.parquet \
-    --config configs/fu13_real_data_schema.yaml \
-    --output "reports/real_ttm_forecasting_w${n}.md" \
-    --model ttm \
-    --window-mode cross-stage \
-    --context-length 90 \
-    --prediction-length 16 \
-    --max-windows "$n" \
-    --model-cache-dir hf_cache \
-    --no-download
-done
-```
-
-## 7. 如何阅读报告
-
-- `schema_valid=True`：canonical schema 验证通过。它不等于数据质量完美，只说明字段、类型和基本结构满足装配要求。
-- `quality_counts`：各类质量标记的计数。当前 `unassigned_cycle` 和 `invalid` 是下一阶段数据治理重点。
-- `available_and_ran`：TTM 依赖、权重和推理链路成功运行。它不代表模型可以用于告警。
-- `Baseline Comparison`：baseline 报告中的整体 MAE/RMSE 对照，通常包含 robust stage fallback 与 seasonal naive 等基线。
-- `Foundation Metrics`：TTM 报告中的基础模型整体指标，当前 TTM 指标在本地报告中以 `foundation` 行输出。
-- `Sensor Metrics`：按传感器拆分的误差，用于识别哪个传感器受量纲、离散值、等待态或质量标记影响更大。
-- `Scenario Metrics`：按 scenario 映射聚合的误差。当前它是分组指标，不是 scenario-filtered training/evaluation。
-
-阅读报告时要注意：`cross-stage` 窗口可能包含等待阶段或跨阶段混合片段；当前还没有做 `good` only、去除 `invalid`、去除 `unassigned_cycle` 等过滤评测。
-
-## TTM 当前结论
-
-完整结论见 [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)。
-
-当前可以确认：
-
-- TTM 可以从本机 cache 离线运行，w20/w40/w80 的状态均为 `available_and_ran`。
-- TTM 是有意义的 forecasting 候选模型；在同一批 constructed windows、同一套 baseline、同一套 MAE/RMSE 指标下，TTM 输出了真实推理结果。
-- first-N `max-windows=20/40/80` 结果中，TTM 整体 MAE/RMSE 均低于 `RobustStageForecaster` 和 `StageSeasonalNaiveForecaster`。
-- `max-windows=20/40/80` 是按当前窗口构建顺序取前 N 个窗口的嵌套规模敏感性证据，不是随机抽样，也不是统计稳健性证明。
-
-## 漏液电流场景评测
-
-`leak_current_monitoring` 是下一阶段业务场景评测口径固化的第一个最小闭环。它只使用 `LeakElec` 作为核心传感器，并比较 related stages、waiting stage、质量标记过滤和 baseline/TTM 同口径 forecasting residual。
+`leak_current_monitoring` 是验证样例，不是项目终点。它只使用 `LeakElec` 作为核心传感器，并比较 related stages、waiting stage、质量标记过滤和 baseline/TTM 同口径 forecasting residual。
 
 baseline 复跑命令：
 
@@ -324,53 +174,41 @@ uv run b08-model-core real-data evaluate-scenario \
   --rolling-window-size 8
 ```
 
-完整本地报告仍写入 ignored 的 `reports/real_*.md`，不要提交；tracked 文档只汇总关键结论和业务边界。摘要见 [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)。
+完整本地报告仍写入 ignored 的 `reports/real_*.md`，不要提交；tracked 文档只汇总关键结论和业务边界。
 
-## 不能得出的结论
+## 6. 阅读报告与边界
 
-当前报告是 forecasting 能力复核，不是故障预测验收。
+- `schema_valid=True`：canonical schema 验证通过。它不等于数据质量完美，只说明字段、类型和基本结构满足装配要求。
+- `quality_counts`：各类质量标记的计数。当前 `unassigned_cycle` 和 `invalid` 是后续数据治理重点。
+- `available_and_ran`：TTM 依赖、权重和推理链路成功运行。它不代表模型可以用于告警。
+- `Baseline Comparison`：baseline 报告中的整体 MAE/RMSE 对照。
+- `Foundation Metrics`：TTM 报告中的基础模型整体指标。
+- `Sensor Metrics`：按传感器拆分的误差，用于识别哪个传感器受量纲、离散值、等待态或质量标记影响更大。
+- `Scenario Metrics`：按 scenario 映射聚合的误差。当前它是分组指标，不是故障预测验收。
 
-不能从当前结果推出：
+当前不能推出设备故障概率、RUL、维护建议、生产告警或 TTM 已经具备预测性维护系统能力。原因是项目仍缺少真实故障标签、维修记录、停机事件标签、寿命标签和退化过程定义。
 
-- 设备故障概率。
-- RUL。
-- 维护建议。
-- 生产告警。
-- TTM 可以直接用于现场业务闭环。
-- TTM 已经具备预测性维护系统能力。
+## 下一阶段研发路线
 
-原因是当前缺少真实故障标签、维修记录、停机事件标签、寿命标签和退化过程定义；`leak_current_monitoring` 已完成第一版 scenario-filtered evaluation、质量标记过滤、等待态对比和 rolling baseline 对照，但这还只是候选异常信号评测，不是业务闭环验证。
-
-## 下一阶段开发任务
-
-下一阶段主线是 **业务场景评测口径固化**。项目已经证明真实数据可以进入基础模型评测链路，并完成了 `leak_current_monitoring` 的第一版场景化残差信号摘要，但还没有证明模型输出可以直接变成维修建议、故障概率或生产告警。
-
-推荐先做一个业务场景的最小闭环，而不是马上横向接入更多模型。第一场景选定为 `leak_current_monitoring`，原因是它只有 `LeakElec` 一个核心传感器，更适合先验证残差、趋势和尖峰能否形成候选异常信号。`atmosphere_detection` 作为第二候选场景保留。
+下一阶段按 **A -> C -> B** 推进：
 
 ```text
-业务场景定义
-  -> 相关传感器和工艺阶段
-  -> 有效窗口规则
-  -> baseline/TTM 同口径评测
-  -> 残差、趋势或尖峰候选信号
-  -> 专家复核或维修记录对齐需求
+A. 学术 / 行业 / 模型路线调研
+  -> C. 开源基础时序模型系统适配与对比
+    -> B. 自研设备时序基础模型训练方案设计
 ```
 
-几个下一步术语在本项目里的含义如下：
+A 先做，因为项目要先判断设备时序基础模型应该学什么、评测什么，以及它与通用时间序列模型和业务告警系统的差异。产物应包括任务谱系、数据特点、学术/行业资料综述、开源模型能力矩阵、训练目标候选和数据规模判断。
 
-- window quality governance：确认模型窗口是否是有业务意义的片段，避免把等待态、无效值、未分配 cycle 或异常采样间隔误判为模型能力问题。
-- scenario-filtered evaluation：先按业务场景筛选相关传感器、阶段和窗口，再评测模型，而不是只在模型跑完后按 scenario 汇总指标。
-- quality-flag filtering：比较 `good only`、去除 `invalid`、去除 `unassigned_cycle` 等数据质量口径下的指标变化。
-- waiting-stage handling：评估 `上盖开启` 等等待态应保留、剔除还是单独建模。
-- stronger baselines：本阶段先增加一个 rolling 或 lag baseline，确认基础模型确实超过合理工程对照；轻量机器学习 baseline 留到后续。
+C 第二，因为要先系统验证开源 foundation models，再决定是否自研。这里要在同一批设备窗口、同一套指标、同一套报告口径下比较 TTM、MOMENT、Chronos、TimesFM、Moirai、UniTS 等候选模型，并解释失败原因是依赖问题、窗口形状问题、任务不匹配，还是模型能力不足。
 
-下一阶段完成标准不是“多接几个模型”，而是能围绕一个具体业务场景说明：模型该看哪些数据、输出如何转成候选异常信号、还缺哪些业务证据才能进入维护决策。
+B 是 A/C 之后的自研条件性路线，不能写成已经决定训练。只有当 A 和 C 给出足够证据，说明开源模型无法覆盖本项目的关键缺口时，才进入自研设备时序基础模型训练方案设计；该阶段也应先形成可审查方案，而不是直接大规模训练。
 
 ## 关键目录
 
 ```text
 AGENTS.md                               # 后续 Agent 工作规则和阶段边界
-details.md                              # 面向用户和非技术人员的项目进展台账
+details.md                              # 项目进展与阶段判断台账
 uv.lock                                 # uv 生成的可复现 Python 依赖锁文件
 configs/
   real_data_schema_map.template.yaml    # 真实数据映射模板
@@ -400,42 +238,26 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 
 ## 文档入口
 
-- [Agent 工作规则](AGENTS.md)
 - [项目进展说明](details.md)
 - [docs/index.html](docs/index.html)
+- [项目主线与研发路线收束设计](docs/superpowers/specs/2026-06-04-project-mainline-roadmap-refactor-design.md)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
 - [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)
-- [模型输入输出定义](docs/model-io-definition.html)
-- [真实基础模型推理验证方案](docs/foundation-model-inference-design.html)
-- [真实基础模型推理实施计划](docs/foundation-model-inference-plan.html)
-- [基础模型验证分析报告](docs/foundation-model-verification-report.html)
-- [业务场景评测口径固化设计](docs/superpowers/specs/2026-06-03-business-scenario-evaluation-design.md)
-- [模型路线决策](docs/model-route-decision.html)
 - [开源时序基础模型调研](docs/调研资料/开源时序基础模型调研.md)
 - [真实数据 Schema Map](docs/reviews/real-data-schema-map.md)
-- [Code Review 与下一阶段计划](docs/reviews/2026-05-31-code-review-and-next-stage.md)
+- [模型路线决策](docs/model-route-decision.html)
 
 ## Agent 维护规则
 
-`details.md` 是项目进展台账，面向用户、管理者和非技术人员。后续 Agent 在完成任何实质性项目推进后，都要检查并及时更新该文件。
+`details.md` 是项目进展台账。后续 Agent 在完成任何实质性项目推进后，都要检查是否需要更新该文件；如果本轮工作只允许修改 README，则不要顺手改 `details.md`，但要在最终回复中说明边界。
 
-必须检查 `details.md` 的场景：
+更新项目文档时遵守：
 
-- 新增或改变了项目能力，例如真实数据接入、模型实验、评测指标、报告输出。
-- 改变了当前阶段判断。
-- 改变了下一步计划、优先级、路线选择或 Go/No-Go 判断。
-- 发现新的风险、阻塞项、数据问题或模型适配问题。
-- 完成了一轮关键验证、code review、实验、提交或推送。
-
-更新 `details.md` 时遵守：
-
-- 用非技术人员能理解的语言说明项目现在在做什么。
 - 分清“已经具备的能力”和“后续需要补充的能力”。
-- 更新“下一阶段计划”和“近期更新记录”。
-- 保留上下文，不只写一句技术提交说明。
-- 如果本轮工作不影响项目进展，也要在最终回复中说明已检查且无需更新。
-
-本任务只允许修改 README 时，不更新 `details.md`。
+- 不把业务场景验证写成项目终点。
+- 不把自研训练写成已经决定的路线。
+- 不扩大到代码重构，除非任务明确要求。
+- 保留当前可复现命令，避免破坏研发执行者入口。
 
 ## Git 安全边界
 
