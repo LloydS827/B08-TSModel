@@ -56,6 +56,8 @@ ALLOWED_DECISIONS = {
     "No_Go_hold",
 }
 
+ALLOWED_EXPERIMENT_STATUSES = {"planned", "needs-review", "blocked"}
+
 REQUIRED_DECISION_CRITERIA = {
     "primary_task",
     "strong_baseline",
@@ -118,6 +120,9 @@ def validate_c_stage_contract(contract: dict[str, Any]) -> None:
         missing = REQUIRED_EXPERIMENT_FIELDS - set(item)
         if missing:
             raise CStageContractError(f"{item.get('experiment_id')} missing {sorted(missing)}")
+
+        if item["status"] not in ALLOWED_EXPERIMENT_STATUSES:
+            raise CStageContractError(f"{item['experiment_id']} has unknown status")
 
         for field in [
             "input_contract",

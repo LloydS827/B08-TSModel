@@ -220,7 +220,7 @@ experiments:
       schema_status: dataset_to_b08_schema_mapping_required
       label_status: label_semantics_and_confidence_required
       split_policy_status: unit_run_fault_or_process_split_required
-    status: needs_review
+    status: needs-review
     invalid_claims:
       - 不得解释为 FU13 已具备同等标签
       - 不得解释为生产级 RUL

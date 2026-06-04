@@ -41,6 +41,8 @@ REQUIRED_DATA_LABEL_AUDIT_FIELDS = {
     "split_policy_status",
 }
 
+ALLOWED_EXPERIMENT_STATUSES = {"planned", "needs-review", "blocked"}
+
 
 def test_c_stage_contract_file_exists():
     assert CONFIG_PATH.exists()
@@ -93,6 +95,12 @@ def test_each_experiment_has_data_label_audit_checklist():
     contract = load_c_stage_contract(CONFIG_PATH)
     for item in contract["experiments"]:
         assert REQUIRED_DATA_LABEL_AUDIT_FIELDS.issubset(item["data_label_audit"])
+
+
+def test_each_experiment_status_uses_shared_allowed_values():
+    contract = load_c_stage_contract(CONFIG_PATH)
+    for item in contract["experiments"]:
+        assert item["status"] in ALLOWED_EXPERIMENT_STATUSES
 
 
 def test_patent_effect_examples_cover_p1_to_p5():
@@ -186,6 +194,13 @@ def test_contract_validation_rejects_non_dict_data_label_audit():
     contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
     contract["experiments"][0]["data_label_audit"] = []
     with pytest.raises(CStageContractError, match="data_label_audit must be a dict"):
+        validate_c_stage_contract(contract)
+
+
+def test_contract_validation_rejects_unknown_status():
+    contract = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))
+    contract["experiments"][0]["status"] = "needs_review"
+    with pytest.raises(CStageContractError, match="unknown status"):
         validate_c_stage_contract(contract)
 
 
