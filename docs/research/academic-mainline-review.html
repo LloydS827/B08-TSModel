@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>学术主线综述 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>学术主线综述</h1>
+    <p class="lead">A 阶段学术定位。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#学术主线综述">学术主线综述</a><a class="pill" href="#核心命题">核心命题</a><a class="pill" href="#为什么不是普通-forecasting">为什么不是普通 forecasting</a><a class="pill" href="#工业物联设备健康管理的特殊性">工业物联设备健康管理的特殊性</a><a class="pill" href="#现有路线分类">现有路线分类</a><a class="pill" href="#B08-的学术缺口">B08 的学术缺口</a><a class="pill" href="#B08-的方法空间">B08 的方法空间</a><a class="pill" href="#与-FU13-当前资产的关系">与 FU13 当前资产的关系</a><a class="pill" href="#与知识成果的关系">与知识成果的关系</a><a class="pill" href="#与工程化产品的关系">与工程化产品的关系</a><a class="pill" href="#后续矩阵接口">后续矩阵接口</a><a class="pill" href="#暂不主张的能力">暂不主张的能力</a></div></section>
+    <article class="article"><h1 id="学术主线综述">学术主线综述</h1>
+<h2 id="核心命题">核心命题</h2>
+<p>B08 的学术主线是：面向小样本工业物联设备健康管理的时序基础模型。它关注在真实故障样本稀缺、设备类型多样、工况阶段强结构化、传感器多物理域耦合的条件下，如何通过无标签或弱标签预训练学习通用设备运行表征，并以少量样本适配预测性维护相关任务。</p>
+<p>这个命题的重点不是把某一个设备、某一个传感器或某一个异常检测规则做成孤立应用，而是把工业物联设备运行数据表达为可预训练、可迁移、可评测的时序表征问题。B08 需要回答的是：在故障标签不足、现场条件复杂、设备状态变化明显的情况下，基础时序模型能否学习到对设备健康管理有用的通用运行模式，并在小样本条件下服务下游维护相关任务。</p>
+<p>因此，B08 的研究对象应收束为工业设备运行状态的时序表征、任务适配和验证体系，而不是泛化到所有通用时间序列问题。</p>
+<h2 id="为什么不是普通-forecasting">为什么不是普通 forecasting</h2>
+<p>B08 不是再做一个时序预测模型。Forecasting 是重要基础任务，也是评估时序模型能力的必要对照，因为正常轨迹预测、短期趋势预测和预测残差都可以为设备状态分析提供基础信号。</p>
+<p>但 forecasting 本身不足以覆盖工业物联设备健康管理的完整需求。设备健康管理不仅需要预测未来数值，还需要学习设备状态表征、补全缺失或异常采样片段、形成异常候选信号、识别退化趋势，并在少量样本或弱标签条件下适配不同设备和工况。</p>
+<p>如果只把 B08 表述为 forecasting，会弱化它与预测性维护、设备健康状态识别、多传感器物理域耦合和小样本适配之间的关系。更稳健的定位是：forecasting 是基础任务和强基线，B08 的主线是围绕工业设备健康管理构建设备时序基础模型及其多任务验证框架。</p>
+<h2 id="工业物联设备健康管理的特殊性">工业物联设备健康管理的特殊性</h2>
+<p>工业物联设备健康管理与通用时间序列建模相比，有更强的场景约束和数据不完备性。</p>
+<p>第一，真实故障样本稀缺。很多设备在真实生产中不会频繁出现完整故障闭环，也难以获得连续 run-to-failure 记录。即使存在维护记录，记录时间、故障原因和传感器变化之间也可能不同步。</p>
+<p>第二，设备类型、批次、工况和现场环境差异较大。不同设备的传感器配置、采样频率、物理量纲和运行阶段并不完全一致，模型需要面对跨设备和跨工况迁移问题。</p>
+<p>第三，工艺阶段具有强结构性。设备在不同阶段的正常模式可能不同，阶段切换会改变时序分布。如果忽略阶段语义，模型可能把正常工况变化误判为异常，或把真正的退化信号淹没在阶段差异中。</p>
+<p>第四，多传感器信号往往来自不同物理域，例如热、力、气氛、电流、压力或运动状态等。单个传感器的波动未必能直接解释设备健康状态，多物理域之间的耦合关系才可能提供更稳定的状态表征。</p>
+<p>第五，工业现场数据常包含时间戳噪声、缺失值、重复采样、无效值、停机片段、维护片段和质量标记。模型路线需要把这些数据质量语义纳入研究设计，而不是简单假设输入时序干净、完整且标签充分。</p>
+<h2 id="现有路线分类">现有路线分类</h2>
+<p>现有相关路线可以概括为四类，它们都对 B08 有参考价值，但单独任何一类都不足以完整覆盖 B08 的目标。</p>
+<p><strong>forecasting-first time-series foundation models</strong>：这一路线以跨数据集预测能力为核心，强调 zero-shot 或 few-shot forecasting、概率预测、不同频率和不同变量数量下的泛化能力。它适合作为 B08 的预测任务强基线，也适合验证预测残差和趋势信号是否有用。但其核心证明通常仍集中在预测误差上，未必直接覆盖工业设备状态表征、弱标签适配和设备健康管理任务。</p>
+<p>代表性锚点包括 TTM、Chronos、TimesFM 和 Moirai；详细论文证据、输入限制、任务覆盖和 B08 适配缺口进入后续 <code>open-source-model-paper-matrix.md</code> 承接。</p>
+<p><strong>multi-task / representation time-series foundation models</strong>：这一路线尝试把 forecasting、imputation、classification、anomaly detection、representation learning 等任务纳入统一模型或统一表征空间。它与 B08 的多任务需求更接近，尤其适合作为设备状态 embedding、补全、异常候选信号和小样本适配的对照。但这类模型是否理解工业工艺阶段、传感器物理域、质量标记和设备 metadata，仍需要在统一数据和统一任务口径下验证。</p>
+<p>代表性锚点包括 MOMENT、UniTS 和 TSPulse；详细任务矩阵、表征能力、适配方式和工业设备缺口进入后续 <code>open-source-model-paper-matrix.md</code> 与 <code>task-metric-matrix.md</code> 承接。</p>
+<p><strong>traditional predictive maintenance / RUL methods</strong>：这一路线通常围绕故障诊断、健康状态识别、退化建模和剩余寿命估计展开，具有清晰的设备健康管理目标。它能为 B08 提供任务定义、评价口径和经典数据集参照。但传统方法往往依赖特定设备、特定特征工程或较明确的故障/退化标签，在小样本、弱标签和跨设备泛化方面存在限制。</p>
+<p>代表性锚点包括 C-MAPSS、IMS Bearing 和 PRONOSTIA 等预测性维护数据与 RUL 任务；详细数据条件、标签形态、RUL 支撑程度和 schema 映射进入后续 <code>predictive-maintenance-dataset-matrix.md</code> 承接。</p>
+<p><strong>industrial anomaly detection and process monitoring</strong>：这一路线关注工业过程异常、过程监控、变点、残差、控制限和多变量过程状态。它适合支撑 B08 中异常候选信号、过程阶段变化和多变量监控的研究语境。但异常检测不等于预测性维护闭环，异常候选信号还需要与设备退化、维护事件、专家复核或后续业务证据建立关系。</p>
+<p>代表性锚点包括 Tennessee Eastman Process 等工业过程监控数据，以及残差、变点和多变量异常候选信号评测；详细任务边界和指标口径进入后续 <code>predictive-maintenance-dataset-matrix.md</code> 与 <code>task-metric-matrix.md</code> 承接。</p>
+<h2 id="B08-的学术缺口">B08 的学术缺口</h2>
+<p>通用时序基础模型主要证明跨数据集 forecasting 能力，但工业设备健康管理需要同时处理工艺阶段、多传感器物理域、质量标记、弱标签、退化趋势和小样本适配。</p>
+<p>这个缺口体现在三个层面。</p>
+<p>第一，任务层面不止 forecasting。工业设备健康管理需要把预测、补全、表征、异常候选信号、退化趋势、阶段识别和少样本分类等任务放在同一研究框架下，而不是只比较未来数值预测误差。</p>
+<p>第二，数据层面具有强结构。设备、传感器、物理域、工艺阶段、批次、周期、质量标记和维护片段都可能影响时序分布。通用模型如果只接收数值窗口，可能难以显式利用这些结构信息。</p>
+<p>第三，验证层面需要从可验证代理任务逐步推进到预测性维护目标任务。当前真实设备数据可以支撑 forecasting、imputation、masked reconstruction、阶段识别、质量标记预测和异常候选信号等任务；RUL、故障分类和维护提前量等第三层目标则需要开源 run-to-failure 数据、后续真实维修记录或专家复核支撑。</p>
+<p>因此，B08 的学术缺口不是“有没有另一个更大模型”，而是如何把时序基础模型放入小样本工业物联设备健康管理语境中，形成结构感知、多任务、可适配、可验证的研究路线。</p>
+<h2 id="B08-的方法空间">B08 的方法空间</h2>
+<p>B08 的方法空间可以从数据结构、预训练任务、适配机制和评测任务四个方向展开。</p>
+<p>在数据结构上，模型应考虑设备标识、传感器标识、物理域、工艺阶段、批次或 cycle、采样模式、质量标记和弱退化代理信号等信息。这些结构信息不一定在第一阶段全部进入模型，但应作为路线设计中的候选变量。</p>
+<p>在预训练任务上，可以优先考虑 masked sensor reconstruction、next-window forecasting、cross-sensor imputation、stage-aware representation learning、正常/异常代理表征对比、残差或趋势候选信号生成等任务。这些任务可以在无标签或弱标签条件下建立设备运行表征。</p>
+<p>在适配机制上，应关注小样本 fine-tuning、adapter、轻量任务头、冻结 backbone 后的表征评测，以及基于少量标注样本的阶段识别、质量标记预测、故障类型识别或退化趋势检测。适配目标应与实际数据证据相匹配，避免在样本不足时直接承诺生产级维护决策。</p>
+<p>在评测任务上，可以分层推进：第一层是无标签可验证任务，例如 forecasting、imputation、masked reconstruction 和 embedding consistency；第二层是弱标签或业务代理任务，例如 stage classification、quality flag prediction、sensor domain discrimination、residual high-percentile detection 和 trend/spike candidate signal；第三层才是预测性维护目标任务，例如 fault classification、degradation trend detection、RUL、maintenance-event lead time 和专家复核异常相关性。</p>
+<h2 id="与-FU13-当前资产的关系">与 FU13 当前资产的关系</h2>
+<p>FU13 是 B08 当前最重要的第一真机样例和 pipeline 验证入口，不是项目终点。它的价值在于提供真实多 CSV 数据、canonical observations、schema 验证、cycle 重构、数据诊断、窗口构建和模型评测的最小真实闭环。</p>
+<p>FU13 可以帮助 B08 验证从真实工业数据到统一窗口、基础 forecasting 对照、残差分析和异常候选信号生成的流程是否成立。它也可以暴露真实数据中时间戳、缺失、质量标记、阶段结构和传感器耦合带来的问题。</p>
+<p>但 FU13 当前不能被写成 B08 的完整学术终点。B08 的长期目标是面向小样本工业物联设备健康管理的设备时序基础模型，需要在更多设备类型、更多任务口径和更多数据来源上建立证据。</p>
+<p><code>leak_current_monitoring</code> 是候选异常信号验证样例，不是业务闭环终点。它可以说明模型输出如何被转化为 residual candidate signal，并服务异常候选信号路线验证；但它本身不等同于生产告警系统、维修闭环或完整预测性维护产品。</p>
+<h2 id="与知识成果的关系">与知识成果的关系</h2>
+<p>本综述服务 B08 的知识成果优先线，主要用于支撑论文主线、专利背景、学术综述和模型路线论证。</p>
+<p>对论文主线而言，它帮助明确 B08 不是泛化时间序列预测论文，而是围绕小样本工业物联设备健康管理提出设备时序基础模型问题定义、相关工作分类、学术缺口和验证路径。</p>
+<p>对专利背景而言，它帮助说明现有 forecasting-first 模型、multi-task 表征模型、传统预测性维护方法和工业异常检测路线的能力边界，从而为阶段感知、多传感器、多物理域、多任务预训练和小样本适配等候选创新点提供背景。</p>
+<p>对学术综述而言，它提供 A 阶段后续模型论文矩阵、预测性维护数据集矩阵、任务指标矩阵和训练路线草案的统一叙述口径。</p>
+<p>对模型路线论证而言，它把 B08 的研究问题落到可训练、可评测、可对照的任务空间，避免研究叙述停留在不可验证的概念层。</p>
+<h2 id="与工程化产品的关系">与工程化产品的关系</h2>
+<p>工程化产品承接线为本综述中的研究问题提供可复现验证和后续训练/评测 workflow。统一数据语料、开源模型 adapter、训练评测脚本、报告生成和阶段 review 都应服务本文定义的问题边界和任务口径。</p>
+<p>二者关系应保持清晰：知识成果定义问题、假设和评价口径；工程化产品承接线把这些定义转化为可重复执行的数据处理、模型适配、训练评测和结果沉淀流程。</p>
+<p>本综述不宣称工程产品已交付，也不把当前 pipeline 写成完整产品能力。当前更稳健的表述是：B08 已经具备若干真实数据处理和模型评测基础，工程化产品承接线将在此基础上逐步提供可复现验证和后续训练/评测 workflow。</p>
+<h2 id="后续矩阵接口">后续矩阵接口</h2>
+<p><code>open-source-model-paper-matrix.md</code> 继承本文对开源时序基础模型的分类口径，重点记录模型任务覆盖、输入限制、预训练数据、适配方式、开源可用性和面向 B08 的缺口。</p>
+<p><code>predictive-maintenance-dataset-matrix.md</code> 继承本文对工业设备健康数据的筛选口径，重点记录真实/仿真属性、设备类型、传感器数量、标签形态、RUL 或故障支撑程度，以及是否能映射到 B08 canonical observation schema。</p>
+<p><code>task-metric-matrix.md</code> 继承本文的任务分层口径，重点区分无标签可验证任务、弱标签或业务代理任务、预测性维护目标任务及其边界，避免把异常候选信号直接写成生产告警能力。</p>
+<p><code>foundation-model-training-route.md</code> 继承本文的方法空间口径，重点展开结构感知输入、预训练目标、小样本适配方式、开源模型对照和进入自研训练前的 Go / No-Go 条件。</p>
+<h2 id="暂不主张的能力">暂不主张的能力</h2>
+<p>本阶段不主张 B08 已具备生产告警、RUL 精确估计或自动维修建议能力。相关能力需要更完整的数据证据、稳定评测协议、现场验证、专家复核和业务闭环支持。</p>
+<p>生产告警需要明确告警阈值、误报漏报成本、现场处置流程和持续监控稳定性。当前异常候选信号只能作为研究和评测对象，不应直接表述为可投入生产的告警能力。</p>
+<p>RUL 是第三层目标，依赖开源 run-to-failure 数据或后续真实维修记录支撑。在缺少完整退化过程和维修事件闭环时，B08 可以讨论 RUL 作为后续任务方向和评测目标，但不应主张已经具备精确估计能力。</p>
+<p>自动维修建议需要故障机理、维修知识、专家规则、历史处置记录和安全责任边界共同支撑。B08 当前主线应聚焦设备时序基础模型、状态表征、小样本适配和预测性维护相关候选信号，而不是直接承诺自动维修决策。</p></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

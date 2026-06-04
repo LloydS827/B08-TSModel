@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>来源登记表 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>来源登记表</h1>
+    <p class="lead">证据索引。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#B08-论文-专利主线来源登记表">B08 论文/专利主线来源登记表</a><a class="pill" href="#定位">定位</a><a class="pill" href="#文档预算">文档预算</a><a class="pill" href="#ID-字典">ID 字典</a><a class="pill" href="#supports_claim_id">supports_claim_id</a><a class="pill" href="#patent_id">patent_id</a><a class="pill" href="#evidence_id">evidence_id</a><a class="pill" href="#来源登记表">来源登记表</a><a class="pill" href="#字段取值与格式约束">字段取值与格式约束</a><a class="pill" href="#使用规则">使用规则</a></div></section>
+    <article class="article"><h1 id="B08-论文-专利主线来源登记表">B08 论文/专利主线来源登记表</h1>
+<h2 id="定位">定位</h2>
+<p>本文件只登记支撑 B08 论文/专利主线的外部 primary sources，不写长篇读书笔记，不替代论文综述正文。</p>
+<p>每条来源必须挂接至少一个 <code>supports_claim_id</code>、<code>patent_id</code> 或 <code>evidence_id</code>。不能挂接的资料不进入本表。</p>
+<h2 id="文档预算">文档预算</h2>
+<ul>
+<li>第一轮最多登记 18 条 accepted/candidate 来源。</li>
+<li>rejected/needs-review 审计行最多额外保留 4 条，且必须解释重要排除原因。</li>
+<li>不为单篇论文、单个模型、单个数据集或单个专利创建独立文档。</li>
+<li>原始 PDF、模型权重、数据下载包不得放入 <code>docs/</code>。</li>
+<li>二手博客、排行榜和新闻稿只能作为线索，不能作为主要证据。</li>
+</ul>
+<h2 id="ID-字典">ID 字典</h2>
+<h3 id="supports_claim_id">supports_claim_id</h3>
+<div class="table-wrap"><table><thead><tr><th>id</th><th>含义</th></tr></thead><tbody><tr><td>C1_problem_definition</td><td>小样本工业物联设备健康管理问题定义</td></tr><tr><td>C2_related_work_map</td><td>相关工作分层</td></tr><tr><td>C3_industrial_gap</td><td>工业 metadata / 弱标签 / 多任务缺口</td></tr><tr><td>C4_framework_design</td><td>数据-任务-模型-评测框架</td></tr><tr><td>C5_validation_path</td><td>FU13 + 开源数据验证路径</td></tr><tr><td>C6_boundary_claims</td><td>边界和禁止过度承诺</td></tr></tbody></table></div>
+<h3 id="patent_id">patent_id</h3>
+<div class="table-wrap"><table><thead><tr><th>id</th><th>含义</th></tr></thead><tbody><tr><td>P1_stage_sensor_encoding</td><td>工艺阶段与传感器物理域联合编码</td></tr><tr><td>P2_small_sample_pretraining</td><td>小样本工业设备基础模型预训练</td></tr><tr><td>P3_weak_label_anomaly_signal</td><td>无故障标签异常候选信号生成</td></tr><tr><td>P4_real_open_data_fusion</td><td>真机与开源设备健康数据融合训练</td></tr><tr><td>P5_multitask_health_evaluation</td><td>多任务设备状态与退化趋势评估</td></tr></tbody></table></div>
+<h3 id="evidence_id">evidence_id</h3>
+<div class="table-wrap"><table><thead><tr><th>id</th><th>含义</th></tr></thead><tbody><tr><td>E1_forecasting_residual</td><td>forecasting residual 证据</td></tr><tr><td>E2_representation</td><td>representation / probe 证据</td></tr><tr><td>E3_imputation</td><td>imputation / reconstruction 证据</td></tr><tr><td>E4_open_data_pm</td><td>run-to-failure / fault / RUL 开源数据证据</td></tr><tr><td>E5_patent_effect</td><td>专利技术效果证据</td></tr></tbody></table></div>
+<h2 id="来源登记表">来源登记表</h2>
+<div class="table-wrap"><table><thead><tr><th>source_id</th><th>type</th><th>title</th><th>url_or_doi</th><th>primary_source</th><th>supports_claim_id</th><th>patent_id</th><th>evidence_id</th><th>relevance</th><th>key_claim</th><th>checked_at</th><th>status</th></tr></thead><tbody><tr><td>S001_TTM_2024</td><td>paper</td><td>Tiny Time Mixers (TTMs): Fast Pre-trained Models for Enhanced Zero/Few-Shot Forecasting of Multivariate Time Series</td><td>https://arxiv.org/abs/2401.03955</td><td>yes</td><td>C2_related_work_map</td><td></td><td>E1_forecasting_residual</td><td>TTM 作为轻量级 TSFM 基线，适合对比 B08 设备时序场景的部署成本与预测能力。</td><td>TTM 是约 1M 参数起的轻量预训练模型，面向多变量零/少样本预测，并强调 CPU-only 可用性。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S002_MOMENT_2024</td><td>paper</td><td>MOMENT: A Family of Open Time-series Foundation Models</td><td>https://arxiv.org/abs/2402.03885</td><td>yes</td><td>C2_related_work_map</td><td></td><td>E2_representation</td><td>MOMENT 支撑通用时序表征与多任务 related-work 边界。</td><td>MOMENT 提出开放时序基础模型家族与 Time Series Pile，用于有限监督下的通用时序分析评测。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S003_CHRONOS_2024</td><td>docs</td><td>Chronos: Learning the Language of Time Series</td><td>https://www.amazon.science/code-and-datasets/chronos-learning-the-language-of-time-series</td><td>yes</td><td>C2_related_work_map</td><td></td><td>E1_forecasting_residual</td><td>Chronos 支撑“把时序离散化为 token 后用语言模型预测”的 TSFM 路线。</td><td>Chronos 将时间序列缩放量化为 token，用语言模型训练，并通过采样生成概率预测。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S004_TIMESFM_2023</td><td>paper</td><td>A decoder-only foundation model for time-series forecasting</td><td>https://arxiv.org/abs/2310.10688</td><td>yes</td><td>C2_related_work_map</td><td></td><td>E1_forecasting_residual</td><td>TimesFM 是解码器式 forecasting-only TSFM 的核心相关工作。</td><td>TimesFM 使用 patched-decoder attention 预训练，支持不同历史长度、预测长度和时间粒度下的零样本预测。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S005_MOIRAI_2024</td><td>paper</td><td>Unified Training of Universal Time Series Forecasting Transformers</td><td>https://arxiv.org/abs/2402.02592</td><td>yes</td><td>C4_framework_design</td><td></td><td>E1_forecasting_residual</td><td>Moirai/Uni2TS 支撑跨频率、任意变量数和大规模开放数据预训练的框架设计参考。</td><td>Moirai 针对 cross-frequency、any-variate 和分布差异问题设计 universal forecasting transformer，并在 LOTSA 上预训练。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S006_UNITS_2024</td><td>paper</td><td>UniTS: A Unified Multi-Task Time Series Model</td><td>https://arxiv.org/abs/2403.00131</td><td>yes</td><td>C4_framework_design</td><td></td><td>E3_imputation</td><td>UniTS 支撑 B08 多任务接口设计，尤其是预测、生成、插补等任务统一。</td><td>UniTS 用 task tokenization 统一预测与生成任务，并覆盖 forecasting、classification、anomaly detection、imputation。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S007_TSPULSE_EXTENSION</td><td>paper</td><td>TSPulse: Tiny Pre-Trained Models with Disentangled Representations for Rapid Time-Series Analysis</td><td>https://arxiv.org/abs/2505.13033</td><td>yes</td><td>C5_validation_path</td><td></td><td>E2_representation</td><td>TSPulse 可作为 B08 诊断型扩展候选，补充 anomaly/search/imputation/classification 证据接口。</td><td>TSPulse 学习 temporal、spectral、semantic 三类解耦表征，并面向零样本诊断任务和 GPU-free 部署；后续仍需核对官方模型卡/代码发布状态。</td><td>2026-06-04</td><td>candidate</td></tr><tr><td>S008_CMAPSS</td><td>dataset</td><td>Damage Propagation Modeling for Aircraft Engine Run-to-Failure Simulation / NASA C-MAPSS</td><td>https://c3.ndc.nasa.gov/dashlink/static/media/publication/2008_IEEEPHM_CMAPPSDamagePropagation.pdf</td><td>yes</td><td>C5_validation_path</td><td></td><td>E4_open_data_pm</td><td>航空发动机多变量退化时序与 RUL benchmark，可支撑开放退化验证路径。</td><td>C-MAPSS 数据用于 run-to-failure/prognostics/RUL 任务，可作为 B08 退化时序验证路径；不证明 FU13 已具备生产 RUL 能力。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S009_IMS_BEARING</td><td>dataset</td><td>NASA PCoE Bearing Data Set, IMS University of Cincinnati</td><td>https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/</td><td>yes</td><td>C5_validation_path</td><td></td><td>E4_open_data_pm</td><td>轴承状态监测/故障诊断/预测性维护公开数据，可支撑第三层目标任务候选验证。</td><td>NASA PCoE 将 IMS Bearing 列为 prognostic repository 数据；可支持轴承退化/故障诊断/预测性维护验证，不应外推为 FU13 生产能力。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S010_PRONOSTIA</td><td>dataset</td><td>PRONOSTIA: An Experimental Platform for Bearings Accelerated Degradation Tests</td><td>https://publiweb.femto-st.fr/tntnet/entries/1528/documents/author/data</td><td>yes</td><td>C5_validation_path</td><td></td><td>E4_open_data_pm</td><td>真实轴承加速退化、RUL challenge 数据，可支撑开放全寿命退化验证。</td><td>PRONOSTIA 提供振动/温度等轴承全寿命退化数据，用于 fault detection、diagnostics、prognostics/RUL 评估；仅支持开放验证路径。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S011_TEP</td><td>dataset</td><td>Additional Tennessee Eastman Process Simulation Data for Anomaly Detection Evaluation</td><td>https://doi.org/10.7910/DVN/6C3JR1</td><td>yes</td><td>C5_validation_path</td><td></td><td>E4_open_data_pm</td><td>工业过程监控/异常检测/故障分类 benchmark，可支撑过程异常与故障分类验证。</td><td>TEP Dataverse 数据面向 anomaly detection evaluation，可支持过程监控与故障检测/分类验证；不是 RUL 或预测性维护生产证据。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S012_PM_RUL_REVIEW</td><td>review</td><td>Prognostics and health management for predictive maintenance: A review</td><td>https://doi.org/10.1016/j.jmsy.2024.05.021</td><td>yes</td><td>C2_related_work_map</td><td></td><td>E4_open_data_pm</td><td>PdM、PHM、RUL 相关工作边界，支撑问题定义和文献分层。</td><td>综述将 PHM/PdM 与健康评估、RUL 预测、维护调度关联；适合支撑 B08 问题定义和边界，不支撑 FU13 已实现完整 PdM。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S013_INDUSTRIAL_ANOMALY_REVIEW</td><td>review</td><td>Survey on data-driven industrial process monitoring and diagnosis</td><td>https://doi.org/10.1016/j.arcontrol.2012.09.004</td><td>yes</td><td>C2_related_work_map</td><td></td><td>E1_forecasting_residual</td><td>工业过程异常检测、故障诊断、SPM 任务定义，支撑异常/残差监控相关工作。</td><td>数据驱动过程监控覆盖 fault detection、diagnosis、reconstruction、quality monitoring；适合支撑 B08 工业异常/残差监控相关工作，不等同于 RUL。</td><td>2026-06-04</td><td>accepted</td></tr><tr><td>S014_PRIOR_ART_P1</td><td>patent</td><td>Anomaly detection and remedial recommendation</td><td>https://patents.google.com/patent/US11410891B2/en</td><td>yes</td><td></td><td>P1_stage_sensor_encoding</td><td></td><td>多步骤制造场景 prior-art 线索，可能接近工艺阶段编码与工具/recipe 上下文。</td><td>提示多步骤半导体制造中按工艺步骤采集时间序列传感器数据、结合工具状态与 recipe 建模；可能接近“工艺阶段编码”和“传感器物理域/子系统上下文”的部分，但未直接限定联合编码结构。</td><td>2026-06-04</td><td>needs-review</td></tr><tr><td>S015_PRIOR_ART_P2</td><td>patent</td><td>Industrial large model platform and its system</td><td>https://patents.google.com/patent/CN119443259A/en</td><td>yes</td><td></td><td>P2_small_sample_pretraining</td><td></td><td>工业基础大模型与小样本适配 prior-art 线索，但不是设备健康时序专门方案。</td><td>提示工业基础大模型预训练、小规模特定数据集二次训练、工业领域知识嵌入和小样本伪标签自训练；可能接近“小样本工业基础模型预训练/微调”主题。</td><td>2026-06-04</td><td>needs-review</td></tr><tr><td>S016_PRIOR_ART_P3</td><td>patent</td><td>Method for generating abnormal data</td><td>https://patents.google.com/patent/US20210124989A1</td><td>yes</td><td></td><td>P3_weak_label_anomaly_signal</td><td></td><td>弱标签/无故障标签异常候选信号 prior-art 线索。</td><td>提示在工业/半导体设备数据集中可含未标注数据或仅正常数据，通过数据变换生成异常数据并赋予伪异常标签；可能接近“无故障标签下生成异常候选信号/弱标签”的部分。</td><td>2026-06-04</td><td>candidate</td></tr><tr><td>S017_PRIOR_ART_P4</td><td>patent</td><td>Predictive maintenance for industrial machines</td><td>https://patents.google.com/patent/WO2022258835A1/en</td><td>yes</td><td></td><td>P4_real_open_data_fusion</td><td></td><td>多机器、多域历史时序和迁移学习 prior-art 线索，但未直接出现开源设备健康数据融合。</td><td>提示多台工业机器、多域历史机器时序数据、数据 harmonizer、迁移学习和域自适应提取域不变特征；可能接近“真机/多来源设备健康数据融合训练”的部分。</td><td>2026-06-04</td><td>needs-review</td></tr><tr><td>S018_PRIOR_ART_P5</td><td>patent</td><td>Multi task learning with incomplete labels for predictive maintenance</td><td>https://patents.google.com/patent/US11231703B2/en</td><td>yes</td><td></td><td>P5_multitask_health_evaluation</td><td></td><td>多任务预测性维护和标签不完整 prior-art 线索。</td><td>提示预测性维护中 RUL、故障预测、故障检测、性能退化检测等多任务共享建模，并处理标签不完整；可能接近“多任务设备状态与退化趋势评估”的核心任务组合。</td><td>2026-06-04</td><td>candidate</td></tr></tbody></table></div>
+<h3 id="字段取值与格式约束">字段取值与格式约束</h3>
+<ul>
+<li><code>source_id</code> 使用 <code>S###_SHORT_NAME</code> 格式，例如 <code>S001_TTM_2024</code>。</li>
+<li><code>type</code> 只能填写 <code>paper</code>、<code>repo</code>、<code>model-card</code>、<code>dataset</code>、<code>patent</code>、<code>review</code> 或 <code>docs</code>。</li>
+<li><code>primary_source</code> 只能填写 <code>yes</code> 或 <code>no</code>。</li>
+<li><code>supports_claim_id</code>、<code>patent_id</code>、<code>evidence_id</code> 至少一个非空；prior-art 来源可以只填写 <code>patent_id</code>。</li>
+<li><code>relevance</code> 用一句话说明该来源和 B08 的关系。</li>
+<li><code>checked_at</code> 使用 <code>YYYY-MM-DD</code> 格式。</li>
+<li><code>status</code> 只能填写 <code>accepted</code>、<code>candidate</code>、<code>rejected</code> 或 <code>needs-review</code>。</li>
+</ul>
+<h2 id="使用规则">使用规则</h2>
+<ul>
+<li><code>key_claim</code> 只记录与 B08 直接相关的最小证据。</li>
+<li><code>status=accepted</code> 表示该来源已被主线文档引用。</li>
+<li><code>status=candidate</code> 表示可用于后续核对，但尚未进入主线论证。</li>
+<li><code>status=rejected</code> 表示核对后不采用，并需简述原因。</li>
+<li><code>status=needs-review</code> 表示来源可靠性、许可证、接口或适用性仍需复核。</li>
+</ul></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

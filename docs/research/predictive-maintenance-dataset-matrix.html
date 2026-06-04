@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>预测性维护数据集矩阵 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>预测性维护数据集矩阵</h1>
+    <p class="lead">开放数据与任务证据。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#预测性维护与设备健康数据集矩阵">预测性维护与设备健康数据集矩阵</a><a class="pill" href="#目的">目的</a><a class="pill" href="#数据筛选原则">数据筛选原则</a><a class="pill" href="#第一批候选数据集">第一批候选数据集</a><a class="pill" href="#与-FU13-的关系">与 FU13 的关系</a><a class="pill" href="#统一-schema-映射问题">统一 schema 映射问题</a><a class="pill" href="#训练与评测用途">训练与评测用途</a><a class="pill" href="#后续矩阵接口">后续矩阵接口</a><a class="pill" href="#许可证和下载风险">许可证和下载风险</a></div></section>
+    <article class="article"><h1 id="预测性维护与设备健康数据集矩阵">预测性维护与设备健康数据集矩阵</h1>
+<h2 id="目的">目的</h2>
+<p>本矩阵用于筛选能支撑小样本工业物联设备健康管理时序基础模型的真实或公开数据，服务 B08 的知识成果沉淀和后续模型训练路线设计。</p>
+<p>需要强调的是，本文件是候选数据集矩阵，不代表其中数据已经全部下载、清洗、映射或完成授权。后续如进入实际训练、论文、专利或产品化验证阶段，应对每个数据集的来源、许可证、下载方式、再分发限制和可用任务边界逐项核对。</p>
+<h2 id="数据筛选原则">数据筛选原则</h2>
+<p>第一阶段优先选择与预测性维护、设备健康、剩余寿命预测（RUL）、故障诊断和退化过程直接相关的数据。这类数据更接近 B08 关注的工业物联设备健康管理场景，也更适合验证小样本条件下的弱标签学习、退化趋势建模和跨设备泛化能力。</p>
+<p>暂不优先纳入金融、交通、天气、电力负荷等通用时间序列数据。它们可以作为时间序列建模方法的补充参考，但不应替代设备健康管理主线数据，也不应作为预测性维护能力的第一证据。</p>
+<p>筛选时建议优先关注以下条件：</p>
+<ul>
+<li>是否来自真实设备、工业过程或被广泛引用的设备退化实验。</li>
+<li>是否包含 RUL、run-to-failure、故障类型、退化阶段、维护事件或可构造弱标签的信息。</li>
+<li>是否包含多变量传感器序列，便于映射到统一的设备时序 schema。</li>
+<li>是否能支持小样本、跨工况、跨设备或跨域迁移评测。</li>
+<li>是否具备清晰的数据许可、引用要求和下载来源。</li>
+</ul>
+<h2 id="第一批候选数据集">第一批候选数据集</h2>
+<div class="table-wrap"><table><thead><tr><th>数据集</th><th>类型</th><th>标签</th><th>B08 用途</th><th>初始优先级</th><th>source_status</th><th>license_status</th><th>redistribution_status</th><th>training_use_status</th><th>risk_level</th><th>next_action</th></tr></thead><tbody><tr><td>FU13</td><td>真机设备数据</td><td>quality_flag、stage、failure_proxy 弱标签</td><td>真实设备 pipeline、第一真机样例</td><td>最高</td><td>内部可控来源待记录</td><td>内部使用边界待确认</td><td>对外再分发待确认</td><td>可作为 pipeline 候选，正式训练边界待确认</td><td>中</td><td>补齐数据来源、字段字典、使用边界和弱标签说明</td></tr><tr><td>NASA C-MAPSS</td><td>涡扇发动机退化</td><td>RUL / run-to-failure</td><td>RUL 和退化趋势评测</td><td>高</td><td>待核对</td><td>待核对</td><td>待核对</td><td>待核对，不默认进入正式训练</td><td>中</td><td>核对官方来源、许可证、引用要求和可训练用途</td></tr><tr><td>NASA IMS Bearing</td><td>轴承退化</td><td>故障过程</td><td>设备健康和退化异常候选</td><td>高</td><td>待核对</td><td>待核对</td><td>待核对</td><td>待核对，不默认进入正式训练</td><td>中</td><td>核对官方来源、许可证、引用要求和标签语义</td></tr><tr><td>PRONOSTIA / FEMTO-ST</td><td>轴承加速退化</td><td>RUL / run-to-failure</td><td>小样本 RUL 和退化预测</td><td>高</td><td>待核对</td><td>待核对</td><td>待核对</td><td>待核对，不默认进入正式训练</td><td>中</td><td>核对下载入口、论文引用、许可证和 RUL 构造方式</td></tr><tr><td>Tennessee Eastman Process</td><td>工业过程故障诊断</td><td>故障类型</td><td>多变量过程异常和分类</td><td>中高</td><td>待核对</td><td>待核对</td><td>待核对</td><td>待核对，不默认进入正式训练</td><td>中</td><td>核对数据版本、故障定义、许可证和评测协议</td></tr></tbody></table></div>
+<p>上述列表是第一批候选，不是最终数据清单。后续可根据 B08 的模型路线继续补充电机、泵、压缩机、工业机器人、工艺过程或其他物联设备健康数据，但应保持“设备健康与预测性维护优先”的筛选边界。</p>
+<h2 id="与-FU13-的关系">与 FU13 的关系</h2>
+<p>FU13 是当前可控真机数据和 pipeline 验证入口，应作为 B08 真实工业设备数据路径的第一样例。它的核心价值不只是提供传感器时间序列，更包括现场语义、工艺阶段、数据质量、弱标签构造和真实设备 pipeline 的可落地验证。</p>
+<p>公开数据集用于补足 FU13 暂时不一定覆盖的任务形态，例如 RUL、run-to-failure、明确故障分类、退化趋势和跨设备泛化验证。它们可以帮助建立更完整的训练与评测矩阵，也可以为论文和知识成果提供可复现实验入口。</p>
+<p>公开数据不能替代 FU13 的现场语义。即使公开数据在标签完整性或 benchmark 可比性方面更强，也不能直接证明 B08 已具备生产级预测性维护能力；它们应被定位为补充验证、方法对照和预训练/微调路线探索的数据来源。</p>
+<h2 id="统一-schema-映射问题">统一 schema 映射问题</h2>
+<p>为了将 FU13 与公开数据纳入同一训练和评测框架，后续需要建立统一 schema。第一版 schema 至少应考虑以下字段：</p>
+<p>核心 observation-level 字段用于描述单条或单窗口观测记录，应尽量保留可直接进入训练样本构造的最小语义：</p>
+<ul>
+<li><code>timestamp</code></li>
+<li><code>device_id</code></li>
+<li><code>batch_id / run_id</code></li>
+<li><code>stage</code> 或 <code>operating condition</code></li>
+<li><code>sensor_id</code></li>
+<li><code>value</code></li>
+<li><code>unit</code></li>
+<li><code>domain</code></li>
+<li><code>quality_flag</code></li>
+<li><code>degradation_label</code></li>
+<li><code>failure_proxy</code></li>
+<li><code>RUL / maintenance_event if available</code></li>
+</ul>
+<p>dataset-level metadata 用于记录数据来源、文件粒度、映射状态和标签置信度，不一定逐行重复写入训练样本，但应能追溯每条样本的来源和映射过程：</p>
+<ul>
+<li><code>source_dataset/source_file</code></li>
+<li><code>cycle_id</code> 或 <code>batch/run/cycle</code> 关系</li>
+<li><code>sampling_rate/time_index_type</code></li>
+<li><code>mapping_status/label_confidence</code></li>
+<li><code>license_status</code></li>
+<li><code>source_status</code></li>
+<li><code>split_policy</code></li>
+<li><code>version/download_date if available</code></li>
+</ul>
+<p>不同数据集的字段含义和粒度可能存在明显差异。例如，run-to-failure 数据通常以一次退化实验或一个 engine/unit 作为 <code>run_id</code>；工业过程故障数据可能更关注故障编号、注入时间和工况；FU13 则需要保留现场阶段、批次、质量标记和弱标签语义。</p>
+<p>因此，统一 schema 不应简单追求字段名一致，而应明确每个字段的语义来源、可置信程度和是否为弱标签。对于无法可靠映射的字段，应保留为空、标注为 unknown，或记录在数据集级 metadata 中，避免在训练阶段引入伪精确标签。</p>
+<h2 id="训练与评测用途">训练与评测用途</h2>
+<p>FU13 用于验证真实工业设备 pipeline 和弱标签任务，包括数据接入、清洗、质量标记、阶段识别、failure_proxy 构造以及面向现场语义的时序表示学习。</p>
+<p>开源 run-to-failure 数据用于补足 RUL、故障分类和退化趋势任务。它们适合作为模型能力边界的可复现实验入口，例如退化趋势预测、剩余寿命估计、异常检测、跨工况评测和小样本微调。</p>
+<p>模拟数据或退化注入数据只适合作为弱标签和冷启动补充，不应作为第一证据。它们可以帮助调试 schema、pipeline、训练脚本和评测协议，但不能单独证明模型已经具备真实设备预测性维护能力。</p>
+<p>建议将训练与评测用途分为三个层级：</p>
+<ul>
+<li>真实 pipeline 验证：以 FU13 为主，确认数据链路、字段语义和弱标签任务是否可运行。</li>
+<li>公开 benchmark 验证：以 C-MAPSS、IMS Bearing、PRONOSTIA / FEMTO-ST、Tennessee Eastman Process 等为候选，验证 RUL、退化、异常和故障分类能力。</li>
+<li>冷启动与方法调试：使用模拟或退化注入数据辅助调试，但不作为生产能力或核心知识成果的唯一依据。</li>
+</ul>
+<h2 id="后续矩阵接口">后续矩阵接口</h2>
+<p>为了让本数据集矩阵能够承接 <code>task-metric-matrix.md</code> 和 <code>foundation-model-training-route.md</code>，后续每个数据集条目应补充面向任务和训练路线的接口字段。这些字段不表示数据已经完成下载、授权、清洗或映射，而是用于判断某个数据集是否可以进入下一阶段。</p>
+<ul>
+<li><code>task_family</code>：描述数据集可支持的任务族，例如弱标签设备健康评估、RUL、run-to-failure 退化预测、故障分类、异常检测或跨设备泛化。该字段应与 <code>task-metric-matrix.md</code> 中的任务分类保持一致。</li>
+<li><code>allowed_metrics</code>：记录在当前标签和评测协议下允许使用的指标，例如分类指标、异常检测指标、趋势误差指标或 RUL 误差指标。若标签语义不清晰，应标记为待核对，避免使用不适配的精确 RUL 指标。</li>
+<li><code>training_role</code>：标记数据在训练路线中的角色，例如真实 pipeline 验证、预训练候选、微调候选、评测候选、冷启动补充或仅用于方法调试。该字段应与 <code>foundation-model-training-route.md</code> 中的训练阶段衔接。</li>
+<li><code>split_policy</code>：记录训练、验证、测试划分策略，例如按设备划分、按 run 划分、按时间划分或按工况划分。对于 run-to-failure 数据，应避免同一设备或同一退化轨迹泄漏到多个评测集合。</li>
+<li><code>go/no-go prerequisite</code>：记录进入下一阶段前必须满足的前置条件，例如许可证核对通过、来源可追溯、字段映射完成、标签置信度可接受、评测协议明确、FU13 现场语义不被公开数据替代等。</li>
+</ul>
+<p>这些接口字段的作用是把“候选数据能否使用”拆成可审计条件，而不是直接承诺某个公开数据集可以进入正式训练。只有当来源、授权、schema 映射、任务族和评测指标都清楚后，才适合把对应数据纳入训练路线或对外成果描述。</p>
+<h2 id="许可证和下载风险">许可证和下载风险</h2>
+<p>候选数据是否可下载、是否允许再分发、是否可用于论文、专利或模型训练，需要逐项核对。不同数据集可能存在引用要求、注册下载、研究用途限制、再分发限制、商业使用限制或原始链接变更等问题。</p>
+<p>本矩阵不等于数据授权清单，也不表示 B08 已经取得这些数据的再分发权或训练使用权。任何进入正式实验、论文、专利材料、开源仓库或产品演示的数据，都应先完成来源记录、许可证核对、引用格式确认和内部合规判断。</p>
+<p>在下载和使用外部数据前，建议至少记录：</p>
+<ul>
+<li>官方来源或可信镜像链接。</li>
+<li>数据许可或使用条款。</li>
+<li>是否允许再分发原始数据或派生数据。</li>
+<li>是否允许用于论文、专利、模型训练和商业场景。</li>
+<li>需要保留的引用、致谢或声明。</li>
+<li>数据版本、下载日期和校验信息。</li>
+</ul>
+<p>对于许可不清晰、下载入口失效或用途边界不明确的数据，应先标记为“待进一步核对”，不得默认纳入训练主线或对外成果描述。</p></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

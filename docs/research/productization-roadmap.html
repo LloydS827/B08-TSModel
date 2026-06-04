@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>产品化路线 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>产品化路线</h1>
+    <p class="lead">工程化承接。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#工程化产品承接路线">工程化产品承接路线</a><a class="pill" href="#定位">定位</a><a class="pill" href="#与知识成果的关系">与知识成果的关系</a><a class="pill" href="#产品化资产">产品化资产</a><a class="pill" href="#当前已有工程基础">当前已有工程基础</a><a class="pill" href="#下一步工程化模块">下一步工程化模块</a><a class="pill" href="#最小切片">最小切片</a><a class="pill" href="#不做事项">不做事项</a><a class="pill" href="#Go-No-Go-条件">Go / No-Go 条件</a></div></section>
+    <article class="article"><h1 id="工程化产品承接路线">工程化产品承接路线</h1>
+<h2 id="定位">定位</h2>
+<p>工程化产品成果是 B08 的第二目标。它不抢占 A 阶段知识成果优先级，而是把论文、专利和模型路线沉淀为可复现、可扩展、可交付的模型研发工作台。</p>
+<p>该路线的重点不是提前建设完整生产系统，而是在知识成果形成过程中，同步沉淀后续可承接为工程模块的资产边界、接口约定、验证路径和交付形态。</p>
+<h2 id="与知识成果的关系">与知识成果的关系</h2>
+<p>知识成果定义问题、方法、证据和主线边界；工程化产品承接这些边界，提供数据、模型、评测、报告和 workflow 基础。</p>
+<p>工程化路线不能脱离知识主线变成泛化平台建设。每一个工程模块都应能追溯到明确的论文方向、专利方向、模型训练路线或已验证实验流程，用于支撑可复现研究、模型训练、评测对比和报告生成。</p>
+<h2 id="产品化资产">产品化资产</h2>
+<p>候选产品化资产包括：</p>
+<ul>
+<li>canonical schema：沉淀统一观测数据结构，降低不同数据源接入成本。</li>
+<li>dataset registry：记录数据集来源、授权边界、schema 映射、版本和验证状态。</li>
+<li>adapter contract：约定数据适配器、模型适配器和任务适配器的输入输出。</li>
+<li>evaluation runner：统一执行预测、诊断、场景评测等任务的评测流程。</li>
+<li>training config：沉淀基础模型、baseline 和任务微调所需的训练配置模板。</li>
+<li>report renderer：将实验配置、数据边界、指标结果和关键图表渲染为研究报告。</li>
+<li>model cache policy：约定模型权重、依赖包、缓存目录和离线复现策略。</li>
+<li>experiment registry：记录实验编号、配置、数据版本、模型版本、指标和产物位置。</li>
+<li>research workflow：串联数据准备、模型运行、评测、报告和复盘的研发工作流。</li>
+</ul>
+<p>这些资产目前均应视为路线候选或可逐步沉淀的研发基础设施，不代表工程化产品已经完成。</p>
+<h2 id="当前已有工程基础">当前已有工程基础</h2>
+<p>当前可作为产品化承接起点的工程基础包括：</p>
+<ul>
+<li>FU13 canonical observations pipeline。</li>
+<li>real-data assemble / diagnose / forecast / evaluate-scenario CLI。</li>
+<li>baseline 与 TTM 同口径 forecasting。</li>
+<li><code>leak_current_monitoring</code> residual candidate signal 样例。</li>
+<li>uv + pytest 本地验证路径。</li>
+</ul>
+<p>这些基础说明项目已经具备一定的数据整理、诊断、预测、场景评测和本地验证能力，但仍处于研发工作台和模型评测/训练基础设施的早期承接阶段，不应表述为生产级能力。</p>
+<h2 id="下一步工程化模块">下一步工程化模块</h2>
+<p>下一步工程化模块建议围绕知识主线和训练路线逐步拆解：</p>
+<ul>
+<li>开源数据集 schema mapper：将公开数据集映射到 canonical schema，明确字段语义、时间粒度、设备对象和缺失值处理规则。</li>
+<li>统一 dataset registry：管理数据集元信息、授权状态、版本、schema mapper、验证命令和可用任务范围。</li>
+<li>统一 adapter contract：定义数据、模型、任务和评测适配器的最小接口，避免各实验脚本形成孤立实现。</li>
+<li>多任务 evaluation runner：支持 forecasting、diagnosis、scenario evaluation 等任务在同一口径下执行、记录和对比。</li>
+<li>research report renderer：从实验配置、指标、图表和结论生成稳定的研究报告草稿，支撑论文、专利和阶段复盘。</li>
+<li>model cache and dependency policy：明确模型缓存、外部权重、依赖版本、离线运行和失败回退策略。</li>
+<li>experiment configuration templates：提供 baseline、TTM、数据适配、残差信号和多任务评测的配置模板。</li>
+</ul>
+<p>这些模块进入实现前，应优先拆成代码、配置和测试计划，确保每个模块都有清晰边界，而不是一次性建设泛化平台。</p>
+<h2 id="最小切片">最小切片</h2>
+<p>第一步不是全量平台建设，而是围绕知识主线做一条最小可验证路径。默认优先级应从能够支撑研究复现、数据接入和报告沉淀的最小闭环开始，其余模块保持路线候选，不默认进入实现。</p>
+<p>建议最小切片包括：</p>
+<ul>
+<li>一个开源数据集 schema mapper 候选设计：选择一个授权清晰、字段可映射到 canonical observations 的公开设备时序数据集，先形成字段映射、缺失值处理和样例输出设计。</li>
+<li>dataset registry 最小元信息：记录数据集名称、来源、授权、版本、schema mapper、可用任务、验证方式和已知限制。</li>
+<li>一个本地验证命令或检查脚本计划：定义可在本地执行的 schema 检查、样例数据检查或 registry 完整性检查路径。</li>
+<li>一份 research report 草稿：展示数据来源、映射边界、实验配置、指标占位、已知限制和后续验证项，服务研究复现和阶段复盘。</li>
+<li>其他模块保持候选：adapter contract、多任务 evaluation runner、model cache and dependency policy、experiment configuration templates 仅在有对应知识成果或训练路线依据时进入实现讨论。</li>
+</ul>
+<h2 id="不做事项">不做事项</h2>
+<p>A 阶段不开发生产告警系统、不做维修决策闭环、不承诺模型服务化部署。</p>
+<p>产品化承接只到研发工作台和模型评测/训练基础设施。当前路线不声称已经具备生产告警、RUL 精确估计或自动维修建议能力，也不把研究阶段样例包装为可直接交付的生产系统。</p>
+<h2 id="Go-No-Go-条件">Go / No-Go 条件</h2>
+<p>工程模块进入实现前，需要同时满足以下 Go 条件：</p>
+<ul>
+<li>有对应知识成果或训练路线依据，能够说明模块服务于哪条论文、专利、模型训练或实验主线。</li>
+<li>有明确输入输出，包括数据格式、配置字段、模型接口、指标产物或报告产物。</li>
+<li>有验证命令，能够在本地或约定环境中复现关键路径。</li>
+<li>有数据/授权边界，明确可使用的数据来源、许可、脱敏要求和不可使用范围。</li>
+<li>有失败回退方式，说明依赖缺失、数据不可用、模型不可下载或评测失败时如何保持默认路径可用。</li>
+</ul>
+<p>当上述条件不满足时，对应模块只保留为路线候选，不进入实现阶段，不进入默认排期，不影响现有研发路径的可用性。每个模块进入实现前都必须有对应知识成果或训练路线依据，避免工程线抢占知识主线。</p>
+<p>逐模块 Go / No-Go 矩阵如下：</p>
+<div class="table-wrap"><table><thead><tr><th>模块</th><th>服务的知识主线</th><th>输入输出</th><th>验证命令或验证方式</th><th>数据/授权边界</th><th>No-Go 触发条件</th><th>最小交付物</th></tr></thead><tbody><tr><td>开源数据集 schema mapper</td><td>公开设备时序数据到 canonical observations 的可复现实验主线</td><td>输入为公开数据集文件和映射配置；输出为 canonical observations 样例与字段诊断结果</td><td>先定义本地 schema check 或 dry-run 检查计划，确认必需字段、时间戳、设备标识和观测值语义</td><td>只接入授权清晰的公开数据集，记录来源、许可、版本和不可再分发限制</td><td>数据授权不清、核心字段无法映射、样例无法通过 schema 检查、缺少对应论文或训练路线依据</td><td>一个 mapper 设计文档、样例字段映射表、最小检查命令计划</td></tr><tr><td>dataset registry</td><td>数据集版本、授权和任务边界的研究复现主线</td><td>输入为数据集元信息；输出为最小 registry 条目和可用任务声明</td><td>检查 registry 条目必填字段是否完整，并能关联 schema mapper 与验证方式</td><td>明确每个数据集的来源、许可、下载方式、脱敏要求和使用限制</td><td>元信息缺失、授权边界不明、无法追溯数据版本、没有服务的知识主线</td><td>最小 registry schema、一个示例条目、字段完整性检查计划</td></tr><tr><td>adapter contract</td><td>数据、模型、任务和评测解耦的模型研发工作台主线</td><td>输入为 canonical 数据、模型配置和任务配置；输出为统一适配器接口约定</td><td>通过接口契约样例或伪实现检查输入输出字段是否闭合</td><td>不直接绑定未授权数据或外部闭源模型，外部依赖需写明许可与调用边界</td><td>现有实验尚未形成重复接口、接口抽象超过当前任务需要、缺少训练路线依据</td><td>最小接口说明、输入输出示例、失败回退约定</td></tr><tr><td>多任务 evaluation runner</td><td>forecasting、diagnosis、scenario evaluation 同口径评测主线</td><td>输入为数据集条目、模型或 baseline 配置、任务配置；输出为指标、日志和评测产物</td><td>先定义单机本地运行方式或 dry-run 计划，确认任务配置、指标输出和失败记录</td><td>只运行授权数据和允许本地评测的模型依赖，不引入生产数据默认路径</td><td>任务指标口径未定、数据不可复现、模型依赖无法获取、没有对应知识成果支撑</td><td>最小 runner 设计、任务配置样例、指标输出约定</td></tr><tr><td>research report renderer</td><td>论文、专利和训练路线复盘的研究复现主线，不包装成完整产品交付能力</td><td>输入为实验配置、数据边界、指标、图表和结论草稿；输出为 research report 草稿</td><td>通过固定样例数据生成或手工检查报告章节完整性，确认可追溯配置与限制说明</td><td>报告不得包含无授权数据原文、敏感数据或不可公开模型权重信息</td><td>报告来源不可追溯、指标无验证路径、被要求包装成客户交付产品、没有知识成果依据</td><td>一份研究报告模板或草稿、章节清单、产物来源说明</td></tr><tr><td>model cache and dependency policy</td><td>模型训练与评测复现的依赖治理主线，不包装成完整产品交付能力</td><td>输入为模型名称、权重来源、依赖版本和缓存目录；输出为缓存策略、依赖边界和失败回退说明</td><td>通过依赖清单审查、离线/缺失依赖回退方案检查来验证</td><td>只使用许可允许的模型权重和依赖，记录下载来源、版本和再分发限制</td><td>权重许可不明、依赖不可复现、缓存策略影响默认路径可用、没有训练路线依据</td><td>一份模型缓存与依赖策略文档、依赖清单、回退说明</td></tr><tr><td>experiment configuration templates</td><td>baseline、TTM、残差信号和多任务评测的实验复现主线</td><td>输入为任务、数据集、模型、指标和输出目录配置；输出为可复用实验配置模板</td><td>通过配置字段完整性检查或与现有 CLI 参数对齐检查来验证</td><td>模板只引用授权数据和可用模型，不默认暴露敏感路径或本地私有数据</td><td>配置字段未稳定、无法对应现有验证路径、模板引入未授权数据、缺少知识成果或训练路线依据</td><td>一组最小配置模板、字段说明、默认安全边界</td></tr></tbody></table></div></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

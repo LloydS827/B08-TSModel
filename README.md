@@ -260,7 +260,7 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 
 - [项目进展说明](details.md)
 - [docs/index.html](docs/index.html)
-- [A 阶段研究资产索引](docs/research/index.md)
+- [A 阶段研究资产索引](docs/research/index.html)
 - [项目主线与研发路线收束设计](docs/superpowers/specs/2026-06-04-project-mainline-roadmap-refactor-design.md)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
 - [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)

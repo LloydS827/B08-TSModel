@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>论文与专利方向 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>论文与专利方向</h1>
+    <p class="lead">知识成果主线。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#论文与专利方向">论文与专利方向</a><a class="pill" href="#知识成果定位">知识成果定位</a><a class="pill" href="#论文方向">论文方向</a><a class="pill" href="#论文主线蓝图">论文主线蓝图</a><a class="pill" href="#专利方向">专利方向</a><a class="pill" href="#专利候选结构化拆解">专利候选结构化拆解</a><a class="pill" href="#C-阶段证据需求反推">C 阶段证据需求反推</a><a class="pill" href="#数据集-benchmark-成果">数据集 / benchmark 成果</a><a class="pill" href="#模型资产成果">模型资产成果</a><a class="pill" href="#优先级">优先级</a><a class="pill" href="#风险与证据需求">风险与证据需求</a></div></section>
+    <article class="article"><h1 id="论文与专利方向">论文与专利方向</h1>
+<h2 id="知识成果定位">知识成果定位</h2>
+<p>论文和专利方向是 A 阶段第一目标，用于把学术主线、数据矩阵、任务指标和训练路线沉淀为可审查、可复核、可继续细化的知识成果方向。</p>
+<p>本文件定位为研究成果规划和证据需求清单，不是投稿稿件，也不是专利法律意见；其中列出的方向均为候选方向，不代表已经形成论文结果、专利可授权结论或生产级产品能力。</p>
+<p>这些方向的共同目标是服务后续 B/C 阶段实验设计、数据治理、模型原型和成果转化判断。当前应保持稳健表述，避免过度承诺生产告警、RUL 精确估计或自动维修建议。</p>
+<h2 id="论文方向">论文方向</h2>
+<div class="table-wrap"><table><thead><tr><th>类型</th><th>题目占位</th><th>核心贡献</th><th>证据需求</th></tr></thead><tbody><tr><td>框架与验证</td><td>面向小样本工业物联设备健康管理的时序基础模型框架与验证</td><td>问题定义、任务谱系、数据语料、开源模型缺口</td><td>A 阶段综述、模型矩阵、数据矩阵</td></tr><tr><td>方法创新</td><td>阶段感知、多传感器、多任务工业设备时序基础模型</td><td>结构感知 token、多任务预训练、弱标签适配</td><td>C/B 阶段实验结果</td></tr><tr><td>benchmark</td><td>真机与开源设备健康数据融合的工业时序基础模型评测基准</td><td>FU13 + 开源数据统一 schema 和评测协议</td><td>数据映射和任务指标矩阵</td></tr></tbody></table></div>
+<p>框架与验证型论文更适合作为近期知识成果载体，重点是把工业物联设备健康管理的问题边界、数据条件、任务体系和现有开源模型缺口组织成可审查论证。该方向不需要预设已经完成自研模型，但需要清楚说明为什么小样本、弱标签、多传感器和工艺阶段信息会影响模型路线选择。</p>
+<p>方法创新型论文应依赖后续实验结果逐步形成。候选贡献可以围绕阶段感知编码、多传感器对齐、多任务预训练、弱标签适配和设备状态表征展开，但在缺少 C/B 阶段结果前，不应声称方法已经优于现有模型。</p>
+<p>Benchmark 方向可以作为数据与评测体系成果，但需要先完成数据授权边界、统一 schema、任务定义、指标协议、复现报告和基线模型对比。其核心不是直接发布真实生产数据，而是形成可解释、可复现、可审查的评测方法。</p>
+<h2 id="论文主线蓝图">论文主线蓝图</h2>
+<p>论文暂定题目：<strong>面向小样本工业物联设备健康管理的时序基础模型框架与验证</strong>。</p>
+<p>核心问题：在真实故障标签稀缺、工况阶段强结构、多传感器物理域耦合且跨设备泛化需求存在的工业物联场景下，如何构建设备时序基础模型的任务体系、数据组织、模型适配和验证路径，使其能够在小样本条件下服务预测性维护相关候选任务？</p>
+<p>贡献点：</p>
+<ol>
+<li>提出面向小样本工业设备健康管理的时序基础模型问题定义。</li>
+<li>建立 forecasting、imputation、representation、weak-label proxy 和预测性维护目标任务的分层验证框架。</li>
+<li>将 FU13 真机数据与开源预测性维护数据放入统一 schema / task / metric 证据路径。</li>
+<li>提出从开源模型适配到条件性自研训练的 A -&gt; C -&gt; B 决策门。</li>
+</ol>
+<p>相关工作分层：</p>
+<div class="table-wrap"><table><thead><tr><th>layer</th><th>role_in_paper</th><th>source_ids</th><th>boundary</th></tr></thead><tbody><tr><td>时序基础模型与 forecasting 基线</td><td>说明 TTM、Chronos、TimesFM、Moirai 等模型可作为 forecasting-first 对照。</td><td>S001_TTM_2024, S003_CHRONOS_2024, S004_TIMESFM_2023, S005_MOIRAI_2024</td><td>forecasting 能提供残差候选信号，但不能直接写成维护能力。</td></tr><tr><td>通用表征、多任务与插补模型</td><td>支撑 representation、imputation 和 multi-task 接口设计。</td><td>S002_MOMENT_2024, S006_UNITS_2024</td><td>TSPulse 仅作为扩展/待核对候选，不作为核心主线证据；表征 probe 和重建误差需要后续弱标签或专家复核。</td></tr><tr><td>预测性维护、PHM 与 RUL 综述</td><td>说明 PdM / PHM / RUL 的任务边界和验证要求。</td><td>S012_PM_RUL_REVIEW</td><td>开源 RUL 任务只能支撑验证路径，不能外推为 FU13 RUL 能力。</td></tr><tr><td>工业过程异常检测与诊断</td><td>支撑 residual monitoring、fault detection、diagnosis 和 process monitoring 的相关工作。</td><td>S013_INDUSTRIAL_ANOMALY_REVIEW</td><td>异常候选信号需要业务语义和维修记录复核。</td></tr><tr><td>开源设备健康数据与先案线索</td><td>支撑第三层数据验证和五个专利候选的现有技术检索入口。</td><td>S008_CMAPSS, S009_IMS_BEARING, S010_PRONOSTIA, S011_TEP, S014_PRIOR_ART_P1, S015_PRIOR_ART_P2, S016_PRIOR_ART_P3, S017_PRIOR_ART_P4, S018_PRIOR_ART_P5</td><td>数据集和先案线索不构成生产能力或专利判断。</td></tr></tbody></table></div>
+<p>验证路径：</p>
+<div class="table-wrap"><table><thead><tr><th>stage</th><th>goal</th><th>minimum_evidence</th><th>source_ids</th></tr></thead><tbody><tr><td>FU13 真实闭环</td><td>先验证 schema、forecasting residual、imputation 和 representation probe 的可执行性。</td><td>C 阶段形成统一切分、基线配置、残差/重建/表征报告。</td><td>S001_TTM_2024, S002_MOMENT_2024, S006_UNITS_2024</td></tr><tr><td>开源预测性维护补充</td><td>用 run-to-failure、轴承退化和过程异常数据补齐 FU13 暂缺的故障/RUL 类证据。</td><td>C 阶段形成数据映射、任务边界、指标和失败案例说明。</td><td>S008_CMAPSS, S009_IMS_BEARING, S010_PRONOSTIA, S011_TEP</td></tr><tr><td>专利技术效果样例</td><td>为 P1-P5 提供阶段感知、多传感器、弱标签、数据融合和多任务评估的对照样例。</td><td>C 阶段形成样例图、对照表、专家复核或先案差异材料。</td><td>S014_PRIOR_ART_P1, S015_PRIOR_ART_P2, S016_PRIOR_ART_P3, S017_PRIOR_ART_P4, S018_PRIOR_ART_P5</td></tr></tbody></table></div>
+<p>禁止过度解释：</p>
+<ol>
+<li>预测误差、残差和重建误差只能作为候选分析信号，不等于生产告警。</li>
+<li>开源 RUL / run-to-failure 结果不外推为 FU13 RUL 能力。</li>
+<li>弱标签 probe、embedding 聚类或趋势分数不等于真实健康等级或自动维修建议。</li>
+<li>专利候选和 prior-art 关键词不代表新颖性、创造性、授权或侵权风险判断。</li>
+<li>A 阶段论文框架不写成 B 阶段自研模型训练结论。</li>
+</ol>
+<div class="table-wrap"><table><thead><tr><th>contribution_id</th><th>supports_claim_id</th><th>evidence_id</th><th>source_ids</th><th>current_gap</th></tr></thead><tbody><tr><td>CT1_problem_definition</td><td>C2_related_work_map, C4_framework_design</td><td>E2_representation</td><td>S002_MOMENT_2024, S006_UNITS_2024, S012_PM_RUL_REVIEW</td><td>这些来源支撑问题定义的相关工作和框架入口；C1/C3 仍需 FU13 阶段、传感器物理域和弱标签 metadata 的对齐样例补证。</td></tr><tr><td>CT2_layered_validation</td><td>C2_related_work_map, C5_validation_path</td><td>E1_forecasting_residual, E3_imputation, E4_open_data_pm</td><td>S001_TTM_2024, S003_CHRONOS_2024, S004_TIMESFM_2023, S006_UNITS_2024, S008_CMAPSS, S009_IMS_BEARING, S010_PRONOSTIA, S011_TEP</td><td>需要 C 阶段统一切分、指标和 baseline 报告，避免只停留在任务定义。</td></tr><tr><td>CT3_unified_schema_metric</td><td>C4_framework_design, C5_validation_path</td><td>E3_imputation, E4_open_data_pm</td><td>S005_MOIRAI_2024, S006_UNITS_2024, S008_CMAPSS, S011_TEP</td><td>需要把 FU13 schema 与开源数据字段、任务和指标映射成可复核表。</td></tr><tr><td>CT4_decision_gate</td><td>C4_framework_design, C6_boundary_claims</td><td>E5_patent_effect</td><td>S014_PRIOR_ART_P1, S015_PRIOR_ART_P2, S016_PRIOR_ART_P3, S017_PRIOR_ART_P4, S018_PRIOR_ART_P5</td><td>需要 C 阶段证据和先案复核后，才能判断是否进入 B 阶段条件性自研训练。</td></tr></tbody></table></div>
+<h2 id="专利方向">专利方向</h2>
+<p>以下方向适合作为技术交底、现有技术检索和新颖性分析的候选条目，不构成专利可授权判断，也不替代专利代理或法律审查。</p>
+<ul>
+<li>工艺阶段与传感器物理域联合编码方法。</li>
+<li>工业设备小样本预测性维护的基础时序模型预训练方法。</li>
+<li>无故障标签条件下的设备异常候选信号生成方法。</li>
+<li>真机数据与开源设备健康数据融合的设备时序基础模型训练方法。</li>
+<li>基于多任务输出的设备状态表征、预测残差和退化趋势联合评估方法。</li>
+</ul>
+<p>这些候选方向需要进一步拆解为技术问题、技术方案、关键步骤、输入输出、可替代实现和实验支撑。对于涉及模型结构、训练流程、数据融合和评估方法的条目，应重点区分通用时序建模技术与本项目工业设备场景中的具体约束。</p>
+<h2 id="专利候选结构化拆解">专利候选结构化拆解</h2>
+<div class="table-wrap"><table><thead><tr><th>patent_id</th><th>technical_problem</th><th>proposed_solution</th><th>key_steps</th><th>inputs_outputs</th><th>alternatives</th><th>evidence_needed</th><th>prior_art_keywords</th><th>source_ids</th><th>current_status</th></tr></thead><tbody><tr><td>P1_stage_sensor_encoding</td><td>小样本设备数据中工艺阶段和传感器物理域混杂，导致通用时序模型难以区分阶段差异与异常候选。</td><td>构建阶段 token、传感器域 token 和时序片段 token 的联合编码，用于模型适配或下游 probe。</td><td>解析阶段与传感器 metadata；生成联合编码；与时序窗口拼接或对齐；输出阶段感知表征和残差分析。</td><td>输入：FU13 时序、阶段标签、传感器/子系统字典；输出：联合编码、阶段表征、候选异常分数。</td><td>阶段嵌入、传感器分组嵌入、图结构编码、规则化 metadata prompt。</td><td>需要阶段/传感器消融、异常候选案例和专家复核。</td><td>process step sensor encoding, recipe context, equipment time series, industrial anomaly detection</td><td>S014_PRIOR_ART_P1, S013_INDUSTRIAL_ANOMALY_REVIEW</td><td>needs-prior-art-review</td></tr><tr><td>P2_small_sample_pretraining</td><td>工业设备真实故障样本少，直接训练或微调模型容易过拟合且难以跨设备复用。</td><td>采用开源时序基础模型适配、少样本自监督任务和条件性领域预训练门控，形成小样本设备健康管理预训练流程。</td><td>汇总 FU13 与候选开源数据；设置 forecasting/imputation/representation 预任务；执行少样本适配对照；按证据门判断是否进入自研训练。</td><td>输入：FU13、开源设备健康数据、任务配置；输出：适配模型、预任务指标、是否进入 B 阶段的门控记录。</td><td>冻结 encoder probe、LoRA/adapter、轻量 mixer、领域继续预训练。</td><td>需要少样本对照、迁移失败案例和先案差异复核。</td><td>small-sample industrial foundation model, domain adaptation, self-supervised pretraining, predictive maintenance</td><td>S015_PRIOR_ART_P2, S001_TTM_2024, S002_MOMENT_2024, S005_MOIRAI_2024</td><td>needs-prior-art-review</td></tr><tr><td>P3_weak_label_anomaly_signal</td><td>无完整故障标签时，设备异常候选难以从普通预测误差中筛出并解释。</td><td>结合 forecasting residual、imputation error、阶段/传感器上下文和弱标签 proxy，生成待复核异常候选信号。</td><td>训练或适配基线模型；计算残差和重建误差；按阶段/传感器聚合；引入弱标签或规则阈值；输出候选信号清单。</td><td>输入：时序窗口、阶段信息、弱标签 proxy、阈值规则；输出：候选异常片段、变量贡献、复核队列。</td><td>规则阈值、统计过程控制、embedding 离群、伪异常样本生成。</td><td>需要误报/漏报样例、维修记录或专家复核，不能只依赖模型分数。</td><td>weak label anomaly, pseudo anomaly, residual monitoring, fault detection</td><td>S016_PRIOR_ART_P3, S013_INDUSTRIAL_ANOMALY_REVIEW, S001_TTM_2024</td><td>evidence-needed</td></tr><tr><td>P4_real_open_data_fusion</td><td>FU13 真机数据缺少完整故障/RUL 证据，单独使用开源数据又难以覆盖真实设备约束。</td><td>建立真机数据与开源设备健康数据的 schema、任务和指标融合训练/验证流程。</td><td>定义统一字段；映射任务层级；区分训练、验证和开放数据补证；记录授权和适用边界；输出融合证据包。</td><td>输入：FU13 schema、C-MAPSS、IMS、PRONOSTIA、TEP；输出：统一 schema、任务映射、数据适用性说明、baseline 报告。</td><td>分层 benchmark、domain adaptation、只用开源数据做第三层验证、合成样例补充。</td><td>需要数据授权边界、跨数据集一致指标和 domain gap 说明。</td><td>multi-domain machinery data, transfer learning, harmonized time series, predictive maintenance dataset fusion</td><td>S017_PRIOR_ART_P4, S008_CMAPSS, S009_IMS_BEARING, S010_PRONOSTIA, S011_TEP</td><td>needs-prior-art-review</td></tr><tr><td>P5_multitask_health_evaluation</td><td>单一 forecasting 指标难以覆盖设备状态表征、退化趋势和维护候选任务。</td><td>将预测残差、插补误差、表征 probe、退化/RUL 指标和专家复核结果组织为多任务健康评估输出。</td><td>生成多任务输出；归一化指标；按设备/阶段/传感器聚合；形成趋势和失败案例；记录不可解释边界。</td><td>输入：模型输出、任务指标、开源退化标签、专家复核；输出：多任务评估表、趋势图、证据缺口清单。</td><td>多头输出、共享 encoder、任务 token、后处理评分卡。</td><td>需要多任务对照、指标相关性分析和标签不完整场景复核。</td><td>multi-task predictive maintenance, incomplete labels, health evaluation, degradation trend</td><td>S018_PRIOR_ART_P5, S006_UNITS_2024, S012_PM_RUL_REVIEW</td><td>evidence-needed</td></tr></tbody></table></div>
+<p>以上方向是技术交底候选，不构成新颖性、创造性、可授权性或侵权风险判断；后续需要专利检索、代理人审查和实验/样例证据支撑。</p>
+<h2 id="C-阶段证据需求反推">C 阶段证据需求反推</h2>
+<div class="table-wrap"><table><thead><tr><th>evidence_id</th><th>supports</th><th>required_experiment</th><th>required_data</th><th>primary_metric</th><th>expected_artifact</th><th>invalid_claims</th></tr></thead><tbody><tr><td>E1_forecasting_residual</td><td>CT2_layered_validation; P3_weak_label_anomaly_signal; P5_multitask_health_evaluation</td><td>C 阶段需要完成 FU13 forecasting-first 对照，输出预测误差和残差候选信号。</td><td>FU13 对齐后的多传感器时序、阶段切分、训练/验证/测试划分。</td><td>MAE / RMSE / MAPE、残差分布、变量级误差排序。</td><td>forecasting baseline 报告、残差候选样例、失败案例表。</td><td>不得解释为生产告警、FU13 RUL、自动维修、专利授权或其他过度结论。</td></tr><tr><td>E2_representation</td><td>CT1_problem_definition; P1_stage_sensor_encoding; P2_small_sample_pretraining</td><td>C 阶段需要完成 embedding / probe 对照，观察阶段、质量或弱标签 proxy 的可分性。</td><td>FU13 时序窗口、阶段 metadata、传感器物理域字典、可用弱标签 proxy。</td><td>probe accuracy / F1、聚类可分性、跨阶段稳定性。</td><td>表征 probe 报告、可视化样例、metadata 对齐缺口。</td><td>不得解释为生产告警、FU13 RUL、自动维修、专利授权或真实健康等级结论。</td></tr><tr><td>E3_imputation</td><td>CT2_layered_validation; CT3_unified_schema_metric; P5_multitask_health_evaluation</td><td>C 阶段需要完成 mask reconstruction / imputation 对照，评估多传感器缺失和重建任务。</td><td>FU13 多变量窗口、人工 mask 规则、变量分组、缺失模式记录。</td><td>reconstruction MAE / RMSE、变量级重建误差、mask ratio sensitivity。</td><td>插补任务报告、变量级重建表、重建失败样例。</td><td>不得解释为生产告警、FU13 RUL、自动维修、专利授权或异常识别结论。</td></tr><tr><td>E4_open_data_pm</td><td>CT2_layered_validation; CT3_unified_schema_metric; P4_real_open_data_fusion</td><td>C 阶段需要完成 C-MAPSS / IMS / PRONOSTIA / TEP 的候选验证，补充故障、退化或过程异常证据。</td><td>授权可用的开源 run-to-failure、轴承退化、过程异常数据和任务标签。</td><td>RUL error、fault detection F1、degradation trend correlation、dataset-specific metric。</td><td>开源数据任务映射、baseline 结果、与 FU13 差异说明。</td><td>不得解释为生产告警、FU13 RUL、自动维修、专利授权或 FU13 已具备开源数据同等标签。</td></tr><tr><td>E5_patent_effect</td><td>CT4_decision_gate; P1_stage_sensor_encoding; P2_small_sample_pretraining; P3_weak_label_anomaly_signal; P4_real_open_data_fusion; P5_multitask_health_evaluation</td><td>C 阶段需要为五个专利候选形成最小技术效果样例、对照表和先案差异复核材料。</td><td>FU13 样例、开源数据样例、模型输出、人工复核记录、prior-art 检索摘要。</td><td>消融差异、候选信号命中/误报样例、任务指标变化、专家复核意见。</td><td>技术效果样例包、对照表、风险清单、代理人沟通材料。</td><td>不得解释为生产告警、FU13 RUL、自动维修、专利授权或新颖性/创造性判断。</td></tr></tbody></table></div>
+<h2 id="数据集-benchmark-成果">数据集 / benchmark 成果</h2>
+<p>数据集与 benchmark 成果应依赖数据授权、schema 映射、评测协议和可复现报告逐步形成。可沉淀的成果包括数据字段字典、设备与传感器映射、任务划分规则、训练/验证/测试切分原则、指标定义、基线模型结果和复现实验说明。</p>
+<p>不应直接发布 FU13 原始真实数据，也不应发布 ignored 本机数据。若后续需要形成可公开 benchmark，应优先考虑脱敏摘要、统计特征、合成样例、授权开源数据映射、评测脚本和报告模板等边界更清晰的形式。</p>
+<p>该方向的关键证据是：数据来源和授权边界清楚，schema 能覆盖真机与开源设备健康数据，任务指标能支撑异常检测、状态表征、趋势预测或维护辅助分析，并且复现报告能够说明基线、环境和局限。</p>
+<h2 id="模型资产成果">模型资产成果</h2>
+<p>候选模型资产包括模型 IO schema、adapter contract、训练/评测配置、报告模板、轻量原型权重或实验结果。这些资产可以为后续自研模型、开源模型适配和评测复现提供工程基础。</p>
+<p>当前不声称已完成自研模型，也不声称已经形成可交付生产产品。模型资产的合理定位是研究原型和评测支撑材料，用于验证任务定义、数据接口、训练路线和模型对比是否可行。</p>
+<p>后续若要将模型资产推进到更高成熟度，需要补充最小自研原型结果、开源模型对照实验、稳定复现实验、专家复核意见和明确的部署边界。对于生产告警、RUL 精确估计或自动维修建议，应保持审慎描述，仅在有充分验证和业务确认后再扩大表述范围。</p>
+<h2 id="优先级">优先级</h2>
+<p>第一优先级是框架与验证型论文和专利背景材料，因为它们能立即承接 A 阶段调研，并将学术主线、模型矩阵、数据矩阵和任务指标整理为可审查的知识成果基础。</p>
+<p>第二优先级是方法创新型论文和核心算法专利，它们依赖 C/B 阶段实验结果。该阶段需要用真实或授权数据、开源基线、自研原型和任务指标证明方法设计的必要性与有效性。</p>
+<p>第三优先级是工程化模型资产和 benchmark 发布，它们依赖数据授权、复现稳定性和项目发布边界。该类成果适合在数据治理、评测协议、模型配置和报告模板稳定后推进。</p>
+<h2 id="风险与证据需求">风险与证据需求</h2>
+<ul>
+<li>外部论文证据：需要持续补充学术主线、工业时序基础模型、预测性维护、弱标签学习、多传感器建模和 benchmark 相关文献，避免方向与已有工作重复或证据链不足。</li>
+<li>数据授权：需要明确 FU13 真机数据、开源数据和 ignored 本机数据的使用边界，区分内部研究、论文展示、benchmark 发布和模型资产交付的不同约束。</li>
+<li>开源模型对比结果：需要形成可复现的基线结果，覆盖候选开源模型、统一输入输出、相同数据切分和一致评测指标。</li>
+<li>最小自研原型结果：需要至少有轻量原型或关键模块实验，用于支撑方法创新、模型资产和专利技术效果描述。</li>
+<li>专家复核/维修记录：需要设备领域专家、维修记录或工艺知识对异常候选、退化趋势和状态解释进行复核，避免仅依赖模型输出作过度判断。</li>
+<li>专利新颖性检索：需要围绕联合编码、预训练、弱标签异常候选、数据融合训练和多任务评估等方向开展现有技术检索，再决定是否进入正式专利撰写。</li>
+</ul>
+<p>在上述证据未充分形成前，相关成果应以候选方向、研究规划、实验假设或背景材料表述，不应写成已经验证的论文结论、专利授权结论或生产产品承诺。</p></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>项目主线重构蓝图 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>项目主线重构蓝图</h1>
+    <p class="lead">治理与边界。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#项目整体重构蓝图">项目整体重构蓝图</a><a class="pill" href="#目的">目的</a><a class="pill" href="#总体目标">总体目标</a><a class="pill" href="#两条主线">两条主线</a><a class="pill" href="#当前项目结构观察">当前项目结构观察</a><a class="pill" href="#目标项目结构">目标项目结构</a><a class="pill" href="#前置重构范围">前置重构范围</a><a class="pill" href="#后续代码重构入口">后续代码重构入口</a><a class="pill" href="#保留与归档规则">保留与归档规则</a><a class="pill" href="#文件迁移规则">文件迁移规则</a><a class="pill" href="#文档入口规则">文档入口规则</a><a class="pill" href="#代码模块边界规则">代码模块边界规则</a><a class="pill" href="#配置与数据资产规则">配置与数据资产规则</a><a class="pill" href="#测试与验证规则">测试与验证规则</a><a class="pill" href="#风险与回滚">风险与回滚</a><a class="pill" href="#执行顺序决策">执行顺序决策</a></div></section>
+    <article class="article"><h1 id="项目整体重构蓝图">项目整体重构蓝图</h1>
+<h2 id="目的">目的</h2>
+<p>本文件用于前置定义 B08 项目下一阶段的整体重构蓝图与执行门，避免在进入知识成果和工程化产品两条主线后继续以零散文档、临时脚本或隐性约定推动工作。</p>
+<p>本蓝图只处理项目结构、入口职责、资产归属和后续重构决策规则，不直接修改源码、CLI、配置、测试或既有文档入口。后续如需调整代码和测试结构，应通过独立 spec、plan 和验证流程执行。</p>
+<h2 id="总体目标">总体目标</h2>
+<p>本次整体重构不是清理所有历史债务，而是正式确立 B08 项目主线：短期第一目标服务知识成果，包括论文、专利、学术综述、模型路线和数据/任务矩阵；第二目标服务工程化产品成果，包括统一数据语料、开源模型适配、训练评测 workflow 和可复现模型研发工作台。</p>
+<p>重构的核心目标是让项目默认路径保持可读、可运行、可验证，并让每类资产有明确入口、生命周期和归档规则。所有结构调整都应服务主线成果，不以泛化清理、审美式整理或一次性重写为目标。</p>
+<h2 id="两条主线">两条主线</h2>
+<p><strong>知识成果优先线</strong>：面向论文、专利、学术综述、模型路线、数据/任务矩阵和阶段性研究判断。该主线负责定义 B08 项目的问题边界、研究假设、方法路线、任务定义、评价口径和可沉淀知识资产。</p>
+<p><strong>工程化产品承接线</strong>：面向统一数据语料、开源模型适配、训练评测 workflow 和可复现模型研发工作台。该主线负责把知识成果中的问题定义和方法假设转化为可复现验证、可持续迭代和后续交付基础。</p>
+<p>二者关系是：知识成果定义问题和方法，工程化产品提供可复现验证和后续交付基础。工程化产品不应脱离知识主线做孤立平台化建设，知识成果也不应停留在不可验证的叙述层。</p>
+<h2 id="当前项目结构观察">当前项目结构观察</h2>
+<p>基于本次只读结构检查，当前项目根部已存在 <code>README.md</code>、<code>details.md</code>、<code>docs/</code>、<code>src/</code>、<code>tests/</code>、<code>configs/</code>、<code>reports/</code> 等主要入口。<code>src/</code> 下已有 <code>src/b08_model_core/</code> 包目录，<code>tests/</code> 下已有较多验证文件，<code>configs/</code> 下已有真实数据 schema、schema map 模板和仿真配置文件。</p>
+<p><code>docs/</code> 当前包含多个根层 HTML/Markdown 文档，同时已有 <code>docs/reviews/</code>、<code>docs/superpowers/</code>、<code>docs/原始材料/</code>、<code>docs/归档/</code>、<code>docs/调研资料/</code> 等目录。蓝图制定前的只读结构检查未看到 <code>docs/research/</code> 目录，因此 A 阶段知识成果与训练路线资产在蓝图制定前尚缺少独立承接入口。</p>
+<p>本观察仅来自 <code>maxdepth 2</code> 的目录和文件结构检查，不代表已经完整审计源码、CLI、配置、测试语义或文档内容。后续涉及代码组织是否阻碍主线时，必须另行做有证据的审计。</p>
+<h2 id="目标项目结构">目标项目结构</h2>
+<pre><code>README.md                         # 研发执行入口，说明知识成果优先与工程化产品承接
+details.md                        # 阶段判断台账
+docs/index.html                   # 文档导航入口
+docs/research/                    # A 阶段知识成果与训练路线资产
+docs/superpowers/specs/           # 已确认设计
+docs/superpowers/plans/           # 可执行计划
+docs/reviews/                     # 评审、schema map、阶段 review
+docs/调研资料/                    # 既有中文调研资料，逐步被 docs/research 承接或引用
+docs/归档/                        # 历史规划和旧方案
+src/b08_model_core/               # 模型研发工作台代码
+configs/                          # 真实数据、schema map、实验配置
+tests/                            # 可复现验证
+reports/                          # 可提交白名单报告与 ignored 本机报告分离
+data/                             # ignored 本机数据
+hf_cache/                         # ignored 模型缓存</code></pre>
+<p><code>README.md</code> 应作为研发执行入口，帮助新参与者理解当前主线、默认工作流和关键文档入口。<code>details.md</code> 应保留为阶段判断台账，用于记录阶段状态、决策依据和已知限制。<code>docs/index.html</code> 应承担导航职责，避免用户在根层文档和历史资料中迷路。</p>
+<p><code>docs/research/</code> 是知识成果优先线的主入口，承接论文、专利、综述、模型路线、数据/任务矩阵、训练路线和阶段性研究资产。<code>docs/superpowers/specs/</code> 与 <code>docs/superpowers/plans/</code> 分别保留已确认设计和可执行计划，避免把待执行计划混入研究沉淀。<code>docs/reviews/</code> 保留评审、schema map 和阶段 review，作为验证与决策依据。</p>
+<p><code>docs/调研资料/</code> 保留既有中文调研资料，但新主线资产应逐步由 <code>docs/research/</code> 承接或引用。<code>docs/归档/</code> 用于存放历史规划和旧方案，归档不等于删除，必要时应保留来源说明和替代入口。</p>
+<p><code>src/b08_model_core/</code> 承担模型研发工作台代码，<code>configs/</code> 承担真实数据、schema map 和实验配置，<code>tests/</code> 承担可复现验证。<code>reports/</code> 应区分可提交白名单报告和本机 ignored 报告，<code>data/</code> 与 <code>hf_cache/</code> 应作为本机数据和模型缓存，不进入默认提交路径。</p>
+<h2 id="前置重构范围">前置重构范围</h2>
+<div class="table-wrap"><table><thead><tr><th>范围</th><th>当前观察</th><th>处理决策</th><th>执行门</th></tr></thead><tbody><tr><td><code>docs/research/</code></td><td>结构检查中未看到该目录</td><td>立即创建并作为知识成果优先线入口</td><td>本任务只创建蓝图文件；后续研究资产迁入需单独计划</td></tr><tr><td><code>README.md</code>、<code>details.md</code>、<code>docs/index.html</code></td><td>已存在入口文件</td><td>立即纳入目标结构定义，但本任务不修改</td><td>后续入口改动需单独文档入口计划和人工确认</td></tr><tr><td>旧调研资料</td><td>已存在 <code>docs/调研资料/</code>，并有开源时序基础模型调研文件</td><td>先保留，逐步由 <code>docs/research/</code> 承接或引用</td><td>迁移前需确认资料仍有效、是否被新研究资产替代</td></tr><tr><td><code>docs/归档/</code></td><td>已存在历史规划和旧方案</td><td>立即确认为历史资产归档区</td><td>归档迁移只移动历史方案，不删除仍被入口引用的资料</td></tr><tr><td><code>src/</code>、<code>tests/</code>、<code>configs/</code></td><td>已存在模型包、测试集合和配置文件</td><td>先审计后处理，不在本任务中重构</td><td>进入后续 code-refactor spec 与 plan，并在测试保护下执行</td></tr><tr><td><code>data/</code>、<code>reports/</code>、<code>hf_cache/</code></td><td><code>reports/</code> 已在根部；<code>data/</code> 与 <code>hf_cache/</code> 在本次目录输出中被排除或未展示</td><td>先定义资产规则，再审计提交边界</td><td>确认 ignored、本机缓存和可提交报告的分离规则后再调整</td></tr></tbody></table></div>
+<p>债务分类与前置处理规则如下：</p>
+<div class="table-wrap"><table><thead><tr><th>债务类型</th><th>判定</th><th>是否允许前置处理</th></tr></thead><tbody><tr><td>文档入口债务</td><td><code>README.md</code>、<code>details.md</code>、<code>docs/index.html</code> 未清晰表达主线、入口、导航或阶段判断</td><td>允许前置处理；仅限入口、导航、交叉引用和阶段说明，不改变代码行为</td></tr><tr><td>资产归属债务</td><td>研究资产、调研资料、评审、计划或归档资料的目录归属不清</td><td>允许前置处理；先定义归属和引用关系，再迁移或归档</td></tr><tr><td>工程可复现债务</td><td><code>src/</code>、CLI、configs、tests 或 workflow 阻碍可复现数据、训练、评测或模型适配</td><td>不直接前置改代码；先进入主线必要重构审计与执行门</td></tr><tr><td>本机数据边界债务</td><td><code>data/</code>、<code>hf_cache/</code>、临时 <code>reports/</code> 或本机路径与可提交资产边界不清</td><td>允许前置定义边界；实际清理和规则调整需先审计提交状态与默认 workflow</td></tr></tbody></table></div>
+<h2 id="后续代码重构入口">后续代码重构入口</h2>
+<p>如果后续发现 <code>src/b08_model_core</code>、CLI、configs 或 tests 的现有组织已经阻碍统一数据语料、开源模型 adapter、训练/评测 workflow 或知识成果沉淀，则必须创建独立 code-refactor spec 与 plan，并在测试保护下执行。</p>
+<p>代码重构不后置为模糊债务，但也不在没有证据时作为泛化清理执行。触发代码重构的证据应来自主线需求、结构审计、重复失败的验证路径、不可复现 workflow、配置边界混乱或知识资产无法沉淀等具体问题。</p>
+<p>判定规则：只有同时满足“阻碍两条主线之一、存在可引用证据、有验证与回滚路径”的问题，才进入 code-refactor spec；不满足任一条件的问题先记录为非阻塞债务，不进入代码重构执行。</p>
+<p>后续 code-refactor spec 至少应说明：阻碍点、受影响主线、需要触碰的文件、保留行为、测试保护、回滚方式和验收标准。plan 应把每次改动拆成可验证的小步，避免在一个任务内同时改变接口、数据格式、训练流程和文档入口。</p>
+<h2 id="保留与归档规则">保留与归档规则</h2>
+<p>保留规则：仍支撑当前主线、仍被默认入口引用、仍作为阶段判断依据、仍可复现或仍有研究参考价值的资产应保留在当前有效区或被新入口引用。</p>
+<p>归档规则：已被新方案替代、只反映历史阶段判断、与当前主线不再一致但仍有追溯价值的资产应进入 <code>docs/归档/</code>。归档时应保留文件原意，不改写为当前口径；必要时增加简短说明指向替代文档。</p>
+<p>不删除规则：除非已经确认资产无引用、无追溯价值且删除不会影响默认工作流，否则不通过重构任务删除历史资料。发现无主文件时，应先记录在审计结果中，而不是直接移除。</p>
+<h2 id="文件迁移规则">文件迁移规则</h2>
+<p>文件迁移应遵循“先入口、后迁移、再归档”的顺序。先明确目标入口和引用关系，再移动或复制资料，最后处理旧位置说明，避免迁移后用户无法找到原资料。</p>
+<p>研究资产优先迁入 <code>docs/research/</code>，执行计划保留在 <code>docs/superpowers/plans/</code>，已确认设计保留在 <code>docs/superpowers/specs/</code>，评审和阶段 review 保留在 <code>docs/reviews/</code>。历史规划、旧方案和被替代路线进入 <code>docs/归档/</code>。</p>
+<p><code>docs/调研资料/</code> 到 <code>docs/research/</code> 的承接标准分为“迁入、引用、归档”三种结果。已转化为研究判断、模型路线、数据/任务矩阵或训练路线的内容进入 <code>docs/research/</code>；原始调研记录、背景材料和仍有参考价值但不宜改写的资料保留在 <code>docs/调研资料/</code> 并由 <code>docs/research/</code> 引用；过期路线、被替代方案或不再服务当前主线的阶段性材料进入 <code>docs/归档/</code>。</p>
+<p>迁移不应改变文件语义。若需要重写内容，应作为新文档产生，并在旧文档中保留归档或引用关系。跨目录迁移应同步更新入口和导航，但本任务不执行这些更新。</p>
+<h2 id="文档入口规则">文档入口规则</h2>
+<p><code>README.md</code> 是默认研发执行入口，应说明当前阶段目标、两条主线、默认命令和关键文档入口。它不应承载过多研究细节，而应把读者引导到稳定的专题文档。</p>
+<p><code>details.md</code> 是阶段判断台账，应记录关键决策、状态变化、已知限制和后续门槛。它不应替代计划文档，也不应成为所有细节的堆放处。</p>
+<p><code>docs/index.html</code> 是文档导航入口，应清晰区分研究资产、设计规格、执行计划、评审报告、调研资料和归档资料。新增主线文档后，应优先更新导航，而不是依赖文件名让用户自行发现。</p>
+<h2 id="代码模块边界规则">代码模块边界规则</h2>
+<p><code>src/b08_model_core/</code> 应围绕模型研发工作台建立稳定边界，避免把研究叙述、临时实验、数据样例和本机路径混入核心代码。核心代码应优先表达可复现的数据加载、schema map、模型 adapter、训练/评测 workflow 和结果产物生成能力。</p>
+<p>CLI 应服务默认可验证路径，不应把临时研究假设固化为不可维护命令。若 CLI 已经无法清晰表达统一数据语料、开源模型适配或训练/评测 workflow，应进入独立 code-refactor spec 与 plan。</p>
+<p>测试代码应围绕可复现行为组织，避免仅验证当前实现细节。配置解析、schema map、数据窗口、模型 adapter、训练 runner、评测报告等边界应有对应验证入口。</p>
+<h2 id="配置与数据资产规则">配置与数据资产规则</h2>
+<p><code>configs/</code> 应存放真实数据 schema、schema map、实验配置和可复现实验所需的轻量配置。配置文件应避免写入本机绝对路径、私有数据内容或缓存路径。</p>
+<p><code>data/</code> 应作为 ignored 本机数据目录，承载原始数据、临时切片和不可提交数据资产。若需要共享数据样例，应使用脱敏、小体量、可公开的 fixture 或说明文档，而不是把本机数据放入默认路径。</p>
+<p><code>hf_cache/</code> 应作为 ignored 模型缓存目录，不应成为项目默认运行的隐性依赖。模型来源、版本、适配假设和复现实验要求应通过文档、配置或 workflow 明确表达。</p>
+<p><code>reports/</code> 应区分可提交白名单报告与本机生成报告。提交边界分类为：阶段 review、schema map、模型评测摘要可提交；临时训练输出、缓存型报告、本机路径报告不提交。可提交报告应服务阶段 review、schema map、模型评测和知识成果沉淀；本机临时报告应避免污染默认项目状态。</p>
+<h2 id="测试与验证规则">测试与验证规则</h2>
+<p>任何影响默认工作流、数据语料、模型 adapter、训练/评测 workflow、CLI 或配置解析的改动，都必须有匹配 blast radius 的验证。验证可以是单元测试、集成测试、CLI smoke test、schema 校验或报告生成检查，但应在 plan 中明确。</p>
+<p>文档-only 变更应至少检查入口一致性、链接关系和目标结构是否仍可理解。涉及迁移时，应验证旧入口不会变成断链或误导入口。</p>
+<p>代码重构应在测试保护下执行。不得在没有证据和没有验证门的情况下重排 <code>src/</code>、<code>tests/</code> 或 <code>configs/</code>，也不得用“后续再补测试”替代当前可验证性要求。</p>
+<h2 id="风险与回滚">风险与回滚</h2>
+<p>主要风险包括：过早移动历史资料导致入口断裂；在未审计源码前做泛化重构导致默认 workflow 损坏；把本机数据、模型缓存或临时报告混入可提交路径；以目录清理名义删除仍有追溯价值的研究判断。</p>
+<p>回滚原则是优先保持默认项目可用。文档迁移可通过恢复旧入口、保留跳转说明或撤回迁移提交来回滚。代码重构必须在独立 spec、plan 和测试保护下执行，回滚时应优先恢复已验证的上一条可用路径。</p>
+<p>本蓝图阶段不触碰源码和配置，因此本阶段的回滚范围仅限 <code>docs/research/</code> 下新增蓝图文件及其目录承接关系。后续实际重构必须在各自计划中单独定义回滚方式。</p>
+<h2 id="执行顺序决策">执行顺序决策</h2>
+<p>整体项目重构必须前置启动；前置阶段先完成目录、入口、导航和重构蓝图；源码、CLI、配置和测试结构的重构进入后续“主线必要重构审计与执行门”。</p>
+<p>第一步，建立 <code>docs/research/</code> 并放置本蓝图，明确知识成果优先线和工程化产品承接线的结构边界。第二步，在独立任务中更新 <code>README.md</code>、<code>details.md</code> 和 <code>docs/index.html</code>，让默认入口表达新主线。第三步，梳理既有调研资料、历史规划和 review，决定哪些被 <code>docs/research/</code> 承接，哪些进入或保留在归档。</p>
+<p>第四步，启动“主线必要重构审计与执行门”，针对 <code>src/b08_model_core</code>、CLI、configs、tests、reports、data 和 hf_cache 的实际阻碍点形成证据。第五步，仅对已确认阻碍主线的部分创建独立 code-refactor spec 与 plan，并在测试保护下小步执行。</p></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

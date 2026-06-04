@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开源时序基础模型论文矩阵 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>开源时序基础模型论文矩阵</h1>
+    <p class="lead">C 阶段模型证据。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#开源时序基础模型论文矩阵">开源时序基础模型论文矩阵</a><a class="pill" href="#目的">目的</a><a class="pill" href="#候选模型分层说明">候选模型分层说明</a><a class="pill" href="#调研字段">调研字段</a><a class="pill" href="#Forecasting-first-模型">Forecasting-first 模型</a><a class="pill" href="#Multi-task-representation-模型">Multi-task / representation 模型</a><a class="pill" href="#对-B08-的适配缺口">对 B08 的适配缺口</a><a class="pill" href="#C-阶段优先级">C 阶段优先级</a><a class="pill" href="#参考链接">参考链接</a></div></section>
+    <article class="article"><h1 id="开源时序基础模型论文矩阵">开源时序基础模型论文矩阵</h1>
+<h2 id="目的">目的</h2>
+<p>本矩阵用于把主流开源时序基础模型及其论文/模型卡整理为 C 阶段开源模型适配和 B 阶段自研训练判断的依据；它是初版研究资产，不是最终选型结论。</p>
+<p>对 B08 来说，开源模型首先是能力对照和适配入口，而不是可直接替代预测性维护系统的完整方案。本矩阵关注模型在 forecasting、imputation、representation、anomaly、classification、RUL 等任务上的覆盖范围、输入约束、适配方式和工业设备缺口，后续仍需要在统一数据、统一窗口和统一指标下逐步核对。</p>
+<h2 id="候选模型分层说明">候选模型分层说明</h2>
+<p>本矩阵把 C 阶段候选分为核心比较对象和扩展/待核对对象。核心比较对象是 TTM、MOMENT、Chronos、TimesFM、Moirai / Uni2TS、UniTS，应优先进入统一窗口、统一 adapter contract 和统一指标下的系统对比。</p>
+<p>扩展/待核对对象包括 TSPulse、FlowState。TSPulse 因已有公开资料和初步任务接口信息，暂在 Multi-task / representation 表中保留为扩展候选，但不等同于核心 C 阶段比较对象；FlowState 当前只作为扩展/待核对候选记录，资料、开源可运行性、许可证和接口形态仍待核对，因此不强行补入详细矩阵正文。</p>
+<h2 id="调研字段">调研字段</h2>
+<div class="table-wrap"><table><thead><tr><th>字段</th><th>含义</th></tr></thead><tbody><tr><td>paper</td><td>论文或模型卡</td></tr><tr><td>open source</td><td>代码或权重是否可用</td></tr><tr><td>task coverage</td><td>支持 forecasting、imputation、representation、anomaly、classification、RUL 中哪些任务</td></tr><tr><td>input constraints</td><td>单变量/多变量、上下文长度、预测长度、采样频率、metadata 支持</td></tr><tr><td>training data</td><td>预训练数据来源</td></tr><tr><td>adaptation</td><td>zero-shot、few-shot、fine-tuning、adapter 支持</td></tr><tr><td>B08 fit</td><td>对小样本工业物联预测性维护的适配价值</td></tr><tr><td>gap</td><td>不能直接覆盖的缺口</td></tr></tbody></table></div>
+<h2 id="Forecasting-first-模型">Forecasting-first 模型</h2>
+<p>这类模型优先证明跨数据集 forecasting 能力，适合作为 B08 的预测残差、正常轨迹预测、概率预测和资源受限部署候选对照。它们不应被写成完整预测性维护模型，后续需要外部补充设备结构、工艺阶段、质量标记、物理域和维护语义。</p>
+<div class="table-wrap"><table><thead><tr><th>模型</th><th>论文/资料</th><th>核心能力</th><th>B08 价值</th><th>主要缺口</th></tr></thead><tbody><tr><td>TTM / TinyTimeMixer</td><td>arXiv:2401.03955；IBM Granite TTM model card</td><td>轻量 zero/few-shot 多变量 forecasting</td><td>预测残差基线、资源受限部署候选</td><td>主要偏 forecasting，设备结构 metadata 需要外部处理</td></tr><tr><td>Chronos / Chronos-Bolt</td><td>arXiv:2403.07815；Chronos 官方仓库</td><td>token 化时序 forecasting</td><td>zero-shot forecasting 对照</td><td>对工业物理域、阶段和多任务表征支持有限</td></tr><tr><td>TimesFM</td><td>arXiv:2310.10688；TimesFM 官方仓库</td><td>decoder-only forecasting foundation model</td><td>正常轨迹预测对照</td><td>主要偏 forecasting</td></tr><tr><td>Moirai / Uni2TS</td><td>arXiv:2402.02592；Uni2TS 官方仓库</td><td>universal probabilistic forecasting</td><td>概率预测和跨数据集 forecasting 对照</td><td>预测性维护任务需额外适配</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>模型</th><th>open source</th><th>task coverage</th><th>input constraints</th><th>training data</th><th>adaptation</th><th>B08 fit</th><th>gap</th></tr></thead><tbody><tr><td>TTM / TinyTimeMixer</td><td>IBM Granite / Hugging Face 权重和 <code>granite-tsfm</code> 仓库可用</td><td>forecasting</td><td>支持多变量 forecasting；上下文长度和预测长度按模型分支选择；部分版本支持频率前缀、exogenous / categorical 信息注入</td><td>论文和模型卡说明使用公开时序数据预训练；具体版本数据规模按模型卡核对</td><td>zero-shot、few-shot、fine-tuning</td><td>已适合作为 B08 forecasting 参考和预测残差基线候选</td><td>不直接建模设备层级、工艺阶段、传感器物理域和维护语义</td></tr><tr><td>Chronos / Chronos-Bolt</td><td>Chronos 官方仓库提供代码和模型 checkpoint；Chronos-Bolt 具体接口需按官方仓库继续核对</td><td>forecasting</td><td>将连续值缩放、量化后作为 token；主要面向概率 forecasting；工业多传感器结构需要外部组织</td><td>公开数据集与合成数据组合</td><td>zero-shot forecasting；fine-tuning 机制需按 C 阶段运行接口核对</td><td>适合作为 token 化 forecasting 路线的横向对照</td><td>对阶段、物理域、设备 metadata 和 multi-task representation 覆盖不足</td></tr><tr><td>TimesFM</td><td>Google Research 官方仓库可用</td><td>forecasting</td><td>decoder-only forecasting；论文强调可跨历史长度、预测长度和时间粒度工作；具体 horizon、频率和外生变量接口需按仓库版本核对</td><td>论文说明使用大规模时序语料预训练；细分数据来源需按论文和仓库核对</td><td>zero-shot forecasting；fine-tuning / adapter 能力需按官方实现核对</td><td>适合作为正常轨迹预测和趋势预测对照</td><td>主要面向 forecasting，不直接覆盖工业设备健康表征和维护语义</td></tr><tr><td>Moirai / Uni2TS</td><td>Uni2TS 官方仓库提供代码、数据和权重</td><td>probabilistic forecasting</td><td>面向跨频率、任意变量数量和不同分布属性的 universal forecasting；具体输入 schema 需按 adapter 实现核对</td><td>LOTSA，大规模开放时序归档，覆盖多个领域</td><td>zero-shot forecasting；fine-tuning 需按仓库接口核对</td><td>适合作为概率预测和跨数据集泛化能力对照</td><td>预测性维护、异常候选信号和 RUL 需要额外任务定义与适配</td></tr></tbody></table></div>
+<h2 id="Multi-task-representation-模型">Multi-task / representation 模型</h2>
+<p>这类模型更接近 B08 对设备状态表征、补全、异常候选信号和小样本适配的需求。它们仍需要在工业物联语境下验证：模型是否能有效利用设备、传感器、物理域、工艺阶段、质量标记、batch/cycle 和弱标签，而不是只在通用 benchmark 上成立。</p>
+<div class="table-wrap"><table><thead><tr><th>模型</th><th>论文/资料</th><th>核心能力</th><th>B08 价值</th><th>主要缺口</th></tr></thead><tbody><tr><td>MOMENT</td><td>arXiv:2402.03885；MOMENT 官方仓库</td><td>forecasting、imputation、classification、anomaly、representation</td><td>多任务基础模型重要对照</td><td>工业设备结构和预测性维护语义需适配</td></tr><tr><td>UniTS</td><td>arXiv:2403.00131；UniTS 官方仓库</td><td>unified time-series tasks</td><td>多任务统一机制参考</td><td>工业 metadata 与设备健康任务需重构</td></tr><tr><td>TSPulse / Granite Time Series</td><td>IBM Granite Time Series docs；TSPulse model card</td><td>表征、预测、补全、分类、异常等</td><td>设备状态表征和异常候选信号对照</td><td>具体开源可运行性和任务接口需核对</td></tr></tbody></table></div>
+<div class="table-wrap"><table><thead><tr><th>模型</th><th>open source</th><th>task coverage</th><th>input constraints</th><th>training data</th><th>adaptation</th><th>B08 fit</th><th>gap</th></tr></thead><tbody><tr><td>MOMENT</td><td>官方仓库、Hugging Face 模型和 Time Series Pile 可用</td><td>forecasting、imputation、classification、anomaly、representation</td><td>通用时序 patch / embedding 路线；具体多变量、上下文长度和任务头需按仓库接口核对</td><td>Time Series Pile，公开时序数据集合</td><td>minimal-data / task-specific fine-tuning；zero-shot 能力需按任务区分</td><td>适合作为 B08 多任务和表征学习首批对照</td><td>不直接包含工业工艺阶段、传感器物理域、设备健康标签和维护事件语义</td></tr><tr><td>UniTS</td><td>官方仓库和数据集入口可用</td><td>forecasting、imputation、classification、anomaly，以及统一 predictive / generative tasks</td><td>通过 task tokenization 统一任务；支持多域、多采样率、多时间尺度数据；工业 schema 需重构</td><td>多域异构预训练数据集</td><td>few-shot、prompt 和下游任务适配能力需按官方实现核对</td><td>适合参考多任务统一机制和任务 token 设计</td><td>工业 metadata、质量标记、设备健康任务、RUL 和维护提前量需要重新定义</td></tr><tr><td>TSPulse / Granite Time Series</td><td>IBM Granite Time Series 文档、Hugging Face 模型卡和 <code>granite-tsfm</code> 仓库可用</td><td>representation、imputation、classification、anomaly、similarity search；Granite Time Series 家族也覆盖 forecasting</td><td>模型卡显示轻量模型和 GPU-free inference；TSPulse 基础上下文长度为 512，不同任务有不同输入长度建议</td><td>TSPulse 模型卡列出多个公开时序数据集；Granite Time Series 具体模型按版本核对</td><td>zero-shot imputation、anomaly detection、similarity search、classification 示例；fine-tuning 脚本和任务接口需按版本核对</td><td>适合作为设备状态 embedding、补全和异常候选信号的重点候选</td><td>工业设备结构语义、任务接口稳定性、版本差异和实际部署依赖仍需 C 阶段核对</td></tr></tbody></table></div>
+<h2 id="对-B08-的适配缺口">对 B08 的适配缺口</h2>
+<p><strong>forecasting-only 缺口</strong>：TTM、Chronos、TimesFM、Moirai 等主要证明未来值预测或概率预测能力。B08 需要的设备状态表征、补全、异常候选信号、阶段识别、弱标签适配和 RUL 等任务，不能只靠 forecasting 误差直接推出。</p>
+<p><strong>industrial metadata 缺口</strong>：主流模型通常以数值窗口为核心输入，对 <code>device_id</code>、<code>sensor_id</code>、物理域、工艺阶段、batch/cycle、质量标记、维护片段和现场环境等结构信息支持有限。B08 需要在 adapter、prompt、特征工程或自研结构中显式处理这些语义。</p>
+<p><strong>小样本/弱标签缺口</strong>：公开模型可以提供 zero-shot、few-shot 或 fine-tuning 起点，但工业设备真实故障、维护事件和退化标签稀缺。B08 需要把无标签任务、弱标签代理任务和少量专家复核任务分层推进，避免把弱证据写成完整预测性维护结论。</p>
+<p><strong>多任务评测缺口</strong>：不同模型的任务接口、输入长度、输出形式和指标口径差异较大。B08 需要统一窗口、统一任务定义和统一指标，分别评估 forecasting、imputation、representation、anomaly、classification 和 RUL，而不是只比较单一 benchmark 分数。</p>
+<p><strong>工程依赖/部署成本缺口</strong>：轻量模型更适合资源受限环境，但仍需核对依赖、许可证、模型权重、推理速度、CPU/GPU 需求、批处理方式和离线部署可行性。较大的 forecasting-first 模型可能适合研究对照，但未必适合作为默认工程路径。</p>
+<h2 id="C-阶段优先级">C 阶段优先级</h2>
+<p>C 阶段优先级不是按模型名气排序，而是按 B08 任务覆盖排序：核心候选先保留 TTM 作为已跑通 forecasting 参考，再补 MOMENT / UniTS 的 representation 与 multi-task 能力对照，同时用 Chronos / TimesFM / Moirai / Uni2TS 作为 forecasting-first 横向比较。TSPulse 和 FlowState 先作为扩展/待核对候选保留，待资料、许可证、开源可运行性和接口形态核对后，再决定是否并入核心系统对比。</p>
+<p>建议顺序如下：</p>
+<ol>
+<li>TTM / TinyTimeMixer：保留为已跑通 forecasting 参考，继续沉淀预测残差、资源受限部署和统一 adapter contract。</li>
+<li>MOMENT / UniTS：优先补齐 representation、imputation、classification、anomaly 和 multi-task 对照，重点观察是否能形成设备状态 embedding 与异常候选信号。</li>
+<li>Chronos / TimesFM / Moirai / Uni2TS：作为 forecasting-first 横向比较，验证 zero-shot forecasting、概率预测和跨数据集预测能力是否优于或补充 TTM。</li>
+<li>TSPulse / FlowState：作为扩展/待核对候选，先核对资料、许可证、开源可运行性和 adapter 接口，再决定是否进入核心系统对比。</li>
+<li>自研训练判断：只有当统一评测证明开源模型在工业 metadata、小样本弱标签、多任务表征或设备健康语义上存在稳定缺口时，才进入 B 阶段自研结构和预训练目标设计。</li>
+</ol>
+<p>本优先级不代表任何模型已经适合生产告警、RUL 精确估计或完整预测性维护。它只是 C 阶段 adapter 和评测工作的初版排序依据。</p>
+<h2 id="参考链接">参考链接</h2>
+<ul>
+<li>TTM / TinyTimeMixer paper: &lt;https://arxiv.org/abs/2401.03955&gt;</li>
+<li>IBM Granite TTM model card: &lt;https://huggingface.co/ibm-granite/granite-timeseries-ttm-r2&gt;</li>
+<li>IBM Granite Time Series docs: &lt;https://www.ibm.com/granite/docs/models/time-series&gt;</li>
+<li>TSPulse model card: &lt;https://huggingface.co/ibm-granite/granite-timeseries-tspulse-r1&gt;</li>
+<li>MOMENT paper: &lt;https://arxiv.org/abs/2402.03885&gt;</li>
+<li>MOMENT official repository: &lt;https://github.com/moment-timeseries-foundation-model/moment&gt;</li>
+<li>Chronos paper: &lt;https://arxiv.org/abs/2403.07815&gt;</li>
+<li>Chronos official repository: &lt;https://github.com/amazon-science/chronos-forecasting&gt;</li>
+<li>Chronos-Bolt specific model card / interface: 待进一步核对。</li>
+<li>TimesFM paper: &lt;https://arxiv.org/abs/2310.10688&gt;</li>
+<li>TimesFM official repository: &lt;https://github.com/google-research/timesfm&gt;</li>
+<li>Moirai / Uni2TS paper: &lt;https://arxiv.org/abs/2402.02592&gt;</li>
+<li>Uni2TS official repository: &lt;https://github.com/SalesforceAIResearch/uni2ts&gt;</li>
+<li>UniTS paper: &lt;https://arxiv.org/abs/2403.00131&gt;</li>
+<li>UniTS official repository: &lt;https://github.com/mims-harvard/UniTS&gt;</li>
+</ul></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

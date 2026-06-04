@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>主线必要重构审计 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>主线必要重构审计</h1>
+    <p class="lead">重构执行门。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#主线必要重构审计">主线必要重构审计</a><a class="pill" href="#目的">目的</a><a class="pill" href="#判定原则">判定原则</a><a class="pill" href="#当前项目主线">当前项目主线</a><a class="pill" href="#需要立即解决的阻碍">需要立即解决的阻碍</a><a class="pill" href="#可以后置但需记录的债务">可以后置但需记录的债务</a><a class="pill" href="#不属于本阶段的债务">不属于本阶段的债务</a><a class="pill" href="#源码-CLI-配置-测试影响">源码 / CLI / 配置 / 测试影响</a><a class="pill" href="#是否需要代码重构">是否需要代码重构</a><a class="pill" href="#如果需要-重构子计划">如果需要，重构子计划</a><a class="pill" href="#验证要求">验证要求</a></div></section>
+    <article class="article"><h1 id="主线必要重构审计">主线必要重构审计</h1>
+<h2 id="目的">目的</h2>
+<p>本审计用于给 B08 项目主线建立“是否需要立即代码重构”的执行门。用户已经明确要求：为了确立项目主线，必要重构不能作为模糊债务后置；但代码重构必须满足证据、验证、回滚路径，不做泛化清理。</p>
+<p>本任务只做审计，不执行源码、CLI、配置或测试重构。当前文件是 A 阶段研究资产的一部分，用于记录哪些问题必须现在处理，哪些问题进入后续 C/B 阶段或具体工程模块实现前的子 spec/plan。</p>
+<p>本次只读检查已执行：</p>
+<pre><code>find src/b08_model_core tests configs -maxdepth 3 -type f | sort</code></pre>
+<pre><code>rg -n &quot;adapter|foundation|real-data|scenario|forecast|knowledge|paper|patent|dataset|schema|window|TTM|MOMENT|Chronos|TimesFM|Moirai|UniTS&quot; src tests configs README.md details.md docs</code></pre>
+<h2 id="判定原则">判定原则</h2>
+<p>本审计采用以下三类决策：</p>
+<div class="table-wrap"><table><thead><tr><th>Decision</th><th>判定口径</th></tr></thead><tbody><tr><td><code>fix now</code></td><td>该债务阻碍 A 阶段知识成果、模型训练路线、开源模型比较、统一数据语料、adapter workflow、可复现研究交接或工程化产品承接，并且有可引用证据、验证路径和回滚边界。</td></tr><tr><td><code>document for later</code></td><td>债务真实存在，但不阻碍当前知识成果第一目标或工程化产品第二目标。</td></tr><tr><td><code>ignore</code></td><td>美观、历史、缓存、生成物或与当前主线无关的问题。</td></tr></tbody></table></div>
+<p>代码重构的进入条件必须同时满足：</p>
+<ol>
+<li>有明确阻碍证据，且该阻碍影响当前主线交付，而不是一般清理偏好。</li>
+<li>能指出精确文件、预期行为、需要新增或修改的测试。</li>
+<li>有可执行验证路径和可接受的回滚边界。</li>
+<li>不与当前任务边界冲突；本任务不得实际修改源码、CLI、配置或测试。</li>
+</ol>
+<h2 id="当前项目主线">当前项目主线</h2>
+<p>当前主线是 A -&gt; C -&gt; B：</p>
+<div class="table-wrap"><table><thead><tr><th>阶段</th><th>当前含义</th><th>仓库证据</th></tr></thead><tbody><tr><td>A</td><td>短期第一目标是知识成果：论文主线、专利方向、学术综述、开源模型论文矩阵、预测性维护数据矩阵和模型训练路线。</td><td><code>README.md:218</code> 说明 A 阶段第一目标是知识成果，第二目标是工程化产品承接。</td></tr><tr><td>C</td><td>系统验证开源 foundation models，在同一批设备窗口、指标和报告口径下比较 TTM、MOMENT、Chronos、TimesFM、Moirai、UniTS 等候选模型。</td><td><code>README.md:222</code> 和 <code>details.md:193</code> 均指出还需系统适配并比较更多开源模型。</td></tr><tr><td>B</td><td>基于 A/C 证据，再决定是否进入自研设备时序基础模型训练方案设计。</td><td><code>details.md:322</code> 说明下一步应先补学术/行业/模型路线调研，再系统适配开源模型，最后判断是否进入自研训练方案设计。</td></tr></tbody></table></div>
+<p>现有工程主线基础设施已经包括：</p>
+<div class="table-wrap"><table><thead><tr><th>能力</th><th>只读检查证据</th><th>当前判断</th></tr></thead><tbody><tr><td>真实数据 pipeline</td><td><code>src/b08_model_core/real_data/*.py</code>、<code>configs/fu13_real_data_schema.yaml</code>、<code>configs/real_data_schema_map.template.yaml</code>、<code>tests/test_fu13_loader.py</code>、<code>tests/test_real_data_forecasting.py</code>、<code>tests/test_scenario_evaluation.py</code>。</td><td>已能承接 A 阶段关于统一数据语料、数据矩阵和训练路线的研究表达；后续 C/B 扩展再按具体 spec 进入代码修改。</td></tr><tr><td>窗口与 schema</td><td><code>src/b08_model_core/tasks/schema.py</code>、<code>src/b08_model_core/tasks/window_builder.py</code>、<code>tests/test_simulation_schema.py</code>、<code>tests/test_window_builder.py</code>。</td><td>已有 canonical schema 与 window builder 基础，不构成 A 阶段阻碍。</td></tr><tr><td>foundation / adapter workflow</td><td><code>src/b08_model_core/foundation/*.py</code>、<code>src/b08_model_core/adapters/base.py</code>、<code>chronos_adapter.py</code>、<code>moment_adapter.py</code>、<code>timesfm_adapter.py</code>、<code>ttm_adapter.py</code>、<code>tests/test_foundation_runner.py</code>、<code>tests/test_foundation_results.py</code>、<code>tests/test_ttm_adapter.py</code>。</td><td>已有 adapter/foundation 骨架与 TTM 真实链路；多模型 adapter 完整验证属于 C 阶段工程扩展，不应在 A 阶段泛化重构。</td></tr><tr><td>knowledge outputs</td><td><code>src/b08_model_core/knowledge/paper_candidates.py</code>、<code>src/b08_model_core/knowledge/patent_candidates.py</code>、<code>tests/test_knowledge_outputs.py</code>。</td><td>已有知识候选输出入口，可承接 A 阶段研究资产；不需要立即源码重构。</td></tr><tr><td>CLI 入口</td><td><code>src/b08_model_core/cli.py</code>、<code>tests/test_cli_real_data_validate.py</code>、<code>tests/test_cli_fu13_real_data.py</code>、<code>tests/test_cli_simulate.py</code>；README 记录 <code>real-data assemble-fu13</code>、<code>diagnose-fu13</code>、<code>forecast-fu13</code>、<code>evaluate-scenario</code>。</td><td>未发现必须立即修改 CLI 的主线阻碍。</td></tr></tbody></table></div>
+<h2 id="需要立即解决的阻碍">需要立即解决的阻碍</h2>
+<p>当前没有发现必须在 A 阶段立即修改源码、CLI、配置或测试结构的主线阻碍。本阶段只执行研究资产和入口文档重构；源码级重构进入后续 C/B 阶段或具体工程模块实现前的子 spec/plan。</p>
+<p>本次唯一需要立即补齐的是“主线必要重构审计与执行门”本身，即当前文档。它不是代码重构，而是防止后续把必要重构模糊后置，或反过来把泛化清理伪装成主线阻碍。</p>
+<div class="table-wrap"><table><thead><tr><th>Finding</th><th>Evidence</th><th>Impact on mainline</th><th>Decision</th><th>Required action</th></tr></thead><tbody><tr><td>缺少本次 Task 12 要求的主线必要重构执行门。</td><td>用户任务明确要求创建 <code>docs/research/mainline-refactor-audit.md</code>，并要求判断是否需要立即代码重构。</td><td>若不记录，后续可能把“必要重构”变成模糊债务，影响 A -&gt; C -&gt; B 主线排序。</td><td><code>fix now</code></td><td>创建本审计文档；不执行代码重构。</td></tr><tr><td>A -&gt; C -&gt; B 主线已经在入口文档中明确，当前审计应服务该主线而不是替代该主线。</td><td><code>README.md:218</code>、<code>README.md:222</code>、<code>details.md:322</code>。</td><td>主线清晰，审计重点应是是否有阻碍该主线的工程结构问题。</td><td><code>ignore</code></td><td>不修改 README/details；以本 research 文档记录门控结论。</td></tr><tr><td>adapter/foundation/real_data/knowledge 模块已经存在，可承接 A 阶段文档路线。</td><td><code>find</code> 输出包含 <code>src/b08_model_core/adapters/</code>、<code>foundation/</code>、<code>real_data/</code>、<code>knowledge/</code>；测试包含 <code>test_foundation_*</code>、<code>test_real_data_*</code>、<code>test_knowledge_outputs.py</code>。</td><td>不阻碍 A 阶段知识成果、模型训练路线和研究交接。</td><td><code>ignore</code></td><td>不做立即源码重构；后续按 C/B 具体 spec 验证扩展。</td></tr><tr><td>多模型 adapter 比较尚未完全工程化验证。</td><td><code>README.md:222</code> 和 <code>details.md:193</code> 指出仍需比较 MOMENT、Chronos、TimesFM、Moirai、UniTS 等；<code>find</code> 显示 adapter 文件已存在，但测试结构中明确可见的 adapter 专项测试主要是 <code>tests/test_ttm_adapter.py</code>。</td><td>会影响 C 阶段系统开源模型比较，但不阻碍 A 阶段先完成知识成果和路线判断。</td><td><code>document for later</code></td><td>C 阶段前创建独立 <code>docs/research/open-source-adapter-comparison-plan.md</code> 或 code-refactor spec，明确模型、窗口形状、依赖、失败状态和测试矩阵。</td></tr><tr><td>当前未发现必须立即修改 CLI 的主线阻碍。</td><td>README 已记录 <code>real-data assemble-fu13</code>、<code>diagnose-fu13</code>、<code>forecast-fu13</code>、<code>evaluate-scenario</code>；<code>find</code> 显示 <code>src/b08_model_core/cli.py</code> 及 <code>tests/test_cli_real_data_validate.py</code>、<code>tests/test_cli_fu13_real_data.py</code>、<code>tests/test_cli_simulate.py</code>。</td><td>CLI 已能表达当前真实数据、forecasting 和 scenario 验证链路，不阻碍 A 阶段。</td><td><code>ignore</code></td><td>不修改 CLI；若 C 阶段新增模型 adapter，再由具体 CLI spec 决定是否扩展命令参数。</td></tr><tr><td>当前未发现必须立即修改 tests/configs 的主线阻碍。</td><td><code>find</code> 显示 <code>configs/fu13_real_data_schema.yaml</code>、<code>configs/real_data_schema_map.template.yaml</code> 及真实数据、foundation、window、schema、knowledge 等测试文件。</td><td>配置与测试结构覆盖当前工作台主链路；A 阶段不需要结构性测试/配置重构。</td><td><code>ignore</code></td><td>不修改测试或配置；未来代码重构必须先写明新增/修改测试。</td></tr><tr><td><code>.DS_Store</code> 和 <code>__pycache__</code> 生成/缓存痕迹存在。</td><td><code>find</code> 输出包含 <code>src/b08_model_core/.DS_Store</code>、多处 <code>__pycache__/*.pyc</code>、<code>tests/__pycache__/*.pyc</code>；本次指定 <code>find</code> 范围未显示 egg-info。</td><td>属于生成/缓存痕迹，不阻碍 A 阶段知识成果或 C/B 工程承接。</td><td><code>ignore</code></td><td>本任务不删除；如后续仓库卫生任务处理，应单独提出清理范围和回滚边界。</td></tr><tr><td><code>docs/research/</code> 是当前执行资产，不应被误判为债务。</td><td>用户任务明确要求在 <code>docs/research/</code> 创建本审计文档；<code>rg</code> 范围包含 docs，用于主线研究资产检索。</td><td>research 文档是 A 阶段知识成果和交接资产的一部分。</td><td><code>ignore</code></td><td>保留并继续按任务创建 research 文档；不清理其他 research 文档。</td></tr></tbody></table></div>
+<h2 id="可以后置但需记录的债务">可以后置但需记录的债务</h2>
+<p>以下债务真实存在或很可能会在 C/B 阶段显性化，但不应在 A 阶段立即改代码：</p>
+<div class="table-wrap"><table><thead><tr><th>债务</th><th>后置原因</th><th>触发重构的条件</th></tr></thead><tbody><tr><td>多模型 adapter 合同与测试矩阵需要完整化。</td><td>当前 A 阶段第一目标是知识成果与路线判断；已有 adapter/foundation 骨架和 TTM 链路足够支撑研究表达。</td><td>C 阶段开始系统比较 MOMENT、Chronos、TimesFM、Moirai、UniTS 等模型时，若出现窗口形状、依赖、输出 schema 或失败状态不一致，必须创建 code-refactor spec/plan。</td></tr><tr><td>scenario 评测从验证样例扩展到多业务场景时，可能需要更明确的 scenario contract。</td><td>当前 <code>leak_current_monitoring</code> 是验证样例，不是产品化告警闭环；A 阶段不依赖更多场景代码。</td><td>当 C/B 阶段要求多个场景共享同一 residual、embedding、anomaly response 或 RUL 输出口径时，再定义 scenario contract 与测试。</td></tr><tr><td>统一数据语料可能需要跨设备、跨产线 schema 扩展。</td><td>当前 FU13 pipeline 已能支持 A 阶段数据矩阵和训练路线讨论；没有证据显示必须现在改 schema/config。</td><td>当引入非 FU13 数据、维修记录、停机事件、寿命标签或跨设备字段时，再提出 schema/config 迁移计划。</td></tr><tr><td>生成/缓存文件的仓库卫生治理。</td><td><code>.DS_Store</code>、<code>__pycache__</code> 不影响当前主线判断；删除行为不属于本任务。</td><td>后续若要清理仓库卫生，应单独开 housekeeping 任务，只处理生成物并确认不会误删研究资产。</td></tr></tbody></table></div>
+<h2 id="不属于本阶段的债务">不属于本阶段的债务</h2>
+<p>以下事项不进入 A 阶段重构：</p>
+<div class="table-wrap"><table><thead><tr><th>项目</th><th>原因</th></tr></thead><tbody><tr><td>为美观统一目录命名、注释风格或代码排版。</td><td>属于泛化清理，不能证明阻碍主线。</td></tr><tr><td>删除历史计划、执行记录或 research 文档。</td><td><code>docs/research/</code> 和既有计划文档是当前研究交接资产，不应被误判为债务。</td></tr><tr><td>把所有开源模型 adapter 一次性抽象为更复杂框架。</td><td>在 C 阶段模型和任务矩阵没有完全确定前，过早抽象会增加风险。</td></tr><tr><td>把当前 scenario 样例提升为生产告警系统。</td><td>README 和 details 已明确当前不能推出故障概率、RUL、维护建议或生产告警能力。</td></tr><tr><td>清理 <code>.DS_Store</code>、<code>__pycache__</code> 等生成/缓存痕迹。</td><td>本任务边界禁止修改除本文件外的其他文件；这些痕迹也不阻碍主线。</td></tr></tbody></table></div>
+<h2 id="源码-CLI-配置-测试影响">源码 / CLI / 配置 / 测试影响</h2>
+<div class="table-wrap"><table><thead><tr><th>范围</th><th>当前影响</th><th>是否需要立即修改</th></tr></thead><tbody><tr><td>源码</td><td>现有 <code>adapters</code>、<code>foundation</code>、<code>real_data</code>、<code>knowledge</code>、<code>tasks</code> 模块能支撑 A 阶段研究路线描述和已有真实数据/TTM 工作台证据。</td><td>否</td></tr><tr><td>CLI</td><td>README 已有真实数据装配、诊断、forecasting、scenario 评测入口；测试结构中有 CLI 覆盖。</td><td>否</td></tr><tr><td>配置</td><td>FU13 真实数据 schema 与 schema map template 已存在，可支撑当前真实数据语料描述。</td><td>否</td></tr><tr><td>测试</td><td>已有 foundation、TTM adapter、real_data、scenario、schema/window、knowledge 等测试文件；本任务不运行测试。</td><td>否</td></tr><tr><td>文档</td><td>本任务只新增当前审计文档；不修改 README、details、docs/index 或其他 research 文档。</td><td>仅新增本文件</td></tr></tbody></table></div>
+<h2 id="是否需要代码重构">是否需要代码重构</h2>
+<p>不需要立即代码重构。</p>
+<p>当前没有发现必须在 A 阶段立即修改源码、CLI、配置或测试结构的主线阻碍。本阶段只执行研究资产和入口文档重构；源码级重构进入后续 C/B 阶段或具体工程模块实现前的子 spec/plan。</p>
+<p>判断依据：</p>
+<ol>
+<li>A 阶段第一目标是知识成果和路线判断，当前已有 <code>knowledge</code> 入口、研究文档资产、真实数据 pipeline、TTM/baseline 证据和 adapter/foundation 骨架可支撑表达。</li>
+<li>C 阶段多模型 adapter 比较尚未完全工程化，但这是下一阶段需要验证和扩展的对象，不是 A 阶段立即修改代码的阻碍。</li>
+<li>CLI、tests、configs 均已有当前主线所需入口或覆盖迹象；没有证据表明必须现在改结构才能完成 A 阶段交接。</li>
+<li>生成/缓存痕迹不影响主线，不应转化为本阶段代码清理任务。</li>
+</ol>
+<h2 id="如果需要-重构子计划">如果需要，重构子计划</h2>
+<p>当前不需要创建代码重构子计划。</p>
+<p>若后续 C/B 阶段触发代码重构，建议先创建独立子计划文件，例如：</p>
+<div class="table-wrap"><table><thead><tr><th>建议文件名</th><th>触发条件</th><th>必须写清</th></tr></thead><tbody><tr><td><code>docs/research/open-source-adapter-code-refactor-plan.md</code></td><td>多模型 adapter 系统比较开始前，发现现有 adapter contract 无法统一表达模型输入、输出、失败状态或依赖约束。</td><td>精确文件、阻碍证据、预期行为、新增/修改测试、验证命令、回滚路径。</td></tr><tr><td><code>docs/research/real-data-schema-extension-plan.md</code></td><td>引入非 FU13 数据、维修记录、停机事件、寿命标签或跨设备训练语料时，现有 schema/config 无法承接。</td><td>schema 迁移边界、兼容旧配置的策略、fixture 更新、CLI 验证路径。</td></tr><tr><td><code>docs/research/scenario-contract-refactor-plan.md</code></td><td>从单一 <code>leak_current_monitoring</code> 样例扩展到多个业务场景，且需要共享 residual、embedding、anomaly response 或 RUL 输出口径。</td><td>场景 contract、评测指标、报告字段、测试样例、回滚边界。</td></tr></tbody></table></div>
+<p>任一代码重构子计划不得以“清理”“统一风格”“未来灵活性”为理由启动，必须绑定当前主线阻碍。</p>
+<h2 id="验证要求">验证要求</h2>
+<p>本审计任务的验证边界：</p>
+<div class="table-wrap"><table><thead><tr><th>类型</th><th>要求</th></tr></thead><tbody><tr><td>当前任务</td><td>只确认 <code>docs/research/mainline-refactor-audit.md</code> 存在并包含本任务要求结构、审计表和关键结论。</td></tr><tr><td>本任务禁止项</td><td>不运行测试；不使用 git；不修改源码、CLI、配置、README、details、docs/index、其他 research 文档或其他文件。</td></tr><tr><td>后续 research 文档</td><td>应由人工或后续文档任务检查与 README/details 主线一致性。</td></tr><tr><td>后续代码重构</td><td>必须先有 code-refactor spec/plan，写明精确文件、阻碍证据、预期行为、新增/修改测试、验证命令和回滚路径。</td></tr><tr><td>后续验证命令</td><td>根据改动范围选择最小验证，例如 adapter 改动运行对应 adapter/foundation 测试，schema 改动运行 schema/window/real_data 测试，CLI 改动运行对应 CLI 测试。</td></tr></tbody></table></div>
+<p>如果未来判断需要代码重构，最低验证门槛是：</p>
+<ol>
+<li>新增或修改能复现阻碍的测试。</li>
+<li>实现最小代码改动，不做泛化清理。</li>
+<li>运行与改动范围匹配的测试命令并记录结果。</li>
+<li>明确回滚边界，确保默认项目路径仍可安装、运行和交接。</li>
+</ol></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

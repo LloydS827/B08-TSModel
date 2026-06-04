@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>任务与指标矩阵 - B08 Research</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research HTML</div>
+    <h1>任务与指标矩阵</h1>
+    <p class="lead">评测口径。本页是 Markdown 研究资产的 HTML 阅读版，面向快速阅读、判断和后续事项梳理。</p>
+    <div class="meta-row">
+      <a class="pill" href="../index.html">文档总入口</a>
+      <a class="pill" href="index.html">研究 HTML 索引</a>
+    </div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="../index.html">总入口</a><a href="index.html">研究索引</a><a href="#top">回到顶部</a></div></nav>
+  <main id="top" class="layout">
+    <section class="section panel"><span class="kicker">目录</span><div class="meta-row"><a class="pill" href="#任务与指标矩阵">任务与指标矩阵</a><a class="pill" href="#目的">目的</a><a class="pill" href="#三层任务结构">三层任务结构</a><a class="pill" href="#指标口径与无效解释">指标口径与无效解释</a><a class="pill" href="#无标签任务">无标签任务</a><a class="pill" href="#弱标签-业务代理任务">弱标签 / 业务代理任务</a><a class="pill" href="#预测性维护目标任务">预测性维护目标任务</a><a class="pill" href="#FU13-当前支持情况">FU13 当前支持情况</a><a class="pill" href="#开源数据补充情况">开源数据补充情况</a><a class="pill" href="#训练路线接口">训练路线接口</a><a class="pill" href="#进入-C-B-阶段的指标要求">进入 C / B 阶段的指标要求</a></div></section>
+    <article class="article"><h1 id="任务与指标矩阵">任务与指标矩阵</h1>
+<h2 id="目的">目的</h2>
+<p>本矩阵用于把 B08 的预测性维护目标拆成可验证任务层级，服务开源模型适配、模型训练路线和知识成果论证；它不是生产验收指标清单。</p>
+<p>因此，本文件关注研究任务如何定义、当前证据能够支持到哪一层、后续需要哪些数据或标签补充。矩阵中的指标用于统一比较不同模型和路线，不应被直接解释为生产告警阈值、维修建议或现场交付验收标准。</p>
+<h2 id="三层任务结构">三层任务结构</h2>
+<p>B08 的任务验证按三层推进：</p>
+<ol>
+<li>第一层是无标签可验证任务，包括 forecasting、imputation / reconstruction 和 representation consistency。这一层适合预训练、开源模型对照和 FU13 当前无故障标签场景。</li>
+<li>第二层是弱标签或业务代理任务，包括 stage classification、quality_flag prediction、residual high-percentile detection 和 trend/spike candidate signal。这一层用于验证模型是否学习到工艺阶段、质量标记和候选异常信号相关语义。</li>
+<li>第三层是预测性维护目标任务，包括 fault classification、degradation trend / RUL 和 maintenance lead time。这一层依赖开源 run-to-failure 数据、维修记录、停机记录或专家复核补充。</li>
+</ol>
+<p>当前 FU13 优先支持第一层和第二层；第三层需要开源 run-to-failure 数据、维修记录、停机记录或专家复核补充，不能从现有 FU13 证据直接推出。</p>
+<div class="table-wrap"><table><thead><tr><th>层级</th><th>任务</th><th>指标</th><th>当前 FU13 支持</th><th>开源数据支持</th><th>说明</th></tr></thead><tbody><tr><td>无标签</td><td>forecasting</td><td>MAE、RMSE、coverage</td><td>已支持</td><td>候选支持 / 待来源与授权核对</td><td>TTM 已在 FU13 跑通</td></tr><tr><td>无标签</td><td>imputation / reconstruction</td><td>MAE、mask reconstruction error</td><td>待实现</td><td>候选支持 / 待来源与授权核对</td><td>适合 MOMENT / UniTS / 自研预训练</td></tr><tr><td>无标签</td><td>representation consistency</td><td>clustering、linear probe</td><td>待实现</td><td>候选支持 / 待来源与授权核对</td><td>支持状态表征主线</td></tr><tr><td>弱标签</td><td>stage classification</td><td>accuracy、F1</td><td>字段与输入排除口径确认后可支持</td><td>候选支持 / 待来源与授权核对</td><td>验证工艺阶段表征</td></tr><tr><td>弱标签</td><td>quality_flag prediction</td><td>accuracy、F1</td><td>字段与输入排除口径确认后可支持</td><td>候选支持 / 待来源与授权核对</td><td>验证质量标记语义</td></tr><tr><td>弱标签</td><td>residual high-percentile detection</td><td>precision@k、expert review hit rate</td><td>可支持</td><td>候选支持 / 待来源与授权核对</td><td>对接候选异常信号</td></tr><tr><td>预测性维护</td><td>fault classification</td><td>accuracy、F1、AUROC</td><td>需标签</td><td>候选支持 / 待来源与授权核对</td><td>依赖公开故障数据</td></tr><tr><td>预测性维护</td><td>degradation trend / RUL</td><td>MAE、RMSE、lead-time metric</td><td>需标签</td><td>候选支持 / 待来源与授权核对</td><td>第三层目标</td></tr><tr><td>预测性维护</td><td>maintenance lead time</td><td>lead-time recall、precision@k、提前量分布</td><td>需标签</td><td>候选支持 / 待来源与授权核对</td><td>需要维护事件、停机时间或故障确认时间</td></tr></tbody></table></div>
+<h2 id="指标口径与无效解释">指标口径与无效解释</h2>
+<p>以下契约用于约束 C / B 阶段评测记录，不展开为完整实验方案。每个任务在进入比较前都应记录 <code>primary_metric</code>、<code>valid_when</code>、<code>split_policy</code>、<code>aggregation</code> 和 <code>invalid_interpretation</code>。</p>
+<div class="table-wrap"><table><thead><tr><th>任务</th><th>primary_metric</th><th>valid_when</th><th>split_policy</th><th>aggregation</th><th>invalid_interpretation</th></tr></thead><tbody><tr><td>forecasting</td><td>MAE 或 RMSE，概率模型补 coverage</td><td>预测窗口、horizon、目标变量和缺失处理一致</td><td>按时间或 run 切分，避免未来信息泄漏</td><td>按变量、设备或 run 汇总后报告均值和关键分位数</td><td>低预测误差不等于故障预警能力</td></tr><tr><td>imputation / reconstruction</td><td>mask reconstruction error 或 MAE</td><td>mask 策略、可见上下文和被遮蔽变量一致</td><td>mask 位置在评测集内生成，训练与评测窗口隔离</td><td>按 mask 类型、变量和设备汇总</td><td>补全好不等于已识别异常或维修需求</td></tr><tr><td>representation consistency</td><td>linear probe F1 或 clustering score</td><td>embedding 固定，probe 标签不参与表征训练</td><td>按设备、run 或时间切分，probe 训练集与测试集隔离</td><td>按 split 汇总，必要时报告类别加权指标</td><td>聚类结构不等于真实健康状态分级</td></tr><tr><td>stage classification</td><td>macro F1</td><td>stage 标签来源明确，且 stage 未作为输入 metadata 被直接读取</td><td>按时间、batch 或 run 切分，避免同批次泄漏</td><td>按 stage 类别和整体 macro 汇总</td><td>如果 stage 进入输入，准确率不能解释为表征能力</td></tr><tr><td>quality_flag prediction</td><td>macro F1</td><td>quality_flag 标签来源明确，且 quality_flag 未作为输入 metadata 被直接读取</td><td>按时间、batch 或 run 切分，避免同源规则泄漏</td><td>按 flag 类别、设备和整体 macro 汇总</td><td>如果 quality_flag 进入输入，准确率不能解释为语义理解</td></tr><tr><td>residual high-percentile detection</td><td>precision@k 或 expert review hit rate</td><td>残差定义、top-k 比例和专家复核口径预先确定</td><td>候选生成窗口与复核窗口分离，避免后验挑选</td><td>按设备、时间段和候选批次汇总</td><td>高命中率不等于生产告警阈值或维修建议</td></tr><tr><td>fault classification</td><td>macro F1 或 AUROC</td><td>故障类型标签、故障时间和正常样本定义明确</td><td>按设备、run 或工况切分，避免同一故障轨迹泄漏</td><td>按故障类型和整体指标汇总</td><td>公开故障分类结果不等于 FU13 已有故障诊断能力</td></tr><tr><td>degradation trend / RUL</td><td>RUL MAE / RMSE 或 lead-time metric</td><td>存在 run-to-failure、退化标签或可信 RUL 构造规则</td><td>按 unit / run 切分，禁止同一退化轨迹跨集合</td><td>按 unit、工况和 horizon 汇总</td><td>RUL 指标不等于当前可精确估计真实设备寿命</td></tr><tr><td>maintenance lead time</td><td>lead-time recall 或 precision@k</td><td>存在维护事件、停机时间或故障确认时间，事件定义可追溯</td><td>按事件或 run 切分，避免同一事件前后泄漏</td><td>按事件类型、提前量区间和设备汇总</td><td>提前命中不等于自动维修建议或现场处置闭环</td></tr></tbody></table></div>
+<h2 id="无标签任务">无标签任务</h2>
+<p>无标签任务是 B08 当前最稳健的基础评测层，适合用于预训练目标、开源模型对照和缺少故障标签的真实设备数据场景。forecasting 可以评估模型对正常轨迹和短期趋势的拟合能力；imputation / reconstruction 可以评估模型对缺失、遮蔽或跨传感器片段的恢复能力；representation consistency 可以评估窗口或设备状态 embedding 是否形成稳定结构。</p>
+<p>这类任务能够证明模型具备时间序列建模、补全或表征能力，但不代表模型已经具备业务告警能力。尤其是 forecasting residual 只能作为后续候选信号来源，不能直接等同于异常告警、设备故障或维护建议。</p>
+<h2 id="弱标签-业务代理任务">弱标签 / 业务代理任务</h2>
+<p>弱标签或业务代理任务用于连接真实设备语义和模型表征能力。stage classification 关注工艺阶段是否被模型区分；quality_flag prediction 关注质量标记是否能被时序上下文解释；residual high-percentile detection、trend/spike candidate signal 关注模型输出是否能产生值得进一步复核的候选异常信号。</p>
+<p>这些任务的标签通常来自业务字段、规则构造或人工复核，不一定等同于真实故障标签。residual high-percentile、trend/spike candidate 都应被写成候选信号，不是告警阈值、维修建议或生产处置策略。进入后续阶段前，需要明确样本构造方式、时间切分策略、候选信号定义和专家复核口径。</p>
+<h2 id="预测性维护目标任务">预测性维护目标任务</h2>
+<p>预测性维护目标任务包括 fault classification、degradation trend / RUL 和 maintenance lead time。它们更接近 B08 的长期设备健康管理目标，但也对数据证据要求最高。</p>
+<p>fault classification 需要明确故障类型标签；RUL 需要完整或近似完整的退化过程和 run-to-failure 记录；maintenance lead time 需要维护事件、停机记录、故障确认时间或专家复核结果。缺少这些证据时，不能从 FU13 当前 forecasting、残差或弱标签结果直接推出模型已经具备故障分类、RUL 精确估计或维护提前量预测能力。</p>
+<h2 id="FU13-当前支持情况">FU13 当前支持情况</h2>
+<p>FU13 当前最适合作为真实工业设备 pipeline 和第一、第二层任务的验证入口。已有证据支持 forecasting 路线，其中 TTM 已在 FU13 上跑通，可作为 forecasting-only 基线和残差候选信号来源。</p>
+<p>FU13 可继续支持 stage classification、quality_flag prediction 和 residual high-percentile detection 等弱标签任务，前提是阶段字段、质量标记、输入排除口径和候选信号构造口径被清楚记录。stage classification 与 quality_flag prediction 只有在确认字段来源、标签是否参与输入、是否经过专家复核或业务规则复核后，才适合解释为表征能力验证。</p>
+<p>如果 stage 或 quality_flag 作为输入 metadata 被模型直接读取，则不能把分类准确率解释为模型学到了阶段表征或质量标记语义；此时结果最多说明模型能够利用显式字段完成读出任务。imputation / reconstruction 与 representation consistency 尚待实现，不应写成当前已完成能力。</p>
+<p>FU13 当前不应被表述为已经支撑完整预测性维护闭环。fault classification、RUL、maintenance lead time 仍需要真实故障标签、维修记录、停机记录或专家复核补充。</p>
+<h2 id="开源数据补充情况">开源数据补充情况</h2>
+<p>开源预测性维护数据用于补足 FU13 暂时缺少的第三层证据，但当前只能写成候选支持 / 待来源与授权核对。C-MAPSS 更偏 RUL 和退化轨迹评测；IMS Bearing、PRONOSTIA / FEMTO-ST 更偏轴承退化和 run-to-failure 过程；Tennessee Eastman Process 更偏过程故障分类、异常监控和多变量过程状态评测，不应笼统覆盖所有第三层任务。</p>
+<p>这些数据适合作为公开 benchmark、方法对照和第三层目标验证入口，但不能替代 FU13 的现场语义。进入正式训练或对外成果前，需要逐项核对来源、许可证、再分发边界、标签语义、schema 映射和 split policy，避免把公开数据实验直接解释为生产预测性维护能力。</p>
+<h2 id="训练路线接口">训练路线接口</h2>
+<p>为了让任务矩阵能被后续训练路线引用，建议每个候选实验条目至少保留以下字段：</p>
+<div class="table-wrap"><table><thead><tr><th>字段</th><th>含义</th></tr></thead><tbody><tr><td>task_id</td><td>任务唯一标识，例如 <code>fu13_forecasting_v1</code> 或 <code>cmapps_rul_v1</code>，用于追踪数据、模型和报告</td></tr><tr><td>stage</td><td>所属阶段，例如 A 研究定义、C 开源模型适配、B 自研原型判断</td></tr><tr><td>required_data</td><td>任务需要的数据类型，例如 FU13 窗口、公开 run-to-failure 数据、维护事件表或专家复核样本</td></tr><tr><td>required_label</td><td>任务需要的标签或弱标签，例如 stage、quality_flag、fault_type、RUL、maintenance_event；无标签任务应明确为 none</td></tr><tr><td>baseline</td><td>必须对照的强基线，例如 TTM forecasting-only、简单统计补全、冻结 embedding + linear probe</td></tr><tr><td>candidate_model_type</td><td>候选模型类型，例如 forecasting-first 开源模型、multi-task / representation 开源模型、自研原型</td></tr><tr><td>primary_metric</td><td>预先指定的主指标，只能在评测前确定，不能后验挑选</td></tr><tr><td>gate</td><td>进入下一阶段的门槛，包括最低相对 / 绝对增益、是否需要多 seed 或置信区间、失败时 No-Go 条件</td></tr><tr><td>artifact_output</td><td>需要沉淀的产物，例如指标表、失败原因记录、候选样本列表、专家复核记录或模型适配说明</td></tr><tr><td>known_invalid_claims</td><td>明确禁止的解释，例如生产告警、RUL 精确估计、自动维修建议、由弱标签直接推出故障诊断能力</td></tr></tbody></table></div>
+<h2 id="进入-C-B-阶段的指标要求">进入 C / B 阶段的指标要求</h2>
+<p>C 阶段要求每个开源模型在可支持任务上给出同口径指标或明确失败原因。同口径至少包括统一数据窗口、统一任务定义、统一指标计算方式和可追溯的失败记录；如果模型因输入长度、变量形式、依赖环境、任务头缺失或许可证边界无法运行，应明确记录原因，而不是用缺失结果替代评估。</p>
+<p>B 阶段不得后验挑选任务。进入自研原型前，必须预先指定主任务、强基线、最低相对 / 绝对增益、是否需要多 seed 或置信区间，以及失败时 No-Go 条件。自研原型至少应在一个 representation / imputation / weak-label 任务上显示相对 forecasting-only 模型的明确增益，否则不进入更大规模训练。</p>
+<p>这里的增益可以来自更好的补全误差、更稳定的状态表征、更高的弱标签分类指标，或更高质量的专家复核候选命中率；但所有增益都需要在同一数据切分、同一指标口径和预先声明的 gate 下比较。</p>
+<p>若 C 阶段只证明 forecasting-only 模型已经足够，或自研原型无法在 representation / imputation / weak-label 任务上提供明确收益，则应优先沉淀开源模型适配和评测流程，而不是扩大自研预训练规模。</p>
+<p>如果没有足够数据、标签、复核记录或统计证据支撑，上述任务只能保留为路线假设，不进入大规模训练。</p></article>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ HTML 阅读版；Markdown 源文档保留用于编辑、审计和 agent 执行。</footer>
+</body>
+</html>

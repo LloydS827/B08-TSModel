@@ -1,0 +1,85 @@
+:root {
+  --bg: #f3f1ea;
+  --paper: #fffdf7;
+  --ink: #1e252b;
+  --muted: #68717a;
+  --line: #ddd4c4;
+  --accent: #0f766e;
+  --accent-2: #b45309;
+  --accent-soft: #e4f2ef;
+  --gold-soft: #fff4d8;
+  --blue-soft: #eaf1fb;
+  --red-soft: #fae8e3;
+  --shadow: 0 18px 50px rgba(38, 31, 22, 0.08);
+  --radius: 18px;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at 15% 0%, rgba(15, 118, 110, 0.10), transparent 30%),
+    radial-gradient(circle at 85% 8%, rgba(180, 83, 9, 0.11), transparent 28%),
+    linear-gradient(180deg, #f8f5ed 0%, var(--bg) 100%);
+  color: var(--ink);
+  font: 16px/1.72 "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+}
+a { color: var(--accent); text-decoration: none; font-weight: 700; }
+a:hover { text-decoration: underline; }
+.layout { width: min(1180px, calc(100% - 40px)); margin: 0 auto; }
+.hero { padding: 48px 0 28px; }
+.eyebrow { color: var(--accent-2); font: 700 13px/1.2 "Noto Sans SC", "PingFang SC", sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+h1 { margin: 10px 0 14px; font-size: clamp(32px, 5vw, 58px); line-height: 1.08; letter-spacing: -0.04em; }
+.lead { max-width: 900px; color: #46525c; font-size: 18px; }
+.navbar {
+  position: sticky; top: 0; z-index: 10;
+  background: rgba(255, 253, 247, .88); backdrop-filter: blur(14px);
+  border-top: 1px solid rgba(221, 212, 196, .75);
+  border-bottom: 1px solid rgba(221, 212, 196, .75);
+}
+.navbar .layout { display: flex; gap: 12px; flex-wrap: wrap; padding: 10px 0; }
+.navbar a { color: #39434c; font: 700 13px/1.2 "Noto Sans SC", "PingFang SC", sans-serif; padding: 8px 10px; border-radius: 999px; }
+.navbar a:hover { background: var(--accent-soft); text-decoration: none; }
+main.layout { padding: 26px 0 64px; }
+.section { margin: 26px 0; }
+.panel, .card, .article {
+  background: rgba(255, 253, 247, .92);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.panel { padding: 24px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.card { padding: 18px; }
+.card h3 { margin-top: 0; }
+.kicker { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); font: 800 12px/1.2 "Noto Sans SC", "PingFang SC", sans-serif; }
+.warn { background: var(--gold-soft); border-color: #efd090; }
+.danger { background: var(--red-soft); border-color: #efb4a5; }
+.info { background: var(--blue-soft); border-color: #bfd3f0; }
+.article { padding: clamp(20px, 4vw, 40px); overflow: hidden; }
+.article h1 { font-size: clamp(30px, 4vw, 48px); }
+.article h2 { margin-top: 34px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 25px; }
+.article h3 { margin-top: 26px; font-size: 20px; }
+.article p { margin: 12px 0; }
+.article ul, .article ol { padding-left: 1.35em; }
+.table-wrap { overflow-x: auto; margin: 16px 0 22px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+table { width: 100%; border-collapse: collapse; min-width: 720px; font-size: 14px; }
+th, td { padding: 10px 12px; border-bottom: 1px solid #e8e1d5; vertical-align: top; }
+th { background: #f5efe3; text-align: left; font-family: "Noto Sans SC", "PingFang SC", sans-serif; color: #2d3840; }
+tr:last-child td { border-bottom: 0; }
+code { background: #f0eadf; padding: 2px 5px; border-radius: 5px; font-size: .92em; }
+pre { overflow-x: auto; padding: 16px; background: #1f2933; color: #f8fafc; border-radius: 14px; }
+pre code { background: transparent; color: inherit; padding: 0; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.pill { display: inline-flex; padding: 7px 10px; border: 1px solid var(--line); border-radius: 999px; background: rgba(255,255,255,.6); color: #4b5560; font: 700 13px/1.2 "Noto Sans SC", "PingFang SC", sans-serif; }
+.footer { color: var(--muted); font-size: 13px; padding: 28px 0 48px; }
+.timeline { display: grid; gap: 12px; }
+.step { display: grid; grid-template-columns: 44px 1fr; gap: 14px; align-items: start; }
+.step .num { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 800; }
+.callout { padding: 16px 18px; border-radius: 16px; border: 1px solid var(--line); margin: 16px 0; }
+@media (max-width: 720px) {
+  .layout { width: min(100% - 24px, 1180px); }
+  .hero { padding-top: 32px; }
+  .step { grid-template-columns: 1fr; }
+  table { min-width: 620px; }
+}

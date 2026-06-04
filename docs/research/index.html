@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>B08 A 阶段研究 HTML 索引</title>
+  <link rel="stylesheet" href="research-style.css">
+</head>
+<body>
+  <header class="hero layout">
+    <div class="eyebrow">B08 Research Dashboard</div>
+    <h1>A 阶段研究资产 HTML 索引</h1>
+    <p class="lead">把论文/专利主线、开源模型调研、预测性维护数据、任务指标和 C 阶段证据需求集中成可阅读、可判断、可继续执行的 HTML 入口。Markdown 源文档继续保留，但默认阅读路径改为 HTML。</p>
+    <div class="meta-row"><a class="pill" href="../index.html">文档总入口</a><a class="pill" href="../foundation-timeseries-research-roadmap.html">研究路线</a></div>
+  </header>
+  <nav class="navbar"><div class="layout"><a href="#decision">阶段判断</a><a href="#knowledge">知识成果</a><a href="#evidence">证据来源</a><a href="#execution">下一步</a><a href="#boundaries">边界</a></div></nav>
+  <main class="layout">
+    <section id="decision" class="section panel">
+      <span class="kicker">阶段判断</span>
+      <h2>当前主线</h2>
+      <p>B08 已从真实数据与模型评测沙盒推进到“面向小样本工业物联设备健康管理的时序基础模型”学术主线。短期第一目标是论文、专利、学术综述和模型路线论证；第二目标是工程化产品承接，包括统一数据语料、模型适配和可复现评测 workflow。</p>
+      <div class="grid">
+        <div class="card info"><h3>论文题目</h3><p>面向小样本工业物联设备健康管理的时序基础模型框架与验证</p></div>
+        <div class="card"><h3>专利候选</h3><p>P1-P5 固定五个方向，后续新增方向需要单独确认。</p></div>
+        <div class="card warn"><h3>证据预算</h3><p>source registry 第一轮 18 条来源，15 条 accepted/candidate，3 条 needs-review。</p></div>
+      </div>
+    </section>
+
+    <section id="knowledge" class="section">
+      <h2>知识成果优先线</h2>
+      <div class="grid">
+        <article class="card"><span class="kicker">主文档</span><h3><a href="paper-patent-directions.html">论文与专利方向</a></h3><p>论文主线蓝图、P1-P5 专利候选、E1-E5 C 阶段证据需求。</p></article>
+        <article class="card"><span class="kicker">学术定位</span><h3><a href="academic-mainline-review.html">学术主线综述</a></h3><p>说明为什么 B08 不是普通 forecasting，而是工业设备健康管理的基础模型问题。</p></article>
+        <article class="card"><span class="kicker">模型调研</span><h3><a href="open-source-model-paper-matrix.html">开源时序基础模型论文矩阵</a></h3><p>TTM、MOMENT、Chronos、TimesFM、Moirai、UniTS 等模型能力和缺口。</p></article>
+        <article class="card"><span class="kicker">数据调研</span><h3><a href="predictive-maintenance-dataset-matrix.html">预测性维护数据集矩阵</a></h3><p>FU13 与 C-MAPSS、IMS、PRONOSTIA、TEP 等开放数据的验证关系。</p></article>
+        <article class="card"><span class="kicker">任务指标</span><h3><a href="task-metric-matrix.html">任务与指标矩阵</a></h3><p>forecasting、imputation、representation、弱标签代理和第三层维护目标任务。</p></article>
+        <article class="card"><span class="kicker">来源证据</span><h3><a href="source-registry.html">来源登记表</a></h3><p>所有外部论文、模型、数据和 prior-art 来源统一登记，不拆碎片笔记。</p></article>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>工程化承接与治理</h2>
+      <div class="grid">
+        <article class="card"><span class="kicker">训练路线</span><h3><a href="foundation-model-training-route.html">基础模型训练路线</a></h3><p>B 阶段仍是条件路线，必须由 A/C 证据触发。</p></article>
+        <article class="card"><span class="kicker">产品化</span><h3><a href="productization-roadmap.html">产品化路线</a></h3><p>工程化产品第二目标：数据语料、adapter、评测 workflow 和研发工作台。</p></article>
+        <article class="card"><span class="kicker">重构规则</span><h3><a href="project-mainline-refactor-blueprint.html">项目主线重构蓝图</a></h3><p>定义必要重构执行门，避免把债务模糊后置。</p></article>
+        <article class="card"><span class="kicker">重构审计</span><h3><a href="mainline-refactor-audit.html">主线必要重构审计</a></h3><p>记录 A 阶段是否需要立即代码重构，以及 C/B 前触发条件。</p></article>
+      </div>
+    </section>
+
+    <section id="evidence" class="section panel">
+      <span class="kicker">证据地图</span>
+      <h2>从来源到下一步实验</h2>
+      <div class="timeline">
+        <div class="step"><div class="num">1</div><div><strong>E1 forecasting residual</strong><p>用 TTM / Chronos / TimesFM / Moirai 等 forecasting-first 模型形成残差候选信号，但不解释为生产告警。</p></div></div>
+        <div class="step"><div class="num">2</div><div><strong>E2 representation</strong><p>用 MOMENT / UniTS 等表征能力验证阶段、质量或弱标签 proxy 的可分性，不解释为真实健康等级。</p></div></div>
+        <div class="step"><div class="num">3</div><div><strong>E3 imputation</strong><p>用 mask reconstruction / imputation 验证多传感器缺失与重建任务，不解释为异常识别。</p></div></div>
+        <div class="step"><div class="num">4</div><div><strong>E4 open data PM</strong><p>用 C-MAPSS、IMS、PRONOSTIA、TEP 补充故障、退化、RUL 或过程异常证据，不外推为 FU13 已具备 RUL。</p></div></div>
+        <div class="step"><div class="num">5</div><div><strong>E5 patent effect</strong><p>为 P1-P5 形成技术效果样例、对照表和 prior-art 差异材料，不解释为专利授权结论。</p></div></div>
+      </div>
+    </section>
+
+    <section id="execution" class="section panel">
+      <span class="kicker">推荐阅读顺序</span>
+      <h2>先判断，再深入</h2>
+      <ol>
+        <li>先读 <a href="paper-patent-directions.html">论文与专利方向</a>，明确主线和下一步证据需求。</li>
+        <li>再读 <a href="source-registry.html">来源登记表</a>，检查每个结论对应的 source ID。</li>
+        <li>需要学术背景时读 <a href="academic-mainline-review.html">学术主线综述</a> 和 <a href="open-source-model-paper-matrix.html">模型矩阵</a>。</li>
+        <li>进入实验设计前读 <a href="task-metric-matrix.html">任务与指标矩阵</a> 和 <a href="predictive-maintenance-dataset-matrix.html">数据集矩阵</a>。</li>
+        <li>只有 C 阶段证据充分后，再读 <a href="foundation-model-training-route.html">训练路线</a> 判断 B 阶段是否启动。</li>
+      </ol>
+    </section>
+
+    <section id="boundaries" class="section callout danger">
+      <span class="kicker">边界提醒</span>
+      <h2>当前不主张的能力</h2>
+      <p>当前 HTML 索引用于阅读和决策，不改变研究结论边界：不承诺生产告警、FU13 RUL 精确估计、自动维修建议、专利授权或自研基础模型训练成功。所有 C/B 阶段工作仍需后续实验、专家复核和数据授权支撑。</p>
+    </section>
+  </main>
+  <footer class="layout footer">更新日期：2026-06-04 ｜ 研究 HTML 索引默认链接 HTML 阅读版，Markdown 源文档保留用于编辑和审计。</footer>
+</body>
+</html>
