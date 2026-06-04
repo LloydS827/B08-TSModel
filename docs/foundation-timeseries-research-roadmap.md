@@ -17,6 +17,10 @@
 
 这些基础说明项目已经能承接 foundation model 的输入输出验证。真实维修记录、生产告警闭环和现场维护策略仍然重要，但它们主要是工程应用 concern，不是唯一研究 blocker；模型研发下一步还需要先回答任务谱系、模型能力、数据规模和评测口径问题。
 
+## A 阶段执行资产
+
+本阶段执行资产维护在 `docs/research/`。其中 `academic-mainline-review.md`、`paper-patent-directions.md` 服务知识成果优先线；`foundation-model-training-route.md` 和 `productization-roadmap.md` 服务工程化产品承接线；`project-mainline-refactor-blueprint.md` 定义整体重构前置规则；`mainline-refactor-audit.md` 承接必要重构执行门，当前结论是 A 阶段不需要立即源码、CLI、config 或 tests 重构，但 C/B 阶段前需要围绕 adapter contract、CLI contract、config schema 和 tests acceptance 做更细的 contract 审查；开源模型论文矩阵、预测性维护数据矩阵和任务指标矩阵分别支撑 C/B 阶段决策。
+
 ## A. 学术 / 行业 / 模型路线调研
 
 A 阶段目标是建立设备时序基础模型的任务、数据和模型路线判断，避免在没有证据的情况下直接进入自研训练。
@@ -41,7 +45,7 @@ A 阶段目标是建立设备时序基础模型的任务、数据和模型路线
 
 待调研的 models / papers / route：
 
-- Time-series foundation models：TTM、MOMENT、Chronos、TimesFM、Moirai、UniTS。
+- Time-series foundation models：TTM、MOMENT、Chronos、TimesFM、Moirai / Uni2TS、UniTS。
 - Forecasting-oriented foundation models 与 zero-shot / few-shot forecasting 论文。
 - Masked time-series modeling、contrastive representation learning、multi-task time-series learning。
 - Industrial time-series、predictive maintenance、equipment health management 相关综述。
@@ -59,7 +63,7 @@ C 阶段目标是在同一套设备窗口、指标和报告口径下验证开源
 - MOMENT
 - Chronos
 - TimesFM
-- Moirai
+- Moirai / Uni2TS
 - UniTS
 
 比较维度：
@@ -91,7 +95,7 @@ B 阶段成功标准应包括：自研模型要解决的开源模型缺口、最
 后续资料整理建议按以下结构维护：
 
 - 学术综述：时间序列基础模型、工业设备时序、预测性维护、设备健康管理。
-- 模型资料：TTM、MOMENT、Chronos、TimesFM、Moirai、UniTS 的论文、仓库、模型卡和许可证。
+- 模型资料：TTM、MOMENT、Chronos、TimesFM、Moirai / Uni2TS、UniTS 的论文、仓库、模型卡和许可证。
 - 任务资料：forecasting、imputation、representation、anomaly、classification、RUL 的数据集和指标。
 - 项目资料：FU13 pipeline、TTM 真实数据能力复核、`leak_current_monitoring` 场景评测、schema map。
 - 决策资料：开源模型能力矩阵、失败原因记录、训练目标候选和 Go / No-Go 结论。
@@ -106,7 +110,7 @@ B 阶段成功标准应包括：自研模型要解决的开源模型缺口、最
 
 进入 B 阶段前需要回答：
 
-- TTM、MOMENT、Chronos、TimesFM、Moirai、UniTS 在统一窗口和指标下的主要缺口是什么？
+- TTM、MOMENT、Chronos、TimesFM、Moirai / Uni2TS、UniTS 在统一窗口和指标下的主要缺口是什么？
 - 缺口能否通过 adapter、prompt、轻量微调或数据预处理解决？
 - 自研训练是否有明确优于开源模型的目标任务和可验证指标？
 - 当前数据规模、算力和维护成本是否支撑最小原型？
