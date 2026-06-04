@@ -34,48 +34,50 @@
       <span class="kicker">Evidence Packages</span>
       <h2>E1-E5 证据包与 experiment id</h2>
       <p>以下条目只定义最小证据包的执行登记关系。真实实验结果必须来自 <a href="../../configs/c_stage_minimum_evidence.yaml">configs/c_stage_minimum_evidence.yaml</a> 契约校验后的运行产物。</p>
-      <table>
-        <thead>
-          <tr>
-            <th>Evidence</th>
-            <th>Experiment id</th>
-            <th>最小问题</th>
-            <th>禁止解释</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td><strong>E1_forecasting_residual</strong></td>
-            <td><code>c0_fu13_forecast_residual_v1</code></td>
-            <td>forecasting 残差是否形成可追踪候选信号。</td>
-            <td>不得把残差候选直接解释为线上告警、FU13 剩余寿命或维修动作。</td>
-          </tr>
-          <tr>
-            <td><strong>E2_representation</strong></td>
-            <td><code>c0_fu13_representation_probe_v1</code></td>
-            <td>表征 probe 是否在阶段、质量或弱标签 proxy 上有可分性。</td>
-            <td>不得解释为真实健康等级、生产判断或授权结论。</td>
-          </tr>
-          <tr>
-            <td><strong>E3_imputation</strong></td>
-            <td><code>c0_fu13_imputation_reconstruction_v1</code></td>
-            <td>mask reconstruction / imputation 是否能形成多传感器重建证据。</td>
-            <td>不得解释为异常识别、线上告警或维修建议。</td>
-          </tr>
-          <tr>
-            <td><strong>E4_open_data_pm</strong></td>
-            <td><code>c0_open_data_pm_audit_v1</code></td>
-            <td>开放预测性维护数据能否补足 FU13 缺口和任务指标映射。</td>
-            <td>不得外推为 FU13 已具备同等标签或生产级寿命估计。</td>
-          </tr>
-          <tr>
-            <td><strong>E5_patent_effect</strong></td>
-            <td><code>c0_patent_effect_and_decision_gate_v1</code></td>
-            <td>把 E1-E4 的输出汇总为 P1-P5 技术效果样例和 C -> B 决策材料。</td>
-            <td>不得解释为新颖性、创造性、授权或生产处置结论。</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Evidence</th>
+              <th>Experiment id</th>
+              <th>最小问题</th>
+              <th>禁止解释</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>E1_forecasting_residual</strong></td>
+              <td><code>c0_fu13_forecast_residual_v1</code></td>
+              <td>forecasting 残差是否形成可追踪候选信号。</td>
+              <td>不得把残差候选直接解释为线上告警、FU13 剩余寿命或维修动作。</td>
+            </tr>
+            <tr>
+              <td><strong>E2_representation</strong></td>
+              <td><code>c0_fu13_representation_probe_v1</code></td>
+              <td>表征 probe 是否在阶段、质量或弱标签 proxy 上有可分性。</td>
+              <td>不得解释为真实健康等级、生产判断或授权结论。</td>
+            </tr>
+            <tr>
+              <td><strong>E3_imputation</strong></td>
+              <td><code>c0_fu13_imputation_reconstruction_v1</code></td>
+              <td>mask reconstruction / imputation 是否能形成多传感器重建证据。</td>
+              <td>不得解释为异常识别、线上告警或维修建议。</td>
+            </tr>
+            <tr>
+              <td><strong>E4_open_data_pm</strong></td>
+              <td><code>c0_open_data_pm_audit_v1</code></td>
+              <td>开放预测性维护数据能否补足 FU13 缺口和任务指标映射。</td>
+              <td>不得外推为 FU13 已具备同等标签或生产级寿命估计。</td>
+            </tr>
+            <tr>
+              <td><strong>E5_patent_effect</strong></td>
+              <td><code>c0_patent_effect_and_decision_gate_v1</code></td>
+              <td>把 E1-E4 的输出汇总为 P1-P5 技术效果样例和 C -> B 决策材料。</td>
+              <td>不得解释为新颖性、创造性、授权或生产处置结论。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section id="mapping" class="section">
@@ -125,48 +127,50 @@
     <section id="patent" class="section">
       <h2>P1-P5 最小技术效果样例</h2>
       <p>下表是报告模板的最小样例结构，不代表效果已成立。每一项都必须有 prior-art 风险入口，默认入口为 <a href="source-registry.html">source-registry.html</a> 或后续独立 prior-art 风险表。</p>
-      <table>
-        <thead>
-          <tr>
-            <th>Patent id</th>
-            <th>最小对照</th>
-            <th>证据产物</th>
-            <th>prior-art 风险入口</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>P1_stage_sensor_encoding</td>
-            <td>with vs without stage and sensor domain encoding</td>
-            <td>representation or residual group difference</td>
-            <td>required</td>
-          </tr>
-          <tr>
-            <td>P2_small_sample_pretraining</td>
-            <td>zero-shot vs frozen probe vs few-shot adapter</td>
-            <td>small sample adaptation table</td>
-            <td>required</td>
-          </tr>
-          <tr>
-            <td>P3_weak_label_anomaly_signal</td>
-            <td>forecasting residual vs imputation error vs weak proxy queue</td>
-            <td>candidate signal review table</td>
-            <td>required</td>
-          </tr>
-          <tr>
-            <td>P4_real_open_data_fusion</td>
-            <td>FU13 schema vs open data schema task metric mapping</td>
-            <td>fusion mapping and gap table</td>
-            <td>required</td>
-          </tr>
-          <tr>
-            <td>P5_multitask_health_evaluation</td>
-            <td>forecasting only vs residual/reconstruction/probe/open-data summary</td>
-            <td>multitask health evidence table</td>
-            <td>required</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Patent id</th>
+              <th>最小对照</th>
+              <th>证据产物</th>
+              <th>prior-art 风险入口</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>P1_stage_sensor_encoding</td>
+              <td>with vs without stage and sensor domain encoding</td>
+              <td>representation or residual group difference</td>
+              <td>required</td>
+            </tr>
+            <tr>
+              <td>P2_small_sample_pretraining</td>
+              <td>zero-shot vs frozen probe vs few-shot adapter</td>
+              <td>small sample adaptation table</td>
+              <td>required</td>
+            </tr>
+            <tr>
+              <td>P3_weak_label_anomaly_signal</td>
+              <td>forecasting residual vs imputation error vs weak proxy queue</td>
+              <td>candidate signal review table</td>
+              <td>required</td>
+            </tr>
+            <tr>
+              <td>P4_real_open_data_fusion</td>
+              <td>FU13 schema vs open data schema task metric mapping</td>
+              <td>fusion mapping and gap table</td>
+              <td>required</td>
+            </tr>
+            <tr>
+              <td>P5_multitask_health_evaluation</td>
+              <td>forecasting only vs residual/reconstruction/probe/open-data summary</td>
+              <td>multitask health evidence table</td>
+              <td>required</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </section>
 
     <section id="gate" class="section panel">

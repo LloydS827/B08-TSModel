@@ -14,7 +14,7 @@
 
 ## 数据与标签核对
 
-| evidence_id | source | license | schema | label | split policy | reviewer | status |
+| evidence_id | source_status | license_status | schema_status | label_status | split_policy_status | reviewer | status |
 |---|---|---|---|---|---|---|---|
 | E1_forecasting_residual | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 |
 | E2_representation | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 | 待填写 |
@@ -30,9 +30,10 @@
 - baseline and candidate:
 - metrics:
 - artifacts:
-- result summary:
-- failure cases:
-- boundary notes:
+- result_summary:
+- failure_cases:
+- boundary_notes:
+- invalid_claims: 不得解释为生产告警、FU13 RUL、自动维修建议或专利授权结论。
 
 ## E2_representation
 
@@ -42,9 +43,10 @@
 - baseline and candidate:
 - metrics:
 - artifacts:
-- result summary:
-- failure cases:
-- boundary notes:
+- result_summary:
+- failure_cases:
+- boundary_notes:
+- invalid_claims: 不得解释为真实健康等级、生产告警、自动维修建议或专利授权结论。
 
 ## E3_imputation
 
@@ -54,9 +56,10 @@
 - baseline and candidate:
 - metrics:
 - artifacts:
-- result summary:
-- failure cases:
-- boundary notes:
+- result_summary:
+- failure_cases:
+- boundary_notes:
+- invalid_claims: 不得解释为异常识别结论、生产告警、FU13 RUL 或自动维修建议。
 
 ## E4_open_data_pm
 
@@ -66,9 +69,10 @@
 - license and use boundary:
 - task metric mapping:
 - FU13 gap note:
-- result summary:
-- failure cases:
-- boundary notes:
+- result_summary:
+- failure_cases:
+- boundary_notes:
+- invalid_claims: 不得解释为 FU13 已具备同等标签、生产级 RUL、生产告警或自动维修建议。
 
 ## E5_patent_effect
 
@@ -77,9 +81,10 @@
 - CT mapping: `CT4_decision_gate`
 - patent ids: P1_stage_sensor_encoding, P2_small_sample_pretraining, P3_weak_label_anomaly_signal, P4_real_open_data_fusion, P5_multitask_health_evaluation
 - prior-art risk table link:
-- result summary:
-- failure cases:
-- boundary notes:
+- result_summary:
+- failure_cases:
+- boundary_notes:
+- invalid_claims: 不得解释为专利授权结论，不得解释为新颖性或创造性法律判断，不得解释为生产告警或自动维修建议。
 
 ## P1-P5 技术效果样例表
 
@@ -111,6 +116,6 @@
 ## 禁止过度解释
 
 - 不得把 planned、needs-review 或 failed 状态写成 completed。
-- 不得把 proxy、残差、重建误差、probe 分数或开放数据映射写成线上业务结论、FU13 剩余寿命结论、闭环处置建议或授权判断。
-- 不得在缺少 source、license、schema、label、split policy 任一核对项时给出 Go_to_B_minimal_prototype。
+- 不得把 proxy、残差、重建误差、probe 分数或开放数据映射写成线上业务结论、FU13 剩余寿命结论、自动维修建议、专利授权结论、新颖性判断或创造性判断。
+- 缺少核对项时不得 Go；不得在缺少 source_status、license_status、schema_status、label_status、split_policy_status 任一核对项时给出 Go_to_B_minimal_prototype。
 - 不得绕过 prior-art 风险入口给出 P1-P5 技术效果总结。
