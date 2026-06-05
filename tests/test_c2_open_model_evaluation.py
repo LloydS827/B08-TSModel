@@ -5,11 +5,14 @@ import pytest
 import yaml
 
 from b08_model_core.experiments.c2_open_model_evaluation import (
+    C2AuditStatus,
+    C2ModelAuditRecord,
     C2OpenModelConfigError,
     CORE_MODEL_IDS,
     C2TaskId,
-    load_c2_open_model_config,
     build_c2_model_registry,
+    load_c2_open_model_config,
+    run_c2_model_audit,
 )
 
 
@@ -47,6 +50,40 @@ def test_c2_registry_generates_attempt_for_every_core_model():
     assert C2TaskId.FORECASTING in registry.by_model_id["chronos"].primary_tasks
     assert C2TaskId.REPRESENTATION in registry.by_model_id["moment"].primary_tasks
     assert C2TaskId.IMPUTATION in registry.by_model_id["units"].primary_tasks
+
+
+def test_c2_audit_creates_record_for_every_core_model():
+    config = load_c2_open_model_config(CONFIG_PATH)
+    records = run_c2_model_audit(build_c2_model_registry(config))
+    assert all(isinstance(record, C2ModelAuditRecord) for record in records)
+    assert set(record.model_id for record in records) == set(CORE_MODEL_IDS)
+    ttm = next(record for record in records if record.model_id == "ttm")
+    assert ttm.source_ref
+    assert ttm.model_card_ref
+    assert ttm.license_note
+    assert "forecasting" in ttm.supported_tasks
+    assert ttm.weights_status == "download_disabled"
+    assert ttm.offline_feasibility == "no_network_by_default:true"
+    assert ttm.audit_status in set(C2AuditStatus)
+
+
+def test_c2_audit_records_dependency_review_when_dependency_missing():
+    config = load_c2_open_model_config(CONFIG_PATH)
+    config.by_model_id["chronos"].dependency_modules = ["definitely_missing_chronos_module"]
+    records = run_c2_model_audit(build_c2_model_registry(config))
+    chronos = next(record for record in records if record.model_id == "chronos")
+    assert chronos.audit_status == C2AuditStatus.NEEDS_DEPENDENCY_REVIEW
+    assert chronos.dependency_status.startswith("missing:")
+
+
+def test_c2_audit_records_license_review_without_blocking_attempts():
+    config = load_c2_open_model_config(CONFIG_PATH)
+    config.by_model_id["timesfm"].license_note = "needs_review"
+    registry = build_c2_model_registry(config)
+    records = run_c2_model_audit(registry, dependency_checker=lambda _: True)
+    timesfm = next(record for record in records if record.model_id == "timesfm")
+    assert timesfm.audit_status == C2AuditStatus.NEEDS_LICENSE_REVIEW
+    assert any(attempt.model_id == "timesfm" for attempt in registry.attempts)
 
 
 def test_c2_registry_rejects_missing_core_model():

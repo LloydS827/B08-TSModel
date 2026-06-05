@@ -3,9 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import yaml
+
+from b08_model_core.adapters.base import dependency_available
 
 
 CORE_MODEL_IDS = ("ttm", "moment", "chronos", "timesfm", "moirai_uni2ts", "units")
@@ -54,6 +56,22 @@ class C2ModelSpec:
 
 
 @dataclass
+class C2ModelAuditRecord:
+    model_id: str
+    display_name: str
+    source_kind: str
+    source_ref: str
+    model_card_ref: str
+    license_note: str
+    dependency_status: str
+    weights_status: str
+    supported_tasks: list[str]
+    input_constraints: str
+    offline_feasibility: str
+    audit_status: C2AuditStatus
+
+
+@dataclass
 class C2ExecutionConfig:
     stage: str
     upstream_c1_config: Path
@@ -92,6 +110,8 @@ class C2ModelTaskAttempt:
 class C2ModelRegistry:
     by_model_id: dict[str, C2ModelSpec]
     attempts: list[C2ModelTaskAttempt]
+    allow_download: bool = False
+    no_network_by_default: bool = True
 
 
 def load_c2_open_model_config(path: str | Path) -> C2ExecutionConfig:
@@ -166,7 +186,85 @@ def build_c2_model_registry(config: C2ExecutionConfig) -> C2ModelRegistry:
         if model.model_id not in covered_model_ids:
             attempts.extend(C2ModelTaskAttempt(model_id=model.model_id, task_id=task_id) for task_id in model.primary_tasks)
 
-    return C2ModelRegistry(by_model_id=by_model_id, attempts=attempts)
+    return C2ModelRegistry(
+        by_model_id=by_model_id,
+        attempts=attempts,
+        allow_download=config.allow_download,
+        no_network_by_default=config.no_network_by_default,
+    )
+
+
+def run_c2_model_audit(
+    registry: C2ModelRegistry,
+    dependency_checker: Callable[[str], bool] = dependency_available,
+) -> list[C2ModelAuditRecord]:
+    records: list[C2ModelAuditRecord] = []
+    for model in registry.by_model_id.values():
+        missing_dependencies = [
+            module_name
+            for module_name in model.dependency_modules
+            if not dependency_checker(module_name)
+        ]
+        dependency_status = _format_dependency_status(model, missing_dependencies)
+        audit_status = _audit_status_for_model(model, missing_dependencies)
+        records.append(
+            C2ModelAuditRecord(
+                model_id=model.model_id,
+                display_name=model.display_name,
+                source_kind=model.source_kind,
+                source_ref=model.source_ref,
+                model_card_ref=model.model_card_ref,
+                license_note=model.license_note,
+                dependency_status=dependency_status,
+                weights_status=_weights_status_for_model(model, registry.allow_download),
+                supported_tasks=[task_id.value for task_id in model.supported_tasks],
+                input_constraints=_input_constraints_for_model(model),
+                offline_feasibility=_offline_feasibility(registry.no_network_by_default),
+                audit_status=audit_status,
+            )
+        )
+    return records
+
+
+def _format_dependency_status(
+    model: C2ModelSpec,
+    missing_dependencies: list[str],
+) -> str:
+    if missing_dependencies:
+        return f"missing:{','.join(missing_dependencies)}"
+    if model.dependency_modules:
+        return "available"
+    return "not_required"
+
+
+def _audit_status_for_model(
+    model: C2ModelSpec,
+    missing_dependencies: list[str],
+) -> C2AuditStatus:
+    if missing_dependencies:
+        return C2AuditStatus.NEEDS_DEPENDENCY_REVIEW
+    if model.license_note == "needs_review":
+        return C2AuditStatus.NEEDS_LICENSE_REVIEW
+    if not model.source_ref or not model.model_card_ref or not model.supported_tasks:
+        return C2AuditStatus.NEEDS_INTERFACE_REVIEW
+    return C2AuditStatus.AUDIT_PASSED
+
+
+def _weights_status_for_model(model: C2ModelSpec, allow_download: bool) -> str:
+    if not model.model_card_ref or model.model_card_ref == "not_required":
+        return "not_required_for_status_check"
+    if allow_download:
+        return "download_allowed"
+    return "download_disabled"
+
+
+def _input_constraints_for_model(model: C2ModelSpec) -> str:
+    supported_tasks = ",".join(task_id.value for task_id in model.supported_tasks)
+    return f"supported_tasks:{supported_tasks}" if supported_tasks else "supported_tasks:missing"
+
+
+def _offline_feasibility(no_network_by_default: bool) -> str:
+    return f"no_network_by_default:{str(no_network_by_default).lower()}"
 
 
 def _load_model_spec(raw: Any) -> C2ModelSpec:
