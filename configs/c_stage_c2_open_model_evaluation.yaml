@@ -1,0 +1,116 @@
+stage: C2_open_model_evaluation
+upstream_c1_config: configs/c_stage_c1_execution.yaml
+dataset:
+  fu13_observations: data/processed/fu13_real_observations.parquet
+  fu13_config: configs/fu13_real_data_schema.yaml
+  boundary: internal_fu13_no_raw_data_committed
+window:
+  window_mode: cross-stage
+  context_length: 90
+  prediction_length: 16
+  max_windows: 40
+  mask_ratio: 0.2
+  seed: 7
+core_models:
+  - model_id: ttm
+    display_name: TTM / TinyTimeMixer
+    source_kind: official_repo
+    source_ref: docs/research/open-source-model-paper-matrix.md#ttm--tinytimemixer
+    model_card_ref: ibm-granite/granite-timeseries-ttm-r2
+    license_note: needs_review
+    dependency_modules:
+      - tsfm_public
+      - torch
+      - transformers
+      - huggingface_hub
+    primary_tasks:
+      - forecasting
+    supported_tasks:
+      - forecasting
+  - model_id: moment
+    display_name: MOMENT
+    source_kind: official_repo
+    source_ref: docs/research/open-source-model-paper-matrix.md#moment
+    model_card_ref: needs_review
+    license_note: needs_review
+    dependency_modules:
+      - momentfm
+    primary_tasks:
+      - representation
+      - imputation
+    supported_tasks:
+      - forecasting
+      - representation
+      - imputation
+  - model_id: chronos
+    display_name: Chronos / Chronos-Bolt
+    source_kind: official_repo
+    source_ref: docs/research/open-source-model-paper-matrix.md#chronos--chronos-bolt
+    model_card_ref: needs_review
+    license_note: needs_review
+    dependency_modules:
+      - chronos
+    primary_tasks:
+      - forecasting
+    supported_tasks:
+      - forecasting
+  - model_id: timesfm
+    display_name: TimesFM
+    source_kind: official_repo
+    source_ref: docs/research/open-source-model-paper-matrix.md#timesfm
+    model_card_ref: needs_review
+    license_note: needs_review
+    dependency_modules:
+      - timesfm
+    primary_tasks:
+      - forecasting
+    supported_tasks:
+      - forecasting
+  - model_id: moirai_uni2ts
+    display_name: Moirai / Uni2TS
+    source_kind: official_repo
+    source_ref: docs/research/open-source-model-paper-matrix.md#moirai--uni2ts
+    model_card_ref: needs_review
+    license_note: needs_review
+    dependency_modules:
+      - uni2ts
+    primary_tasks:
+      - forecasting
+    supported_tasks:
+      - forecasting
+  - model_id: units
+    display_name: UniTS
+    source_kind: official_repo
+    source_ref: docs/research/open-source-model-paper-matrix.md#units
+    model_card_ref: needs_review
+    license_note: needs_review
+    dependency_modules: []
+    primary_tasks:
+      - representation
+      - imputation
+    supported_tasks:
+      - forecasting
+      - representation
+      - imputation
+task_policy:
+  forecasting:
+    - ttm
+    - chronos
+    - timesfm
+    - moirai_uni2ts
+  representation:
+    - moment
+    - units
+  imputation:
+    - moment
+    - units
+model_cache_policy:
+  allow_download: false
+  cache_dir: hf_cache
+execution_policy:
+  strict_model_success: false
+  no_network_by_default: true
+  record_failure: true
+  do_not_over_claim: true
+outputs:
+  report: reports/c_stage_c2_open_model_evaluation.md
