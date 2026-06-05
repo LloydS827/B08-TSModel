@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C1 证据执行框架与 E1-E3 首批实验闭环设计</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #d7dce2;
+      --soft: #f5f7fa;
+      --accent: #2457a6;
+      --accent-soft: #eaf1ff;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.65;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 36px 24px 64px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin-top: 38px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin-top: 28px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p, li {
+      font-size: 15px;
+    }
+    .meta {
+      margin: 18px 0 26px;
+      padding: 16px 18px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .meta p {
+      margin: 4px 0;
+      color: var(--muted);
+    }
+    .callout {
+      margin: 18px 0;
+      padding: 14px 16px;
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      border-radius: 4px;
+    }
+    code {
+      padding: 1px 4px;
+      background: var(--soft);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 14px 16px;
+      background: #101418;
+      color: #f3f6fa;
+      border-radius: 6px;
+      line-height: 1.5;
+    }
+    pre code {
+      padding: 0;
+      color: inherit;
+      background: transparent;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 22px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: var(--soft);
+      font-weight: 650;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px 18px;
+      margin: 18px 0 28px;
+      padding: 16px 18px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .toc a {
+      display: block;
+      font-size: 14px;
+    }
+    @media (max-width: 720px) {
+      main {
+        padding: 24px 16px 48px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>C1 证据执行框架与 E1-E3 首批实验闭环设计</h1>
+  <div class="meta">
+    <p><strong>日期：</strong>2026-06-05</p>
+    <p><strong>阶段：</strong>C1 证据执行与首批实验闭环</p>
+    <p><strong>上游契约：</strong><code>configs/c_stage_minimum_evidence.yaml</code></p>
+    <p><strong>Markdown 源文件：</strong><code>docs/superpowers/specs/2026-06-05-c1-evidence-execution-design.md</code></p>
+  </div>
+
+  <nav class="toc" aria-label="目录">
+    <a href="#background">背景</a>
+    <a href="#goals">目标与非目标</a>
+    <a href="#scope">范围决策</a>
+    <a href="#architecture">架构</a>
+    <a href="#tasks">任务路径</a>
+    <a href="#status">状态语义</a>
+    <a href="#files">文件影响范围</a>
+    <a href="#cli">CLI 与错误处理</a>
+    <a href="#tests">测试策略</a>
+    <a href="#acceptance">验收标准</a>
+  </nav>
+
+  <section id="background">
+    <h2>背景</h2>
+    <p>B08 已经完成 FU13 真实数据 pipeline、baseline / TTM 同口径 forecasting、漏液电流 residual 样例、A 阶段研究资产和 C0 最小证据契约。C1 的职责是把这些前期工作收束为第一版可执行证据体系。</p>
+    <div class="callout">C1 不应只保守完成单点 E1，也不应扩展成通用实验平台。它应同时推进 E1 真实实验闭环、E1-E5 可复用的最小证据框架、E2/E3 模型扩展入口。</div>
+  </section>
+
+  <section id="goals">
+    <h2>目标与非目标</h2>
+    <h3>目标</h3>
+    <ol>
+      <li>将 <code>E1_forecasting_residual</code> 推进到可运行、可报告、可审计的真实实验闭环。</li>
+      <li>建立 C 阶段最小 evidence framework，统一配置、registry、执行结果、模型状态和报告字段。</li>
+      <li>将 <code>E2_representation</code> 和 <code>E3_imputation</code> 纳入同一执行框架。</li>
+      <li>为下一阶段系统评测 TTM、MOMENT、Chronos、TimesFM、Moirai / Uni2TS、UniTS 预留接口。</li>
+      <li>保持文档系统克制，只新增本 Markdown 与同名 HTML 阅读版。</li>
+    </ol>
+    <h3>非目标</h3>
+    <ol>
+      <li>不进入 B 阶段自研模型训练。</li>
+      <li>不做泛化实验平台或生产级预测性维护系统。</li>
+      <li>不接入公开预测性维护数据集；E4 保持 C2 候选方向。</li>
+      <li>不把 residual、probe 或 reconstruction error 解释为生产告警、FU13 RUL、自动维修建议或专利授权结论。</li>
+      <li>不要求测试依赖真实 FU13 私有数据、外部网络或模型权重。</li>
+    </ol>
+  </section>
+
+  <section id="scope">
+    <h2>范围决策</h2>
+    <table>
+      <thead>
+        <tr><th>层级</th><th>范围</th><th>验收强度</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>E1 真实闭环</td><td>FU13 forecasting residual，baseline 与 TTM 状态，残差候选样例</td><td>baseline 必须可运行；TTM 可运行或输出结构化失败</td></tr>
+        <tr><td>统一证据框架</td><td>C1 execution config、registry、runner、result schema、report renderer</td><td>必须实现，只抽象 C 阶段复用字段</td></tr>
+        <tr><td>E2 representation</td><td>statistical embedding baseline，MOMENT / UniTS adapter 状态，probe 输入排除说明</td><td>必须有入口、baseline 和报告</td></tr>
+        <tr><td>E3 imputation</td><td>deterministic mask，simple reconstruction baseline，MOMENT / UniTS adapter 状态</td><td>必须有入口、baseline 和报告</td></tr>
+        <tr><td>E4/E5</td><td>open-data 与专利效果承接</td><td>C1 报告保留状态和缺口，不执行</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="architecture">
+    <h2>架构</h2>
+    <pre><code>configs/c_stage_minimum_evidence.yaml
+  + configs/c_stage_c1_execution.yaml
+  -> C1 evidence registry
+  -> C1 evidence runner
+     -> E1 forecasting residual
+     -> E2 representation probe
+     -> E3 imputation / reconstruction
+  -> C1 evidence results
+  -> reports/c_stage_c1_evidence_report.md</code></pre>
+    <p>C1 执行配置只记录本轮执行参数，不复制 C0 的完整证据表。Registry 负责继承 C0 的证据边界，Runner 按 E1/E2/E3 调度现有能力，Report Renderer 输出统一证据账本。</p>
+    <p>统一结果结构必须包含 evidence id、experiment id、task id、status、dataset boundary、split policy、model results、primary metrics、failure reasons、artifact outputs、invalid claims 和 decision gate notes。</p>
+  </section>
+
+  <section id="tasks">
+    <h2>任务路径</h2>
+    <h3>E1 forecasting residual</h3>
+    <pre><code>FU13 canonical observations
+  -> C1 window policy
+  -> baseline forecasting
+  -> optional TTM forecasting
+  -> residual metrics and top-k examples
+  -> E1 report section</code></pre>
+    <p>E1 是 C1 的锚点。baseline 路径必须可运行；TTM 在依赖和 cache 具备时真实运行，否则输出结构化失败。</p>
+
+    <h3>E2 representation probe</h3>
+    <pre><code>FU13 windows
+  -> statistical embedding baseline
+  -> optional MOMENT / UniTS embed adapter
+  -> probe labels with input exclusion note
+  -> probe or clustering metrics
+  -> E2 report section</code></pre>
+    <p>E2 重点是表征口径和输入排除。若 stage、quality_flag 或 failure_proxy 被作为输入 metadata，报告必须限制 probe 的解释边界。</p>
+
+    <h3>E3 imputation / reconstruction</h3>
+    <pre><code>FU13 multivariate windows
+  -> deterministic mask strategy
+  -> simple reconstruction baseline
+  -> optional MOMENT / UniTS imputation adapter
+  -> reconstruction metrics by sensor and mask type
+  -> E3 report section</code></pre>
+    <p>mask 策略固定 seed、mask ratio、mask type 和评测窗口范围，只在评测窗口内生成。</p>
+  </section>
+
+  <section id="status">
+    <h2>状态语义</h2>
+    <table>
+      <thead><tr><th>状态</th><th>含义</th></tr></thead>
+      <tbody>
+        <tr><td><code>available_and_ran</code></td><td>模型完成运行</td></tr>
+        <tr><td><code>missing_dependency</code></td><td>Python 包或运行时依赖缺失</td></tr>
+        <tr><td><code>missing_or_blocked_weights</code></td><td>权重缺失、下载禁用或 cache 不可用</td></tr>
+        <tr><td><code>unsupported_task</code></td><td>adapter 不支持当前任务</td></tr>
+        <tr><td><code>unsupported_window_shape</code></td><td>窗口形状、变量数、horizon 或 mask 形式不支持</td></tr>
+        <tr><td><code>runtime_failed</code></td><td>运行时异常已捕获</td></tr>
+        <tr><td><code>skipped_by_config</code></td><td>C1 配置主动跳过</td></tr>
+        <tr><td><code>planned_not_executed</code></td><td>C0 已规划但 C1 不执行，例如 E4/E5</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="files">
+    <h2>文件影响范围</h2>
+    <table>
+      <thead><tr><th>文件或目录</th><th>操作</th><th>职责</th></tr></thead>
+      <tbody>
+        <tr><td><code>configs/c_stage_c1_execution.yaml</code></td><td>新增</td><td>C1 执行参数，引用 C0 contract</td></tr>
+        <tr><td><code>src/b08_model_core/experiments/</code></td><td>新增少量模块</td><td>registry、runner、result schema、report renderer</td></tr>
+        <tr><td><code>src/b08_model_core/adapters/</code></td><td>小幅扩展</td><td>统一 adapter 状态和 E2/E3 任务能力边界</td></tr>
+        <tr><td><code>src/b08_model_core/cli.py</code></td><td>小幅扩展</td><td>增加 <code>experiment c-stage-c1</code></td></tr>
+        <tr><td><code>tests/</code></td><td>新增聚焦测试</td><td>配置、registry、状态、report、mask/probe 口径</td></tr>
+      </tbody>
+    </table>
+    <p>不修改 <code>docs/index.html</code>，不迁移历史文档，不清理旧资料。</p>
+  </section>
+
+  <section id="cli">
+    <h2>CLI 与错误处理</h2>
+    <pre><code>uv run b08-model-core experiment c-stage-c1 \
+  --config configs/c_stage_c1_execution.yaml \
+  --output reports/c_stage_c1_evidence_report.md</code></pre>
+    <p>默认不联网、不自动下载外部模型权重。E1 baseline 无法运行、C0 contract 无法读取、C1 配置无效或报告无法写出时返回非零。候选模型失败时仍写报告，并由配置决定是否严格返回非零。</p>
+  </section>
+
+  <section id="tests">
+    <h2>测试策略</h2>
+    <p>单元测试使用小型 fixture 或 synthetic observations，不依赖真实 FU13、网络或模型权重。测试覆盖配置继承、registry 校验、result schema、失败状态报告、probe 输入排除、deterministic mask、CLI exit code 和默认 pytest。</p>
+  </section>
+
+  <section id="acceptance">
+    <h2>验收标准</h2>
+    <ol>
+      <li>存在 C1 CLI 命令，能从 C1 配置生成 Markdown 报告。</li>
+      <li>E1 baseline 路径真实运行，并输出 forecasting metrics、residual summary、top-k examples 或明确失败原因。</li>
+      <li>TTM 状态被记录为 <code>available_and_ran</code> 或结构化失败状态。</li>
+      <li>E2 有 statistical embedding baseline、probe 输入排除说明、候选模型状态和报告分节。</li>
+      <li>E3 有 deterministic mask、simple reconstruction baseline、候选模型状态和报告分节。</li>
+      <li>报告继承 C0 invalid claims，并明确 C1 不构成生产告警、RUL、自动维修或专利授权结论。</li>
+      <li>E4/E5 在 C1 报告中显示为未执行承接项，不被误写成完成。</li>
+      <li>默认测试通过，且测试不依赖私有数据、外部网络或模型权重。</li>
+    </ol>
+  </section>
+</main>
+</body>
+</html>
