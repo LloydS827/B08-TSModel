@@ -213,6 +213,25 @@ HF_HOME=hf_cache uv run b08-model-core real-data evaluate-scenario \
 
 C 阶段先执行最小证据契约，不直接启动大规模自研训练。执行入口是 `configs/c_stage_minimum_evidence.yaml`，阅读入口是 `docs/research/c-stage-minimum-evidence-register.html`，报告模板是 `reports/c_stage_minimum_evidence_template.md`。
 
+C1 是当前执行环节：把前期 pipeline、C0 契约、baseline/TTM、representation 和 imputation 任务口径收束成第一版证据执行框架。C1 的作用是完成评测体系和流程的前期准备，不是直接完成全部开源模型系统评测，也不是进入自研训练。
+
+```bash
+uv run b08-model-core experiment c-stage-c1 \
+  --config configs/c_stage_c1_execution.yaml \
+  --output reports/c_stage_c1_evidence_report.md
+```
+
+C1 默认执行 `E1_forecasting_residual`、`E2_representation` 和 `E3_imputation`。其中 E1 以真实 baseline 路径为锚点，输出 forecasting metrics、residual summary 和 top-k candidate examples；E2/E3 建立 statistical embedding、deterministic mask 和 simple reconstruction baseline，并记录 MOMENT / UniTS 等候选模型的结构化状态。E4 公开数据和 E5 专利效果样例保留为 C2 之后的承接项。
+
+后续关键任务按以下顺序推进，避免重复讨论路线：
+
+```text
+C1. 证据执行框架与 E1-E3 首批实验闭环
+  -> C2. 开源时序基础模型系统评测：TTM、MOMENT、Chronos、TimesFM、Moirai / Uni2TS、UniTS
+  -> C2 支线. 开源生态数据集整理：公开数据来源、许可证、schema mapping、任务标签和 split policy
+  -> B. 条件性自研模型准备：只有 C1/C2 证明开源路线存在关键缺口后，才进入最小自研原型方案
+```
+
 ```text
 A. 学术 / 行业 / 模型路线调研
   -> C. 开源基础时序模型系统适配与对比
