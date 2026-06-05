@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.experiments.c1_evidence import (
     C1EvidenceConfigError,
     C1EvidenceResult,
@@ -143,6 +144,56 @@ def test_c1_runner_outputs_e2_e3_and_candidate_model_statuses(tmp_path):
     assert e3.primary_metrics["mae"] is not None
     assert any(model.model_name == "simple_reconstruction_baseline" for model in e3.model_results)
     assert e4.status == EvidenceStatus.PLANNED_NOT_EXECUTED
+
+
+def test_cli_c_stage_c1_writes_report(tmp_path):
+    config = _write_c1_fixture_config(tmp_path, candidate_model_failures=True)
+    output = tmp_path / "report.md"
+    result = main(["experiment", "c-stage-c1", "--config", str(config), "--output", str(output)])
+    assert result == 0
+    assert output.exists()
+    assert "C1 Evidence Report" in output.read_text(encoding="utf-8")
+
+
+def test_cli_c_stage_c1_returns_nonzero_for_missing_config(tmp_path):
+    result = main(
+        [
+            "experiment",
+            "c-stage-c1",
+            "--config",
+            str(tmp_path / "missing.yaml"),
+            "--output",
+            str(tmp_path / "report.md"),
+        ]
+    )
+    assert result == 1
+
+
+def test_cli_c_stage_c1_returns_nonzero_for_missing_dataset(tmp_path):
+    config = _write_c1_fixture_config(tmp_path, candidate_model_failures=True)
+    raw = yaml.safe_load(config.read_text(encoding="utf-8"))
+    raw["dataset"]["fu13_observations"] = str(tmp_path / "missing.parquet")
+    config.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    result = main(["experiment", "c-stage-c1", "--config", str(config), "--output", str(tmp_path / "report.md")])
+    assert result == 1
+
+
+def test_cli_c_stage_c1_candidate_failure_is_reported_without_default_failure(tmp_path):
+    config = _write_c1_fixture_config(tmp_path, candidate_model_failures=True, strict_model_success=False)
+    output = tmp_path / "report.md"
+    result = main(["experiment", "c-stage-c1", "--config", str(config), "--output", str(output)])
+    assert result == 0
+    text = output.read_text(encoding="utf-8")
+    assert "missing_dependency" in text or "unsupported_task" in text
+    assert "E1_forecasting_residual" in text
+
+
+def test_cli_c_stage_c1_strict_candidate_failure_returns_nonzero(tmp_path):
+    config = _write_c1_fixture_config(tmp_path, candidate_model_failures=True, strict_model_success=True)
+    output = tmp_path / "report.md"
+    result = main(["experiment", "c-stage-c1", "--config", str(config), "--output", str(output)])
+    assert result == 1
+    assert output.exists()
 
 
 def _result_by_id(results, evidence_id):

@@ -6,6 +6,12 @@ from pathlib import Path
 import pandas as pd
 
 from b08_model_core.evaluation.benchmark import run_benchmark
+from b08_model_core.experiments.c1_evidence import (
+    ModelExecutionStatus,
+    load_c1_execution_config,
+    render_c1_evidence_report,
+    run_c1_evidence,
+)
 from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
@@ -118,6 +124,9 @@ def main(argv: list[str] | None = None) -> int:
     download.add_argument("--allow-download", action="store_true", dest="allow_download")
     download.add_argument("--no-download", action="store_false", dest="allow_download")
     forecasting.set_defaults(allow_download=False)
+    c_stage_c1 = experiment_sub.add_parser("c-stage-c1")
+    c_stage_c1.add_argument("--config", required=True)
+    c_stage_c1.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -240,7 +249,42 @@ def main(argv: list[str] | None = None) -> int:
         if args.model != "baseline" and status != FoundationModelStatus.AVAILABLE_AND_RAN:
             return 1
         return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c1":
+        try:
+            config = load_c1_execution_config(args.config)
+            config.report_path = Path(args.output)
+            results = run_c1_evidence(config)
+            planned_not_executed = [
+                result.evidence_id for result in results if result.status.value == "planned_not_executed"
+            ]
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(
+                render_c1_evidence_report(results, planned_not_executed=planned_not_executed),
+                encoding="utf-8",
+            )
+        except (FileNotFoundError, ValueError):
+            return 1
+        if config.strict_model_success and _has_candidate_model_failure(results):
+            return 1
+        return 0
     raise ValueError(args.command)
+
+
+def _has_candidate_model_failure(results: list[object]) -> bool:
+    failed_statuses = {
+        ModelExecutionStatus.MISSING_DEPENDENCY,
+        ModelExecutionStatus.MISSING_OR_BLOCKED_WEIGHTS,
+        ModelExecutionStatus.UNSUPPORTED_TASK,
+        ModelExecutionStatus.UNSUPPORTED_WINDOW_SHAPE,
+        ModelExecutionStatus.RUNTIME_FAILED,
+    }
+    baseline_names = {"RobustStageForecaster", "statistical_embedding", "simple_reconstruction_baseline"}
+    for result in results:
+        for model in getattr(result, "model_results", []):
+            if model.model_name not in baseline_names and model.status in failed_statuses:
+                return True
+    return False
 
 
 if __name__ == "__main__":
