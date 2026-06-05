@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>C2 开源模型系统评测框架与核心模型全覆盖测试设计</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #202124;
+      --muted: #5f6368;
+      --line: #d7dce2;
+      --soft: #f5f7fa;
+      --accent: #2457a6;
+      --accent-soft: #eaf1ff;
+    }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+      line-height: 1.65;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 36px 24px 64px;
+    }
+    h1 {
+      margin: 0 0 10px;
+      font-size: 32px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    h2 {
+      margin-top: 38px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+      font-size: 22px;
+      letter-spacing: 0;
+    }
+    h3 {
+      margin-top: 28px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+    p, li {
+      font-size: 15px;
+    }
+    .meta {
+      margin: 18px 0 26px;
+      padding: 16px 18px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .meta p {
+      margin: 4px 0;
+      color: var(--muted);
+    }
+    .callout {
+      margin: 18px 0;
+      padding: 14px 16px;
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      border-radius: 4px;
+    }
+    code {
+      padding: 1px 4px;
+      background: var(--soft);
+      border-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92em;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 14px 16px;
+      background: #101418;
+      color: #f3f6fa;
+      border-radius: 6px;
+      line-height: 1.5;
+    }
+    pre code {
+      padding: 0;
+      color: inherit;
+      background: transparent;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 22px;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      vertical-align: top;
+      text-align: left;
+    }
+    th {
+      background: var(--soft);
+      font-weight: 650;
+    }
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .toc {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 8px 18px;
+      margin: 18px 0 28px;
+      padding: 16px 18px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+    .toc a {
+      display: block;
+      font-size: 14px;
+    }
+    @media (max-width: 720px) {
+      main {
+        padding: 24px 16px 48px;
+      }
+      h1 {
+        font-size: 26px;
+      }
+      table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>C2 开源模型系统评测框架与核心模型全覆盖测试设计</h1>
+  <div class="meta">
+    <p><strong>日期：</strong>2026-06-05</p>
+    <p><strong>阶段：</strong>C2 开源模型系统评测</p>
+    <p><strong>上游规格：</strong><code>docs/superpowers/specs/2026-06-05-c1-evidence-execution-design.md</code></p>
+    <p><strong>Markdown 源文件：</strong><code>docs/superpowers/specs/2026-06-05-c2-open-model-evaluation-design.md</code></p>
+  </div>
+
+  <nav class="toc" aria-label="目录">
+    <a href="#background">背景</a>
+    <a href="#goals">目标与非目标</a>
+    <a href="#scope">范围决策</a>
+    <a href="#models">核心模型集合</a>
+    <a href="#architecture">架构</a>
+    <a href="#status">状态语义</a>
+    <a href="#report">报告与 CLI</a>
+    <a href="#tests">测试策略</a>
+    <a href="#acceptance">验收标准</a>
+  </nav>
+
+  <section id="background">
+    <h2>背景</h2>
+    <p>C1 已经把 FU13 真实数据、baseline/TTM forecasting、representation、imputation 和结构化失败记录收束为第一版证据执行框架。C2 的职责是在此基础上进入开源时序基础模型的系统评测。</p>
+    <div class="callout">C2 的核心不是保证所有模型成功运行，而是让六个核心模型全部进入同一套审计、尝试和失败归因框架。</div>
+  </section>
+
+  <section id="goals">
+    <h2>目标与非目标</h2>
+    <h3>目标</h3>
+    <ol>
+      <li>建立 C2 开源模型评测配置、运行入口、模型审计表、评测结果结构和 Markdown 报告。</li>
+      <li>将 TTM、MOMENT、Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS、UniTS 全部纳入同一口径。</li>
+      <li>对 forecasting-first 模型执行 FU13 同窗口 forecasting 评测，或记录结构化失败。</li>
+      <li>对 representation / imputation / multi-task 模型执行 FU13 表征或补全评测，或记录结构化失败。</li>
+      <li>形成 C2 -> C3、C2 -> B 的阶段性决策记录。</li>
+    </ol>
+    <h3>非目标</h3>
+    <ol>
+      <li>不把 C2 做成公开数据集接入阶段；公开数据来源、许可证、schema mapping、标签语义和 split policy 进入 C3。</li>
+      <li>不进入 B 阶段自研模型训练。</li>
+      <li>不要求六个模型全部成功运行。</li>
+      <li>不将 TSPulse、FlowState 纳入 C2 核心必测集合。</li>
+      <li>不默认联网下载权重，不要求测试依赖真实 FU13 私有数据、网络或本机模型 cache。</li>
+    </ol>
+  </section>
+
+  <section id="scope">
+    <h2>范围决策</h2>
+    <table>
+      <thead>
+        <tr><th>层级</th><th>范围</th><th>验收强度</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>模型审计</td><td>六个核心模型的来源、许可证、依赖、权重、接口、任务覆盖、输入限制</td><td>每个核心模型必须有 audit record</td></tr>
+        <tr><td>forecasting 评测</td><td>TTM、Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS，UniTS 若接口支持则记录</td><td>必须尝试运行或记录结构化失败</td></tr>
+        <tr><td>representation 评测</td><td>MOMENT、UniTS，其他模型若接口支持则可记录为补充</td><td>必须尝试运行或记录结构化失败</td></tr>
+        <tr><td>imputation / reconstruction 评测</td><td>MOMENT、UniTS，其他模型若接口支持则可记录为补充</td><td>必须尝试运行或记录结构化失败</td></tr>
+        <tr><td>C2 报告</td><td>模型矩阵、任务结果、失败原因、invalid claims、C3/B 承接记录</td><td>必须生成 Markdown 报告</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="models">
+    <h2>核心模型集合</h2>
+    <table>
+      <thead>
+        <tr><th>模型</th><th>C2 主任务</th><th>C2 记录重点</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>TTM / TinyTimeMixer</td><td>forecasting</td><td>继承 C1 锚点，记录同窗口指标、adapter 状态、cache/权重边界</td></tr>
+        <tr><td>MOMENT</td><td>representation、imputation，可选 forecasting</td><td>多任务接口、embedding/reconstruction 能力、输入排除说明</td></tr>
+        <tr><td>Chronos / Chronos-Bolt</td><td>forecasting</td><td>token 化或 Bolt 接口、概率预测输出、单变量/多变量适配方式</td></tr>
+        <tr><td>TimesFM</td><td>forecasting</td><td>decoder-only forecasting 接口、context/horizon/frequency 约束</td></tr>
+        <tr><td>Moirai / Uni2TS</td><td>probabilistic forecasting</td><td>预测分布输出、变量组织方式、跨频率/多变量接口</td></tr>
+        <tr><td>UniTS</td><td>representation、imputation、multi-task，可选 forecasting</td><td>任务 token、多任务接口、输入 schema 重构要求</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="architecture">
+    <h2>架构</h2>
+    <pre><code>configs/c_stage_c1_execution.yaml
+  + configs/c_stage_c2_open_model_evaluation.yaml
+  -> C2 model registry
+  -> C2 audit runner
+  -> C2 task runner
+     -> forecasting attempts
+     -> representation attempts
+     -> imputation attempts
+  -> C2 evaluation results
+  -> reports/c_stage_c2_open_model_evaluation.md</code></pre>
+    <p>C2 复用 C1 的证据思路，但把中心从 evidence item 扩展为 model-task attempt。Registry 负责生成核心模型任务清单，audit runner 负责模型审计，task runner 负责成功运行或结构化失败记录。Audit record 应包含 <code>source_ref</code> 和 <code>model_card_ref</code>，使来源、仓库和权重说明可追溯。</p>
+  </section>
+
+  <section id="status">
+    <h2>状态语义</h2>
+    <h3>Audit Status</h3>
+    <table>
+      <tbody>
+        <tr><th>audit_passed</th><td>来源、许可证边界、依赖、权重策略和任务接口已记录，未发现阻断</td></tr>
+        <tr><th>needs_license_review</th><td>许可证或使用边界需要人工核对</td></tr>
+        <tr><th>needs_dependency_review</th><td>依赖、安装方式或运行环境需要核对</td></tr>
+        <tr><th>needs_interface_review</th><td>官方接口、adapter contract 或输入输出形状需要核对</td></tr>
+        <tr><th>audit_failed</th><td>审计过程本身失败，原因必须记录</td></tr>
+      </tbody>
+    </table>
+    <h3>Model-Task Status</h3>
+    <table>
+      <tbody>
+        <tr><th>available_and_ran</th><td>依赖、权重、输入形状和任务头可用，模型完成运行</td></tr>
+        <tr><th>missing_dependency</th><td>Python 包或运行时依赖缺失</td></tr>
+        <tr><th>missing_or_blocked_weights</th><td>权重缺失、下载被禁用、下载失败或 cache 不可用</td></tr>
+        <tr><th>unsupported_task</th><td>adapter 或官方接口不支持当前任务</td></tr>
+        <tr><th>unsupported_window_shape</th><td>当前窗口、变量数、horizon、mask 或 token 形式不被模型支持</td></tr>
+        <tr><th>runtime_failed</th><td>运行时异常，已捕获并写入报告</td></tr>
+        <tr><th>license_or_interface_needs_review</th><td>许可证或接口边界不足以安全执行，需要人工核对</td></tr>
+        <tr><th>skipped_by_config</th><td>C2 配置主动跳过，默认核心模型不应出现该状态</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="report">
+    <h2>报告与 CLI</h2>
+    <p>建议新增本机报告 <code>reports/c_stage_c2_open_model_evaluation.md</code>，包含 report metadata、C2 scope、model audit table、model-task result matrix、forecasting section、representation / imputation section、baseline comparison、failure taxonomy、C3 handoff、B decision notes 和 invalid claims。</p>
+    <pre><code>uv run b08-model-core experiment c-stage-c2 \
+  --config configs/c_stage_c2_open_model_evaluation.yaml \
+  --output reports/c_stage_c2_open_model_evaluation.md</code></pre>
+    <p>默认不联网、不自动下载外部模型权重。单个候选模型失败不导致整个命令失败；配置、数据或报告错误应返回非零。</p>
+    <p>即使 audit 进入 needs-review 或 failed，系统仍应生成对应的 model-task attempt 并写入结构化失败。只有整体配置、FU13 评测窗口或报告输出不可用时，CLI 才应返回非零并终止。</p>
+  </section>
+
+  <section id="tests">
+    <h2>测试策略</h2>
+    <p>单元测试不得依赖真实 FU13 私有数据、网络或模型权重。测试使用小型 fixture、fake adapter 和 synthetic observations 验证 C2 行为。</p>
+    <ul>
+      <li>C2 配置必须列出六个核心模型，缺一即失败。</li>
+      <li>registry 为每个核心模型生成至少一个主任务 attempt。</li>
+      <li>audit runner 能在依赖或权重缺失时生成 needs-review / failure record。</li>
+      <li>task runner 能记录成功、依赖缺失、权重缺失、unsupported task、unsupported window shape 和 runtime failed。</li>
+      <li>report renderer 必须包含六个核心模型、任务矩阵、失败分类、invalid claims、C3 handoff 和 B decision notes。</li>
+      <li><code>uv run python -m pytest -q</code> 保持通过。</li>
+    </ul>
+  </section>
+
+  <section id="acceptance">
+    <h2>验收标准</h2>
+    <ol>
+      <li>C2 配置固定列出 TTM、MOMENT、Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS、UniTS 六个核心模型。</li>
+      <li>C2 CLI 可以生成 Markdown 报告，且不要求六个模型全部成功运行。</li>
+      <li>每个核心模型都有 audit record。</li>
+      <li>每个核心模型至少有一个 model-task attempt，状态为成功或结构化失败。</li>
+      <li>报告包含 audit table、result matrix、failure taxonomy、invalid claims、C2 -> C3 handoff 和 C2 -> B decision notes。</li>
+      <li>默认项目状态保持可安装、可测试、可运行；C2 未完成模型成功不破坏 C1 已完成路径。</li>
+    </ol>
+    <div class="callout">C2 的最终价值不是证明某个开源模型已经可生产使用，而是让六个核心候选在同一评测账本中接受审计、尝试和失败归因。</div>
+  </section>
+</main>
+</body>
+</html>
