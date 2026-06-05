@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from b08_model_core.experiments.c1_evidence import (
@@ -8,9 +9,12 @@ from b08_model_core.experiments.c1_evidence import (
     C1ModelResult,
     EvidenceStatus,
     ModelExecutionStatus,
+    apply_deterministic_mask,
     build_c1_registry,
     load_c1_execution_config,
+    reconstruction_metrics,
     render_c1_evidence_report,
+    simple_statistical_embedding,
 )
 
 
@@ -74,3 +78,28 @@ def test_c1_report_contains_audit_invalid_claims_failures_and_decision_gate():
     assert "CT4 Decision Gate Draft" in text
     assert "E4_open_data_pm" in text
     assert "planned_not_executed" in text
+
+
+def test_deterministic_mask_is_reproducible():
+    values = np.arange(24, dtype=float).reshape(6, 4)
+    masked_a, mask_a = apply_deterministic_mask(values, mask_ratio=0.25, seed=7)
+    masked_b, mask_b = apply_deterministic_mask(values, mask_ratio=0.25, seed=7)
+    assert np.array_equal(mask_a, mask_b)
+    assert np.array_equal(masked_a, masked_b)
+    assert mask_a.sum() == 6
+
+
+def test_statistical_embedding_summarizes_window_shape():
+    values = np.array([[1.0, 2.0], [3.0, 6.0]])
+    embedding = simple_statistical_embedding(values)
+    assert embedding["mean_sensor_0"] == 2.0
+    assert embedding["std_sensor_1"] == 2.0
+
+
+def test_reconstruction_metrics_reports_masked_error_only():
+    truth = np.array([[1.0, 2.0], [3.0, 4.0]])
+    reconstructed = np.array([[1.0, 0.0], [0.0, 4.0]])
+    mask = np.array([[False, True], [True, False]])
+    metrics = reconstruction_metrics(truth, reconstructed, mask)
+    assert metrics["mae"] == 2.5
+    assert metrics["count"] == 2

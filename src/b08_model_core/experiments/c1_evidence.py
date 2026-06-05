@@ -5,6 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
 
 from b08_model_core.experiments.c_stage_contract import (
@@ -238,6 +239,52 @@ def render_c1_evidence_report(
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def apply_deterministic_mask(
+    values: np.ndarray,
+    *,
+    mask_ratio: float,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    if not 0 < mask_ratio <= 1:
+        raise ValueError("mask_ratio must be in (0, 1]")
+    arr = np.asarray(values, dtype=float)
+    flat_size = arr.size
+    mask_count = max(1, int(round(flat_size * mask_ratio)))
+    rng = np.random.default_rng(seed)
+    selected = rng.choice(flat_size, size=mask_count, replace=False)
+    mask = np.zeros(flat_size, dtype=bool)
+    mask[selected] = True
+    mask = mask.reshape(arr.shape)
+    masked = arr.copy()
+    masked[mask] = 0.0
+    return masked, mask
+
+
+def simple_statistical_embedding(values: np.ndarray) -> dict[str, float]:
+    arr = np.asarray(values, dtype=float)
+    embedding: dict[str, float] = {}
+    for index in range(arr.shape[1]):
+        series = arr[:, index]
+        embedding[f"mean_sensor_{index}"] = float(np.mean(series))
+        embedding[f"std_sensor_{index}"] = float(np.std(series))
+    return embedding
+
+
+def reconstruction_metrics(
+    truth: np.ndarray,
+    reconstructed: np.ndarray,
+    mask: np.ndarray,
+) -> dict[str, float | int | None]:
+    masked_error = np.asarray(reconstructed, dtype=float)[mask] - np.asarray(truth, dtype=float)[mask]
+    if masked_error.size == 0:
+        return {"mae": None, "rmse": None, "count": 0}
+    return {
+        "mae": float(np.mean(np.abs(masked_error))),
+        "rmse": float(np.sqrt(np.mean(masked_error**2))),
+        "count": int(masked_error.size),
+    }
 
 
 def _value(value: object) -> str:
