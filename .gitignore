@@ -13,6 +13,7 @@ data/processed/*.parquet
 reports/*.md
 !reports/model_core_evaluation.md
 !reports/model_route_decision.md
+!reports/c_stage_minimum_evidence_template.md
 
 # Local model weights and Hugging Face caches must stay off GitHub.
 hf_cache/

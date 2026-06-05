@@ -209,6 +209,10 @@ HF_HOME=hf_cache uv run b08-model-core real-data evaluate-scenario \
 
 下一阶段按 **A -> C -> B** 推进：
 
+### C 阶段最小证据实验入口
+
+C 阶段先执行最小证据契约，不直接启动大规模自研训练。执行入口是 `configs/c_stage_minimum_evidence.yaml`，阅读入口是 `docs/research/c-stage-minimum-evidence-register.html`，报告模板是 `reports/c_stage_minimum_evidence_template.md`。
+
 ```text
 A. 学术 / 行业 / 模型路线调研
   -> C. 开源基础时序模型系统适配与对比
