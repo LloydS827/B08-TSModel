@@ -12,6 +12,12 @@ from b08_model_core.experiments.c1_evidence import (
     render_c1_evidence_report,
     run_c1_evidence,
 )
+from b08_model_core.experiments.c2_open_model_evaluation import (
+    C2ModelTaskStatus,
+    load_c2_open_model_config,
+    render_c2_open_model_report,
+    run_c2_open_model_evaluation,
+)
 from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
@@ -127,6 +133,9 @@ def main(argv: list[str] | None = None) -> int:
     c_stage_c1 = experiment_sub.add_parser("c-stage-c1")
     c_stage_c1.add_argument("--config", required=True)
     c_stage_c1.add_argument("--output", required=True)
+    c_stage_c2 = experiment_sub.add_parser("c-stage-c2")
+    c_stage_c2.add_argument("--config", required=True)
+    c_stage_c2.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -268,6 +277,19 @@ def main(argv: list[str] | None = None) -> int:
         if config.strict_model_success and _has_candidate_model_failure(results):
             return 1
         return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c2":
+        try:
+            config = load_c2_open_model_config(args.config)
+            config.report_path = Path(args.output)
+            result = run_c2_open_model_evaluation(config)
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_c2_open_model_report(result, config_path=args.config), encoding="utf-8")
+        except (FileNotFoundError, ValueError, OSError, PermissionError):
+            return 1
+        if config.strict_model_success and _has_c2_candidate_model_failure(result.task_results):
+            return 1
+        return 0
     raise ValueError(args.command)
 
 
@@ -285,6 +307,18 @@ def _has_candidate_model_failure(results: list[object]) -> bool:
             if model.model_name not in baseline_names and model.status in failed_statuses:
                 return True
     return False
+
+
+def _has_c2_candidate_model_failure(task_results: list[object]) -> bool:
+    failed_statuses = {
+        C2ModelTaskStatus.MISSING_DEPENDENCY,
+        C2ModelTaskStatus.MISSING_OR_BLOCKED_WEIGHTS,
+        C2ModelTaskStatus.UNSUPPORTED_TASK,
+        C2ModelTaskStatus.UNSUPPORTED_WINDOW_SHAPE,
+        C2ModelTaskStatus.RUNTIME_FAILED,
+        C2ModelTaskStatus.LICENSE_OR_INTERFACE_NEEDS_REVIEW,
+    }
+    return any(getattr(task_result, "status", None) in failed_statuses for task_result in task_results)
 
 
 if __name__ == "__main__":

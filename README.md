@@ -223,6 +223,16 @@ uv run b08-model-core experiment c-stage-c1 \
 
 C1 默认执行 `E1_forecasting_residual`、`E2_representation` 和 `E3_imputation`。其中 E1 以真实 baseline 路径为锚点，输出 forecasting metrics、residual summary 和 top-k candidate examples；E2/E3 建立 statistical embedding、deterministic mask 和 simple reconstruction baseline，并记录 MOMENT / UniTS 等候选模型的结构化状态。E4 公开数据和 E5 专利效果样例保留为 C2 之后的承接项。
 
+C2 是开源时序基础模型系统评测入口。它固定审计并尝试 TTM / TinyTimeMixer、MOMENT、Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS、UniTS 六个核心模型；模型失败默认写入结构化状态，不等同于阶段失败。
+
+```bash
+uv run b08-model-core experiment c-stage-c2 \
+  --config configs/c_stage_c2_open_model_evaluation.yaml \
+  --output reports/c_stage_c2_open_model_evaluation.md
+```
+
+`reports/c_stage_c2_open_model_evaluation.md` 是本机 ignored 报告输出，用于记录 model audit table、model-task result matrix、failure taxonomy、C2 -> C3 handoff 和 C2 -> B decision notes。
+
 后续关键任务按以下顺序推进，避免重复讨论路线：
 
 ```text
