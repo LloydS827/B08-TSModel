@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.experiments.c2_open_model_evaluation import (
     C2AuditStatus,
     C2ModelAuditRecord,
@@ -14,10 +15,12 @@ from b08_model_core.experiments.c2_open_model_evaluation import (
     C2OpenModelConfigError,
     CORE_MODEL_IDS,
     C2TaskId,
+    _value,
     _imputation_baseline,
     _model_task_status,
     build_c2_model_registry,
     load_c2_open_model_config,
+    render_c2_open_model_report,
     run_c2_open_model_evaluation,
     run_c2_model_audit,
 )
@@ -336,6 +339,90 @@ def test_c2_runner_returns_data_error_when_no_windows(tmp_path):
     config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True, rows=8)
     with pytest.raises(ValueError, match="not enough windows"):
         run_c2_open_model_evaluation(load_c2_open_model_config(config_path))
+
+
+def test_c2_report_contains_required_sections(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True)
+    result = run_c2_open_model_evaluation(load_c2_open_model_config(config_path))
+    text = render_c2_open_model_report(result, config_path=str(config_path))
+    report_lines = set(text.splitlines())
+    required_headings = [
+        "# C2 Open Model Evaluation Report",
+        "## Report Metadata",
+        "## C2 Scope",
+        "## Model Audit Table",
+        "## Model-Task Result Matrix",
+        "## Forecasting Results",
+        "## Representation And Imputation Results",
+        "## Baseline Comparison",
+        "## Failure Taxonomy",
+        "## C2 -> C3 Handoff",
+        "## C2 -> B Decision Notes",
+        "## Invalid Claims",
+    ]
+    for heading in required_headings:
+        assert heading in report_lines
+    for model_id in CORE_MODEL_IDS:
+        assert model_id in text
+    assert "不得解释为生产告警" in text
+    assert "missing_dependency" in text
+    assert "forced missing dependency status from C2 config" in text
+    assert "force_missing_dependency:true" in text
+    assert "C2 records baseline metrics and model-task readiness only." in text
+    assert "C2 results are not a B-stage self-training Go decision." in text
+
+
+def test_c2_value_renders_empty_containers_as_not_available():
+    assert _value({}) == "not_available"
+    assert _value([]) == "not_available"
+
+
+def test_cli_c_stage_c2_writes_report_when_candidates_fail(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True, strict_model_success=False)
+    output = tmp_path / "c2_report.md"
+    result = main(["experiment", "c-stage-c2", "--config", str(config_path), "--output", str(output)])
+    assert result == 0
+    text = output.read_text(encoding="utf-8")
+    assert "C2 Open Model Evaluation Report" in text
+    assert "missing_dependency" in text or "unsupported_task" in text
+
+
+def test_cli_c_stage_c2_strict_candidate_failure_returns_nonzero_but_writes_report(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True, strict_model_success=True)
+    output = tmp_path / "c2_report.md"
+    result = main(["experiment", "c-stage-c2", "--config", str(config_path), "--output", str(output)])
+    assert result == 1
+    assert output.exists()
+
+
+def test_cli_c_stage_c2_returns_nonzero_for_missing_dataset(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True)
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["dataset"]["fu13_observations"] = str(tmp_path / "missing.parquet")
+    config_path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    output = tmp_path / "c2_report.md"
+    result = main(["experiment", "c-stage-c2", "--config", str(config_path), "--output", str(output)])
+    assert result == 1
+
+
+def test_cli_c_stage_c2_returns_nonzero_when_report_cannot_be_written(tmp_path, monkeypatch):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True)
+
+    def fail_write_text(self, *args, **kwargs):
+        raise PermissionError("read-only report target")
+
+    monkeypatch.setattr(Path, "write_text", fail_write_text)
+    result = main(
+        [
+            "experiment",
+            "c-stage-c2",
+            "--config",
+            str(config_path),
+            "--output",
+            str(tmp_path / "c2_report.md"),
+        ]
+    )
+    assert result == 1
 
 
 def _task_result(result, model_id, task_id):

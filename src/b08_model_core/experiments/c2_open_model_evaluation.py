@@ -347,6 +347,163 @@ def run_c2_open_model_evaluation(config: C2ExecutionConfig) -> C2OpenModelEvalua
     )
 
 
+def render_c2_open_model_report(
+    result: C2OpenModelEvaluationResult,
+    *,
+    config_path: str | None = None,
+) -> str:
+    lines = [
+        "# C2 Open Model Evaluation Report",
+        "",
+        "## Report Metadata",
+        "",
+        f"- config_path: {_value(config_path)}",
+        f"- audit_records: {len(result.audit_records)}",
+        f"- task_results: {len(result.task_results)}",
+        "",
+        "## C2 Scope",
+        "",
+        f"- core_model_ids: {_value(list(CORE_MODEL_IDS))}",
+        "- scope: open model audit and status-only model-task evaluation",
+        "- boundary: C2 does not approve B-stage self-training or C3 execution readiness.",
+        "",
+        "## Model Audit Table",
+        "",
+        (
+            "| model_id | display_name | source_kind | source_ref | model_card_ref | "
+            "license_note | dependency_status | weights_status | supported_tasks | "
+            "input_constraints | offline_feasibility | audit_status |"
+        ),
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for record in result.audit_records:
+        lines.append(
+            (
+                f"| {_cell(record.model_id)} | {_cell(record.display_name)} | {_cell(record.source_kind)} | "
+                f"{_cell(record.source_ref)} | {_cell(record.model_card_ref)} | {_cell(record.license_note)} | "
+                f"{_cell(record.dependency_status)} | {_cell(record.weights_status)} | "
+                f"{_cell(record.supported_tasks)} | {_cell(record.input_constraints)} | "
+                f"{_cell(record.offline_feasibility)} | {_cell(record.audit_status.value)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Model-Task Result Matrix",
+            "",
+            (
+                "| model_id | display_name | task_id | status | dataset_boundary | window_policy | "
+                "failure_reason | error_detail | decision_notes |"
+            ),
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for task_result in result.task_results:
+        lines.append(
+            (
+                f"| {_cell(task_result.model_id)} | {_cell(task_result.display_name)} | "
+                f"{_cell(task_result.task_id.value)} | {_cell(task_result.status.value)} | "
+                f"{_cell(task_result.dataset_boundary)} | {_cell(task_result.window_policy)} | "
+                f"{_cell(task_result.failure_reason)} | {_cell(task_result.error_detail)} | "
+                f"{_cell(task_result.decision_notes)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Forecasting Results",
+            "",
+            "| model_id | status | baseline_reference | metrics | baseline_metrics | artifact_outputs |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for task_result in result.task_results:
+        if task_result.task_id != C2TaskId.FORECASTING:
+            continue
+        lines.append(_task_result_metric_row(task_result))
+
+    lines.extend(
+        [
+            "",
+            "## Representation And Imputation Results",
+            "",
+            "| model_id | task_id | status | baseline_reference | metrics | baseline_metrics | artifact_outputs |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for task_result in result.task_results:
+        if task_result.task_id not in {C2TaskId.REPRESENTATION, C2TaskId.IMPUTATION}:
+            continue
+        lines.append(
+            (
+                f"| {_cell(task_result.model_id)} | {_cell(task_result.task_id.value)} | "
+                f"{_cell(task_result.status.value)} | {_cell(task_result.baseline_reference)} | "
+                f"{_cell(task_result.metrics)} | {_cell(task_result.baseline_metrics)} | "
+                f"{_cell(task_result.artifact_outputs)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Baseline Comparison",
+            "",
+            "| task_id | model_id | baseline_reference | baseline_metrics |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for task_result in result.task_results:
+        lines.append(
+            (
+                f"| {_cell(task_result.task_id.value)} | {_cell(task_result.model_id)} | "
+                f"{_cell(task_result.baseline_reference)} | {_cell(task_result.baseline_metrics)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Failure Taxonomy",
+            "",
+            "| status | model_id | task_id | reason | detail |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    failure_rows = [
+        (status, item)
+        for status, items in result.failure_taxonomy.items()
+        for item in items
+    ]
+    if failure_rows:
+        for status, item in failure_rows:
+            lines.append(
+                (
+                    f"| {_cell(status)} | {_cell(item.get('model_id'))} | {_cell(item.get('task_id'))} | "
+                    f"{_cell(item.get('reason'))} | {_cell(item.get('detail'))} |"
+                )
+            )
+    else:
+        lines.append("| none | none | none | none | none |")
+
+    lines.extend(["", "## C2 -> C3 Handoff", ""])
+    lines.extend(f"- {_value(note)}" for note in result.c3_handoff_notes)
+    lines.extend(["", "## C2 -> B Decision Notes", ""])
+    lines.extend(f"- {_value(note)}" for note in result.b_decision_notes)
+    lines.extend(["", "## Invalid Claims", ""])
+    lines.extend(f"- {claim}" for claim in result.invalid_claims)
+    return "\n".join(lines) + "\n"
+
+
+def _task_result_metric_row(task_result: C2ModelTaskResult) -> str:
+    return (
+        f"| {_cell(task_result.model_id)} | {_cell(task_result.status.value)} | "
+        f"{_cell(task_result.baseline_reference)} | {_cell(task_result.metrics)} | "
+        f"{_cell(task_result.baseline_metrics)} | {_cell(task_result.artifact_outputs)} |"
+    )
+
+
 def _forecasting_baseline(windows: list[object]) -> tuple[str, dict[str, Any], dict[str, Any]]:
     split = max(1, int(len(windows) * 0.7))
     train = windows[:split]
@@ -601,3 +758,21 @@ def _load_bool(raw: dict[str, Any], key: str, default: bool) -> bool:
     if not isinstance(value, bool):
         raise C2OpenModelConfigError(f"C2 {key} must be a boolean")
     return value
+
+
+def _value(value: object) -> str:
+    if value is None or (isinstance(value, str) and value == ""):
+        return "not_available"
+    if isinstance(value, dict):
+        if not value:
+            return "not_available"
+        return ", ".join(f"{key}={_value(item)}" for key, item in value.items())
+    if isinstance(value, list):
+        if not value:
+            return "not_available"
+        return ", ".join(_value(item) for item in value)
+    return str(value)
+
+
+def _cell(value: object) -> str:
+    return _value(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").replace("|", "\\|")
