@@ -70,6 +70,31 @@ class C1EvidenceRegistry:
     decision_gate: dict[str, Any]
 
 
+@dataclass
+class C1ModelResult:
+    model_name: str
+    status: ModelExecutionStatus
+    reason: str = ""
+    metrics: dict[str, float | int | None] | None = None
+
+
+@dataclass
+class C1EvidenceResult:
+    evidence_id: str
+    experiment_id: str
+    task_id: str
+    status: EvidenceStatus
+    dataset_boundary: str
+    split_policy: str
+    data_label_audit: dict[str, Any]
+    model_results: list[C1ModelResult]
+    primary_metrics: dict[str, float | int | str | None]
+    failure_reasons: list[str]
+    artifact_outputs: dict[str, Any]
+    invalid_claims: list[str]
+    decision_gate_notes: list[str]
+
+
 def load_c1_execution_config(path: str | Path) -> C1ExecutionConfig:
     config_path = Path(path)
     raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
@@ -135,3 +160,95 @@ def build_c1_registry(config: C1ExecutionConfig) -> C1EvidenceRegistry:
         execution_status=execution_status,
         decision_gate=dict(contract.get("decision_gate") or {}),
     )
+
+
+def render_c1_evidence_report(
+    results: list[C1EvidenceResult],
+    *,
+    planned_not_executed: list[str] | None = None,
+) -> str:
+    planned = planned_not_executed or []
+    lines = [
+        "# C1 Evidence Report",
+        "",
+        "## Summary",
+        "",
+        "| evidence_id | status |",
+        "| --- | --- |",
+    ]
+    for result in results:
+        lines.append(f"| {_cell(result.evidence_id)} | {_cell(result.status.value)} |")
+    for evidence_id in planned:
+        lines.append(f"| {_cell(evidence_id)} | planned_not_executed |")
+
+    for result in results:
+        lines.extend(
+            [
+                "",
+                f"## {result.evidence_id}",
+                "",
+                f"- experiment_id: {_value(result.experiment_id)}",
+                f"- task_id: {_value(result.task_id)}",
+                f"- status: {_value(result.status.value)}",
+                f"- dataset_boundary: {_value(result.dataset_boundary)}",
+                f"- split_policy: {_value(result.split_policy)}",
+                "",
+                "### data_label_audit",
+            ]
+        )
+        for key, value in result.data_label_audit.items():
+            lines.append(f"- {key}: {_value(value)}")
+        lines.extend(["", "### Model Results", "", "| model | status | reason |", "| --- | --- | --- |"])
+        for model in result.model_results:
+            lines.append(
+                f"| {_cell(model.model_name)} | {_cell(model.status.value)} | {_cell(model.reason or 'not_available')} |"
+            )
+        lines.extend(["", "### Primary Metrics"])
+        for key, value in result.primary_metrics.items():
+            lines.append(f"- {key}: {_value(value)}")
+        lines.extend(["", "### Failure Reasons"])
+        lines.extend(f"- {_value(reason)}" for reason in (result.failure_reasons or ["none"]))
+        lines.extend(["", "### Artifact Outputs"])
+        for key, value in result.artifact_outputs.items():
+            lines.append(f"- {key}: {_value(value)}")
+        lines.extend(["", "### Invalid Claims"])
+        lines.extend(f"- {claim}" for claim in result.invalid_claims)
+        lines.extend(["", "### Decision Gate Notes"])
+        lines.extend(f"- {_value(note)}" for note in result.decision_gate_notes)
+
+    lines.extend(["", "## Planned Not Executed"])
+    if planned:
+        lines.extend(f"- {evidence_id}: planned_not_executed" for evidence_id in planned)
+    else:
+        lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## CT4 Decision Gate Draft",
+            "",
+            "- decision: not_finalized",
+            "- note: C1 records evidence readiness only; it does not approve B-stage training.",
+            "",
+            "## Forbidden Interpretations",
+            "",
+            "- 不得解释为生产告警。",
+            "- 不得解释为 FU13 RUL。",
+            "- 不得解释为自动维修建议。",
+            "- 不得解释为专利授权结论。",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _value(value: object) -> str:
+    if value is None or value == "":
+        return "not_available"
+    if isinstance(value, dict):
+        return ", ".join(f"{key}={_value(item)}" for key, item in value.items())
+    if isinstance(value, list):
+        return ", ".join(_value(item) for item in value)
+    return str(value)
+
+
+def _cell(value: object) -> str:
+    return _value(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").replace("|", "\\|")
