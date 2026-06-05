@@ -4,13 +4,31 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Callable
+import warnings
 
+import numpy as np
+import pandas as pd
 import yaml
 
 from b08_model_core.adapters.base import dependency_available
+from b08_model_core.baselines.robust_forecaster import RobustStageForecaster
+from b08_model_core.evaluation.metrics import forecasting_metrics
+from b08_model_core.experiments.c1_evidence import (
+    apply_deterministic_mask,
+    reconstruction_metrics,
+    simple_statistical_embedding,
+)
+from b08_model_core.tasks.window_builder import build_model_windows
 
 
 CORE_MODEL_IDS = ("ttm", "moment", "chronos", "timesfm", "moirai_uni2ts", "units")
+INVALID_C2_CLAIMS = [
+    "不得解释为生产告警",
+    "不得解释为 FU13 RUL",
+    "不得解释为自动维修建议",
+    "不得解释为模型选型终局",
+    "不得解释为自研训练 Go 结论",
+]
 
 
 class C2OpenModelConfigError(ValueError):
@@ -53,6 +71,8 @@ class C2ModelSpec:
     dependency_modules: list[str]
     primary_tasks: list[C2TaskId]
     supported_tasks: list[C2TaskId]
+    force_missing_dependency: bool = False
+    force_unsupported_task: bool = False
 
 
 @dataclass
@@ -104,6 +124,34 @@ class C2ModelTaskAttempt:
     model_id: str
     task_id: C2TaskId
     status: C2ModelTaskStatus = C2ModelTaskStatus.SKIPPED_BY_CONFIG
+
+
+@dataclass
+class C2ModelTaskResult:
+    model_id: str
+    display_name: str
+    task_id: C2TaskId
+    status: C2ModelTaskStatus
+    dataset_boundary: str
+    window_policy: str
+    metrics: dict[str, Any]
+    baseline_reference: str
+    baseline_metrics: dict[str, Any]
+    failure_reason: str | None
+    error_detail: str | None
+    artifact_outputs: dict[str, Any]
+    invalid_claims: list[str]
+    decision_notes: list[str]
+
+
+@dataclass
+class C2OpenModelEvaluationResult:
+    audit_records: list[C2ModelAuditRecord]
+    task_results: list[C2ModelTaskResult]
+    failure_taxonomy: dict[str, list[dict[str, str]]]
+    c3_handoff_notes: list[str]
+    b_decision_notes: list[str]
+    invalid_claims: list[str]
 
 
 @dataclass
@@ -226,6 +274,223 @@ def run_c2_model_audit(
     return records
 
 
+def run_c2_open_model_evaluation(config: C2ExecutionConfig) -> C2OpenModelEvaluationResult:
+    registry = build_c2_model_registry(config)
+    audit_records = run_c2_model_audit(registry)
+    audit_by_model_id = {record.model_id: record for record in audit_records}
+
+    df = pd.read_parquet(config.dataset_path)
+    windows = build_model_windows(
+        df,
+        context_length=config.context_length,
+        prediction_length=config.prediction_length,
+        stride=config.prediction_length,
+        allow_cross_stage=(config.window_mode == "cross-stage"),
+    )[: config.max_windows]
+    if len(windows) < 2:
+        raise ValueError(f"not enough windows for C2 evaluation: need at least 2, got {len(windows)}")
+
+    baselines = {
+        C2TaskId.FORECASTING: _forecasting_baseline(windows),
+        C2TaskId.REPRESENTATION: _representation_baseline(windows),
+        C2TaskId.IMPUTATION: _imputation_baseline(config, windows),
+    }
+    window_policy = _window_policy(config, len(windows))
+    task_results: list[C2ModelTaskResult] = []
+    failure_taxonomy: dict[str, list[dict[str, str]]] = {}
+
+    for attempt in registry.attempts:
+        model = registry.by_model_id[attempt.model_id]
+        audit_record = audit_by_model_id[attempt.model_id]
+        status, failure_reason, error_detail = _model_task_status(model, attempt.task_id, audit_record)
+        baseline_reference, baseline_metrics, baseline_artifacts = baselines[attempt.task_id]
+        result = C2ModelTaskResult(
+            model_id=model.model_id,
+            display_name=model.display_name,
+            task_id=attempt.task_id,
+            status=status,
+            dataset_boundary=config.dataset_boundary,
+            window_policy=window_policy,
+            metrics={},
+            baseline_reference=baseline_reference,
+            baseline_metrics=baseline_metrics,
+            failure_reason=failure_reason,
+            error_detail=error_detail,
+            artifact_outputs=baseline_artifacts,
+            invalid_claims=list(INVALID_C2_CLAIMS),
+            decision_notes=_decision_notes(status, baseline_reference),
+        )
+        task_results.append(result)
+        if failure_reason:
+            failure_taxonomy.setdefault(status.value, []).append(
+                {
+                    "model_id": model.model_id,
+                    "task_id": attempt.task_id.value,
+                    "reason": failure_reason,
+                    "detail": error_detail or "",
+                }
+            )
+
+    return C2OpenModelEvaluationResult(
+        audit_records=audit_records,
+        task_results=task_results,
+        failure_taxonomy=failure_taxonomy,
+        c3_handoff_notes=[
+            "C2 records baseline metrics and model-task readiness only.",
+            "C3 must re-check licenses, interfaces, and dependencies before any external model execution.",
+        ],
+        b_decision_notes=[
+            "C2 results are not a B-stage self-training Go decision.",
+            "No open model candidate is marked available_and_ran in this status-only task.",
+        ],
+        invalid_claims=list(INVALID_C2_CLAIMS),
+    )
+
+
+def _forecasting_baseline(windows: list[object]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    split = max(1, int(len(windows) * 0.7))
+    train = windows[:split]
+    test = windows[split:]
+    if not test:
+        raise ValueError("not enough windows for C2 forecasting test split")
+    predictions = RobustStageForecaster().fit(train).predict(test)
+    metrics = forecasting_metrics(predictions, test)
+    return (
+        "RobustStageForecaster",
+        metrics,
+        {
+            "split_policy": "ordered_70_30",
+            "train_windows": len(train),
+            "test_windows": len(test),
+        },
+    )
+
+
+def _representation_baseline(windows: list[object]) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    embeddings = [simple_statistical_embedding(window.X) for window in windows]
+    feature_count = len(embeddings[0]) if embeddings else 0
+    return (
+        "statistical_embedding",
+        {
+            "embedding_windows": len(embeddings),
+            "embedding_features": feature_count,
+        },
+        {
+            "statistical_embedding_example": embeddings[0] if embeddings else {},
+        },
+    )
+
+
+def _imputation_baseline(
+    config: C2ExecutionConfig,
+    windows: list[object],
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    metrics_by_window = []
+    for index, window in enumerate(windows):
+        masked, mask = apply_deterministic_mask(
+            window.X,
+            mask_ratio=config.mask_ratio,
+            seed=config.seed + index,
+        )
+        median_source = np.asarray(window.X, dtype=float).copy()
+        median_source[mask] = np.nan
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            medians = np.nanmedian(median_source, axis=0)
+        fallback_medians = np.median(np.asarray(window.X, dtype=float), axis=0)
+        medians = np.where(np.isnan(medians), fallback_medians, medians)
+        medians = np.nan_to_num(medians, nan=0.0)
+        reconstructed = masked.copy()
+        reconstructed[mask] = np.take(medians, np.where(mask)[1])
+        metrics_by_window.append(reconstruction_metrics(window.X, reconstructed, mask))
+
+    mae_values = [metric["mae"] for metric in metrics_by_window if metric["mae"] is not None]
+    rmse_values = [metric["rmse"] for metric in metrics_by_window if metric["rmse"] is not None]
+    metrics = {
+        "mae": float(np.mean(mae_values)) if mae_values else None,
+        "rmse": float(np.mean(rmse_values)) if rmse_values else None,
+        "count": int(sum(int(metric["count"]) for metric in metrics_by_window)),
+    }
+    return (
+        "simple_reconstruction_baseline",
+        metrics,
+        {
+            "mask_policy": {
+                "mask_ratio": config.mask_ratio,
+                "seed": config.seed,
+                "applied_windows": len(windows),
+            },
+        },
+    )
+
+
+def _model_task_status(
+    model: C2ModelSpec,
+    task_id: C2TaskId,
+    audit_record: C2ModelAuditRecord,
+) -> tuple[C2ModelTaskStatus, str | None, str | None]:
+    if model.force_missing_dependency:
+        return (
+            C2ModelTaskStatus.MISSING_DEPENDENCY,
+            "forced missing dependency status from C2 config",
+            "force_missing_dependency:true",
+        )
+    if model.force_unsupported_task:
+        return (
+            C2ModelTaskStatus.UNSUPPORTED_TASK,
+            "forced unsupported task status from C2 config",
+            "force_unsupported_task:true",
+        )
+    if audit_record.dependency_status.startswith("missing:"):
+        return (
+            C2ModelTaskStatus.MISSING_DEPENDENCY,
+            "dependency modules are unavailable",
+            audit_record.dependency_status,
+        )
+    if task_id not in model.supported_tasks:
+        return (
+            C2ModelTaskStatus.UNSUPPORTED_TASK,
+            f"{task_id.value} is not listed in supported_tasks",
+            ",".join(task.value for task in model.supported_tasks),
+        )
+    if audit_record.weights_status == "download_disabled":
+        return (
+            C2ModelTaskStatus.MISSING_OR_BLOCKED_WEIGHTS,
+            "model weights are unavailable because downloads are disabled",
+            audit_record.weights_status,
+        )
+    if audit_record.audit_status in {
+        C2AuditStatus.NEEDS_LICENSE_REVIEW,
+        C2AuditStatus.NEEDS_INTERFACE_REVIEW,
+    }:
+        return (
+            C2ModelTaskStatus.LICENSE_OR_INTERFACE_NEEDS_REVIEW,
+            "license or interface review prevents external model execution",
+            audit_record.audit_status.value,
+        )
+    return (
+        C2ModelTaskStatus.LICENSE_OR_INTERFACE_NEEDS_REVIEW,
+        "external model runtime is not implemented in C2 Task 3",
+        "status_only_runner",
+    )
+
+
+def _window_policy(config: C2ExecutionConfig, window_count: int) -> str:
+    return (
+        f"mode:{config.window_mode};context:{config.context_length};"
+        f"prediction:{config.prediction_length};max_windows:{config.max_windows};"
+        f"used_windows:{window_count}"
+    )
+
+
+def _decision_notes(status: C2ModelTaskStatus, baseline_reference: str) -> list[str]:
+    return [
+        f"candidate_status:{status.value}",
+        f"baseline_reference:{baseline_reference}",
+        "candidate external runtime was not executed in C2 Task 3.",
+    ]
+
+
 def _format_dependency_status(
     model: C2ModelSpec,
     missing_dependencies: list[str],
@@ -280,6 +545,8 @@ def _load_model_spec(raw: Any) -> C2ModelSpec:
         dependency_modules=_load_string_list(raw, "dependency_modules"),
         primary_tasks=_load_task_ids(_load_optional_list(raw, "primary_tasks")),
         supported_tasks=_load_task_ids(_load_optional_list(raw, "supported_tasks")),
+        force_missing_dependency=_load_bool(raw, "force_missing_dependency", False),
+        force_unsupported_task=_load_bool(raw, "force_unsupported_task", False),
     )
 
 

@@ -1,19 +1,28 @@
 from dataclasses import replace
 from pathlib import Path
 
+import numpy as np
+import pandas as pd
 import pytest
 import yaml
 
 from b08_model_core.experiments.c2_open_model_evaluation import (
     C2AuditStatus,
     C2ModelAuditRecord,
+    C2ModelSpec,
+    C2ModelTaskStatus,
     C2OpenModelConfigError,
     CORE_MODEL_IDS,
     C2TaskId,
+    _imputation_baseline,
+    _model_task_status,
     build_c2_model_registry,
     load_c2_open_model_config,
+    run_c2_open_model_evaluation,
     run_c2_model_audit,
 )
+from b08_model_core.experiments.c1_evidence import apply_deterministic_mask, reconstruction_metrics
+from b08_model_core.tasks.window_builder import ModelWindow
 
 
 CONFIG_PATH = Path("configs/c_stage_c2_open_model_evaluation.yaml")
@@ -196,3 +205,237 @@ def test_c2_registry_rejects_core_model_without_primary_task():
     config.by_model_id["moment"].primary_tasks = []
     with pytest.raises(C2OpenModelConfigError, match="at least one primary task"):
         build_c2_model_registry(config)
+
+
+def test_c2_runner_outputs_attempt_for_every_core_model(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True)
+    result = run_c2_open_model_evaluation(load_c2_open_model_config(config_path))
+    assert set(record.model_id for record in result.audit_records) == set(CORE_MODEL_IDS)
+    assert set(attempt.model_id for attempt in result.task_results) == set(CORE_MODEL_IDS)
+    assert any(attempt.task_id == C2TaskId.FORECASTING for attempt in result.task_results)
+    assert any(attempt.task_id == C2TaskId.REPRESENTATION for attempt in result.task_results)
+    assert any(attempt.task_id == C2TaskId.IMPUTATION for attempt in result.task_results)
+
+
+def test_c2_runner_records_forecasting_and_representation_imputation_baselines(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True)
+    result = run_c2_open_model_evaluation(load_c2_open_model_config(config_path))
+    ttm = _task_result(result, "ttm", C2TaskId.FORECASTING)
+    moment_rep = _task_result(result, "moment", C2TaskId.REPRESENTATION)
+    units_imp = _task_result(result, "units", C2TaskId.IMPUTATION)
+    assert ttm.baseline_reference == "RobustStageForecaster"
+    assert "mae" in ttm.baseline_metrics
+    assert moment_rep.baseline_reference == "statistical_embedding"
+    assert moment_rep.baseline_metrics["embedding_windows"] > 0
+    assert units_imp.baseline_reference == "simple_reconstruction_baseline"
+    assert units_imp.baseline_metrics["mae"] is not None
+
+
+def test_c2_imputation_baseline_uses_unmasked_values_for_median_fill(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True)
+    config = load_c2_open_model_config(config_path)
+    config.mask_ratio = 0.25
+    config.seed = 3
+    window = _model_window(
+        np.array(
+            [
+                [10.0, 100.0],
+                [20.0, 200.0],
+                [30.0, 300.0],
+                [40.0, 400.0],
+            ]
+        )
+    )
+
+    _, metrics, _ = _imputation_baseline(config, [window])
+
+    masked, mask = apply_deterministic_mask(window.X, mask_ratio=config.mask_ratio, seed=config.seed)
+    median_source = window.X.astype(float).copy()
+    median_source[mask] = np.nan
+    expected_medians = np.nanmedian(median_source, axis=0)
+    expected_reconstructed = masked.copy()
+    expected_reconstructed[mask] = np.take(expected_medians, np.where(mask)[1])
+    expected_metrics = reconstruction_metrics(window.X, expected_reconstructed, mask)
+    zero_masked_medians = np.median(masked, axis=0)
+    zero_masked_reconstructed = masked.copy()
+    zero_masked_reconstructed[mask] = np.take(zero_masked_medians, np.where(mask)[1])
+    zero_masked_metrics = reconstruction_metrics(window.X, zero_masked_reconstructed, mask)
+
+    assert metrics["mae"] == pytest.approx(expected_metrics["mae"])
+    assert metrics["mae"] != pytest.approx(zero_masked_metrics["mae"])
+
+
+def test_c2_runner_candidate_failures_are_structured(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True)
+    result = run_c2_open_model_evaluation(load_c2_open_model_config(config_path))
+    statuses = {attempt.status for attempt in result.task_results}
+    assert C2ModelTaskStatus.MISSING_DEPENDENCY in statuses or C2ModelTaskStatus.UNSUPPORTED_TASK in statuses
+    assert all(
+        attempt.status != C2ModelTaskStatus.AVAILABLE_AND_RAN
+        for attempt in result.task_results
+    )
+    assert all(attempt.invalid_claims for attempt in result.task_results)
+    assert result.failure_taxonomy
+
+
+def test_c2_model_task_status_maps_missing_dependency_before_weight_blockers():
+    model = _status_model()
+    record = _status_audit_record(
+        dependency_status="missing:definitely_missing_module",
+        weights_status="download_disabled",
+    )
+
+    status, reason, detail = _model_task_status(model, C2TaskId.FORECASTING, record)
+
+    assert status == C2ModelTaskStatus.MISSING_DEPENDENCY
+    assert reason == "dependency modules are unavailable"
+    assert detail == "missing:definitely_missing_module"
+
+
+def test_c2_model_task_status_maps_unsupported_task_before_weight_blockers():
+    model = _status_model(supported_tasks=[C2TaskId.FORECASTING])
+    record = _status_audit_record(weights_status="download_disabled")
+
+    status, reason, detail = _model_task_status(model, C2TaskId.IMPUTATION, record)
+
+    assert status == C2ModelTaskStatus.UNSUPPORTED_TASK
+    assert reason == "imputation is not listed in supported_tasks"
+    assert detail == "forecasting"
+
+
+@pytest.mark.parametrize(
+    "audit_status",
+    [C2AuditStatus.NEEDS_LICENSE_REVIEW, C2AuditStatus.NEEDS_INTERFACE_REVIEW],
+)
+def test_c2_model_task_status_maps_license_or_interface_review(audit_status):
+    model = _status_model()
+    record = _status_audit_record(
+        audit_status=audit_status,
+        weights_status="download_allowed",
+    )
+
+    status, reason, detail = _model_task_status(model, C2TaskId.FORECASTING, record)
+
+    assert status == C2ModelTaskStatus.LICENSE_OR_INTERFACE_NEEDS_REVIEW
+    assert reason == "license or interface review prevents external model execution"
+    assert detail == audit_status.value
+
+
+def test_c2_model_task_status_maps_blocked_weights():
+    model = _status_model()
+    record = _status_audit_record(weights_status="download_disabled")
+
+    status, reason, detail = _model_task_status(model, C2TaskId.FORECASTING, record)
+
+    assert status == C2ModelTaskStatus.MISSING_OR_BLOCKED_WEIGHTS
+    assert reason == "model weights are unavailable because downloads are disabled"
+    assert detail == "download_disabled"
+
+
+def test_c2_runner_returns_data_error_when_no_windows(tmp_path):
+    config_path = _write_c2_fixture_config(tmp_path, force_model_failures=True, rows=8)
+    with pytest.raises(ValueError, match="not enough windows"):
+        run_c2_open_model_evaluation(load_c2_open_model_config(config_path))
+
+
+def _task_result(result, model_id, task_id):
+    return next(item for item in result.task_results if item.model_id == model_id and item.task_id == task_id)
+
+
+def _status_model(*, supported_tasks=None):
+    tasks = supported_tasks or [C2TaskId.FORECASTING]
+    return C2ModelSpec(
+        model_id="status_model",
+        display_name="Status Model",
+        source_kind="local",
+        source_ref="source",
+        model_card_ref="model_card",
+        license_note="reviewed",
+        dependency_modules=[],
+        primary_tasks=list(tasks),
+        supported_tasks=list(tasks),
+    )
+
+
+def _status_audit_record(
+    *,
+    dependency_status="available",
+    weights_status="download_allowed",
+    audit_status=C2AuditStatus.AUDIT_PASSED,
+):
+    return C2ModelAuditRecord(
+        model_id="status_model",
+        display_name="Status Model",
+        source_kind="local",
+        source_ref="source",
+        model_card_ref="model_card",
+        license_note="reviewed",
+        dependency_status=dependency_status,
+        weights_status=weights_status,
+        supported_tasks=[C2TaskId.FORECASTING.value],
+        input_constraints="supported_tasks:forecasting",
+        offline_feasibility="no_network_by_default:true",
+        audit_status=audit_status,
+    )
+
+
+def _model_window(values):
+    return ModelWindow(
+        X=values,
+        mask=np.ones_like(values, dtype=bool),
+        delta_t=np.zeros(values.shape[0]),
+        stage_token=np.array(["stage"] * values.shape[0], dtype=object),
+        sensor_token=[f"sensor_{index}" for index in range(values.shape[1])],
+        domain_token=["domain"] * values.shape[1],
+        device_token="FU13",
+        y=np.empty((0, values.shape[1])),
+        degradation_label="normal",
+    )
+
+
+def _write_c2_fixture_config(tmp_path, *, force_model_failures=False, rows=120, strict_model_success=False):
+    dataset = tmp_path / "fu13.parquet"
+    _write_fu13_fixture(dataset, rows=rows)
+    raw = yaml.safe_load(Path("configs/c_stage_c2_open_model_evaluation.yaml").read_text(encoding="utf-8"))
+    raw["dataset"]["fu13_observations"] = str(dataset)
+    raw["dataset"]["boundary"] = "test_fixture_no_private_data"
+    raw["window"]["context_length"] = 24
+    raw["window"]["prediction_length"] = 6
+    raw["window"]["max_windows"] = 8
+    raw["outputs"]["report"] = str(tmp_path / "report.md")
+    raw["execution_policy"]["strict_model_success"] = strict_model_success
+    if force_model_failures:
+        for model in raw["core_models"]:
+            model["force_missing_dependency"] = model["model_id"] in {"ttm", "chronos", "timesfm", "moirai_uni2ts", "moment"}
+            model["force_unsupported_task"] = model["model_id"] == "units"
+    path = tmp_path / "c2.yaml"
+    path.write_text(yaml.safe_dump(raw, allow_unicode=True), encoding="utf-8")
+    return path
+
+
+def _write_fu13_fixture(path, *, rows=120):
+    timestamps = pd.date_range("2026-05-01", periods=rows, freq="5s", tz="UTC")
+    records = []
+    for i, ts in enumerate(timestamps):
+        stage = "溶解" if i < rows // 2 else "浇筑"
+        quality = "good" if i % 17 else "unassigned_cycle"
+        for sensor, domain, value in [
+            ("LeakElec", "electrical", 10 + np.sin(i / 7)),
+            ("O2Content", "atmosphere", -20 + np.cos(i / 9)),
+        ]:
+            records.append(
+                {
+                    "timestamp": ts,
+                    "device_id": "FU13",
+                    "batch_id": "cycle_0001",
+                    "stage": stage,
+                    "sensor_id": sensor,
+                    "value": value,
+                    "unit": "%",
+                    "domain": domain,
+                    "quality_flag": quality,
+                    "degradation_label": "normal",
+                    "failure_proxy": False,
+                }
+            )
+    pd.DataFrame(records).to_parquet(path, index=False)
