@@ -154,7 +154,7 @@ def test_c2_registry_rejects_core_model_without_primary_task():
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 Expected: FAIL because `b08_model_core.experiments.c2_open_model_evaluation` does not exist.
@@ -276,7 +276,7 @@ Implementation notes:
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 Expected: PASS for the Task 1 tests.
@@ -346,7 +346,7 @@ def test_c2_audit_records_license_review_without_blocking_attempts():
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 Expected: FAIL because audit dataclass/runner is not implemented.
@@ -388,7 +388,7 @@ Audit rules:
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 Expected: PASS for Task 1 and Task 2 tests.
@@ -521,7 +521,7 @@ def _write_fu13_fixture(path, *, rows=120):
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 Expected: FAIL because runner/result schema is not implemented.
@@ -596,7 +596,7 @@ Status helper rules:
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 Expected: PASS for Task 1-3 tests.
@@ -693,7 +693,7 @@ def test_cli_c_stage_c2_returns_nonzero_when_report_cannot_be_written(tmp_path, 
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 Expected: FAIL because report renderer and CLI are missing.
@@ -770,8 +770,8 @@ Failure statuses:
 Run:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
-uv run python -m pytest tests/test_c1_evidence.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c1_evidence.py -q
 ```
 
 Expected: PASS.
@@ -836,7 +836,7 @@ Expected: command and six-model wording appear.
 Run:
 
 ```bash
-uv run python -m pytest -q
+uv run --extra dev python -m pytest -q
 ```
 
 Expected: PASS.
@@ -871,13 +871,13 @@ After all tasks:
 - [ ] Run:
 
 ```bash
-uv run python -m pytest -q
+uv run --extra dev python -m pytest -q
 ```
 
 - [ ] Run C2 CLI against fixture through tests:
 
 ```bash
-uv run python -m pytest tests/test_c2_open_model_evaluation.py -q
+uv run --extra dev python -m pytest tests/test_c2_open_model_evaluation.py -q
 ```
 
 - [ ] If local FU13 parquet exists, run:
