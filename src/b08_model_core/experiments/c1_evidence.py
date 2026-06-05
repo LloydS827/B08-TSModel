@@ -185,7 +185,10 @@ def render_c1_evidence_report(
     ]
     for result in results:
         lines.append(f"| {_cell(result.evidence_id)} | {_cell(result.status.value)} |")
+    result_evidence_ids = {result.evidence_id for result in results}
     for evidence_id in planned:
+        if evidence_id in result_evidence_ids:
+            continue
         lines.append(f"| {_cell(evidence_id)} | planned_not_executed |")
 
     for result in results:

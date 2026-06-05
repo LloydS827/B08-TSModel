@@ -84,6 +84,32 @@ def test_c1_report_contains_audit_invalid_claims_failures_and_decision_gate():
     assert "planned_not_executed" in text
 
 
+def test_c1_report_deduplicates_planned_not_executed_summary_rows():
+    result = C1EvidenceResult(
+        evidence_id="E4_open_data_pm",
+        experiment_id="c0_open_data_pm_audit_v1",
+        task_id="open_data_pm_mapping_v1",
+        status=EvidenceStatus.PLANNED_NOT_EXECUTED,
+        dataset_boundary="internal_fu13_no_raw_data_committed",
+        split_policy="unit_run_fault_or_process_split_required",
+        data_label_audit={"source_status": "official_or_primary_source_required"},
+        model_results=[
+            C1ModelResult(
+                model_name="not_executed_in_c1",
+                status=ModelExecutionStatus.PLANNED_NOT_EXECUTED,
+                reason="C1 executes E1-E3 only",
+            )
+        ],
+        primary_metrics={"dataset_specific_metric": None},
+        failure_reasons=[],
+        artifact_outputs={"status": "planned_not_executed"},
+        invalid_claims=["不得解释为生产告警"],
+        decision_gate_notes=["reserved for C2"],
+    )
+    text = render_c1_evidence_report([result], planned_not_executed=["E4_open_data_pm"])
+    assert text.count("| E4_open_data_pm | planned_not_executed |") == 1
+
+
 def test_deterministic_mask_is_reproducible():
     values = np.arange(24, dtype=float).reshape(6, 4)
     masked_a, mask_a = apply_deterministic_mask(values, mask_ratio=0.25, seed=7)
