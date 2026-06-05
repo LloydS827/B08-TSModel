@@ -53,6 +53,77 @@ def test_c2_config_lists_all_six_core_models():
         assert config.by_model_id[model_id].license_note == "needs_review"
 
 
+def test_c2_config_rejects_invalid_stage(tmp_path):
+    raw = _load_raw_config()
+    raw["stage"] = "C2"
+    with pytest.raises(C2OpenModelConfigError, match="stage"):
+        load_c2_open_model_config(_write_config(tmp_path, raw))
+
+
+def test_c2_config_rejects_missing_upstream_c1_config(tmp_path):
+    raw = _load_raw_config()
+    raw.pop("upstream_c1_config")
+    with pytest.raises(C2OpenModelConfigError, match="upstream_c1_config"):
+        load_c2_open_model_config(_write_config(tmp_path, raw))
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [
+        ("dataset", "fu13_observations"),
+        ("dataset", "fu13_config"),
+        ("dataset", "boundary"),
+        ("outputs", "report"),
+    ],
+)
+def test_c2_config_rejects_missing_required_strings(tmp_path, section, field):
+    raw = _load_raw_config()
+    raw[section].pop(field)
+    with pytest.raises(C2OpenModelConfigError, match=field):
+        load_c2_open_model_config(_write_config(tmp_path, raw))
+
+
+def test_c2_config_rejects_invalid_window_mode(tmp_path):
+    raw = _load_raw_config()
+    raw["window"]["window_mode"] = "free-run"
+    with pytest.raises(C2OpenModelConfigError, match="window_mode"):
+        load_c2_open_model_config(_write_config(tmp_path, raw))
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("context_length", 0, "positive integer"),
+        ("prediction_length", -1, "positive integer"),
+        ("max_windows", 1, ">= 2"),
+        ("context_length", "90", "integer"),
+        ("seed", -1, "non-negative integer"),
+    ],
+)
+def test_c2_config_rejects_invalid_window_integer_fields(tmp_path, field, value, message):
+    raw = _load_raw_config()
+    raw["window"][field] = value
+    with pytest.raises(C2OpenModelConfigError, match=message):
+        load_c2_open_model_config(_write_config(tmp_path, raw))
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        (0, "> 0"),
+        (1.2, "<= 1"),
+        (float("nan"), "finite"),
+        (float("inf"), "finite"),
+        ("0.2", "number"),
+    ],
+)
+def test_c2_config_rejects_invalid_mask_ratio(tmp_path, value, message):
+    raw = _load_raw_config()
+    raw["window"]["mask_ratio"] = value
+    with pytest.raises(C2OpenModelConfigError, match=message):
+        load_c2_open_model_config(_write_config(tmp_path, raw))
+
+
 def test_c2_registry_generates_attempt_for_every_core_model():
     config = load_c2_open_model_config(CONFIG_PATH)
     registry = build_c2_model_registry(config)
@@ -195,6 +266,20 @@ def test_c2_registry_falls_back_to_primary_tasks_when_policy_omits_model():
     config.task_policy = {
         task_id: [model_id for model_id in model_ids if model_id != "moment"]
         for task_id, model_ids in config.task_policy.items()
+    }
+    registry = build_c2_model_registry(config)
+    moment_attempts = [
+        attempt.task_id for attempt in registry.attempts if attempt.model_id == "moment"
+    ]
+    assert moment_attempts == [C2TaskId.REPRESENTATION, C2TaskId.IMPUTATION]
+
+
+def test_c2_registry_falls_back_to_missing_primary_task_when_policy_partially_covers_model():
+    config = load_c2_open_model_config(CONFIG_PATH)
+    config.task_policy = {
+        C2TaskId.FORECASTING: ["ttm", "chronos", "timesfm", "moirai_uni2ts"],
+        C2TaskId.REPRESENTATION: ["moment", "units"],
+        C2TaskId.IMPUTATION: ["units"],
     }
     registry = build_c2_model_registry(config)
     moment_attempts = [
@@ -365,6 +450,12 @@ def test_c2_report_contains_required_sections(tmp_path):
     for model_id in CORE_MODEL_IDS:
         assert model_id in text
     assert "不得解释为生产告警" in text
+    assert "- run_id: C2_open_model_evaluation:" in text
+    assert ":cfg" in result.run_id
+    assert "- upstream_c1_config: configs/c_stage_c1_execution.yaml" in text
+    assert "- execution_time_utc: " in text
+    assert "- dataset_boundary: test_fixture_no_private_data" in text
+    assert "- environment_boundary: no_network_by_default:true;allow_download:false;model_cache_dir:hf_cache" in text
     assert "missing_dependency" in text
     assert "forced missing dependency status from C2 config" in text
     assert "force_missing_dependency:true" in text

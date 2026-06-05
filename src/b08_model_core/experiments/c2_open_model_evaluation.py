@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import StrEnum
+import hashlib
+import json
+import math
 from pathlib import Path
 from typing import Any, Callable
 import warnings
@@ -146,6 +150,11 @@ class C2ModelTaskResult:
 
 @dataclass
 class C2OpenModelEvaluationResult:
+    run_id: str
+    upstream_c1_config: str
+    execution_time_utc: str
+    dataset_boundary: str
+    environment_boundary: str
     audit_records: list[C2ModelAuditRecord]
     task_results: list[C2ModelTaskResult]
     failure_taxonomy: dict[str, list[dict[str, str]]]
@@ -175,19 +184,22 @@ def load_c2_open_model_config(path: str | Path) -> C2ExecutionConfig:
     outputs = _load_optional_mapping(raw, "outputs")
     core_models = _load_optional_list(raw, "core_models")
     task_policy = _load_optional_mapping(raw, "task_policy")
+    stage = _load_required_string(raw, "stage")
+    if stage != "C2_open_model_evaluation":
+        raise C2OpenModelConfigError("C2 stage must be C2_open_model_evaluation")
 
     return C2ExecutionConfig(
-        stage=str(raw.get("stage", "")),
-        upstream_c1_config=Path(raw.get("upstream_c1_config", "")),
-        dataset_path=Path(dataset.get("fu13_observations", "")),
-        fu13_config_path=Path(dataset.get("fu13_config", "")),
-        dataset_boundary=str(dataset.get("boundary", "")),
-        window_mode=str(window.get("window_mode", "cross-stage")),
-        context_length=int(window.get("context_length", 90)),
-        prediction_length=int(window.get("prediction_length", 16)),
-        max_windows=int(window.get("max_windows", 40)),
-        mask_ratio=float(window.get("mask_ratio", 0.2)),
-        seed=int(window.get("seed", 7)),
+        stage=stage,
+        upstream_c1_config=Path(_load_required_string(raw, "upstream_c1_config")),
+        dataset_path=Path(_load_required_string(dataset, "fu13_observations")),
+        fu13_config_path=Path(_load_required_string(dataset, "fu13_config")),
+        dataset_boundary=_load_required_string(dataset, "boundary"),
+        window_mode=_load_window_mode(window),
+        context_length=_load_positive_int(window, "context_length"),
+        prediction_length=_load_positive_int(window, "prediction_length"),
+        max_windows=_load_min_int(window, "max_windows", minimum=2),
+        mask_ratio=_load_mask_ratio(window, "mask_ratio"),
+        seed=_load_nonnegative_int(window, "seed"),
         core_models=[_load_model_spec(item) for item in core_models],
         task_policy=_load_task_policy(task_policy),
         allow_download=_load_bool(cache_policy, "allow_download", False),
@@ -196,7 +208,7 @@ def load_c2_open_model_config(path: str | Path) -> C2ExecutionConfig:
         no_network_by_default=_load_bool(execution_policy, "no_network_by_default", True),
         record_failure=_load_bool(execution_policy, "record_failure", True),
         do_not_over_claim=_load_bool(execution_policy, "do_not_over_claim", True),
-        report_path=Path(outputs.get("report", "reports/c_stage_c2_open_model_evaluation.md")),
+        report_path=Path(_load_required_string(outputs, "report")),
     )
 
 
@@ -220,19 +232,24 @@ def build_c2_model_registry(config: C2ExecutionConfig) -> C2ModelRegistry:
 
     by_model_id = config.by_model_id
     attempts: list[C2ModelTaskAttempt] = []
-    covered_model_ids: set[str] = set()
+    covered_pairs: set[tuple[str, C2TaskId]] = set()
     for task_id, model_ids in config.task_policy.items():
         for model_id in model_ids:
             if model_id not in by_model_id:
                 raise C2OpenModelConfigError(f"task policy references unknown core model: {model_id}")
-            attempts.append(C2ModelTaskAttempt(model_id=model_id, task_id=task_id))
-            covered_model_ids.add(model_id)
+            pair = (model_id, task_id)
+            if pair not in covered_pairs:
+                attempts.append(C2ModelTaskAttempt(model_id=model_id, task_id=task_id))
+                covered_pairs.add(pair)
 
     for model in config.core_models:
         if not model.primary_tasks:
             raise C2OpenModelConfigError(f"{model.model_id} must declare at least one primary task")
-        if model.model_id not in covered_model_ids:
-            attempts.extend(C2ModelTaskAttempt(model_id=model.model_id, task_id=task_id) for task_id in model.primary_tasks)
+        for task_id in model.primary_tasks:
+            pair = (model.model_id, task_id)
+            if pair not in covered_pairs:
+                attempts.append(C2ModelTaskAttempt(model_id=model.model_id, task_id=task_id))
+                covered_pairs.add(pair)
 
     return C2ModelRegistry(
         by_model_id=by_model_id,
@@ -331,7 +348,13 @@ def run_c2_open_model_evaluation(config: C2ExecutionConfig) -> C2OpenModelEvalua
                 }
             )
 
+    execution_time_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return C2OpenModelEvaluationResult(
+        run_id=_run_id(config, execution_time_utc),
+        upstream_c1_config=str(config.upstream_c1_config),
+        execution_time_utc=execution_time_utc,
+        dataset_boundary=config.dataset_boundary,
+        environment_boundary=_environment_boundary(config),
         audit_records=audit_records,
         task_results=task_results,
         failure_taxonomy=failure_taxonomy,
@@ -358,6 +381,11 @@ def render_c2_open_model_report(
         "## Report Metadata",
         "",
         f"- config_path: {_value(config_path)}",
+        f"- run_id: {_value(result.run_id)}",
+        f"- upstream_c1_config: {_value(result.upstream_c1_config)}",
+        f"- execution_time_utc: {_value(result.execution_time_utc)}",
+        f"- dataset_boundary: {_value(result.dataset_boundary)}",
+        f"- environment_boundary: {_value(result.environment_boundary)}",
         f"- audit_records: {len(result.audit_records)}",
         f"- task_results: {len(result.task_results)}",
         "",
@@ -640,6 +668,49 @@ def _window_policy(config: C2ExecutionConfig, window_count: int) -> str:
     )
 
 
+def _run_id(config: C2ExecutionConfig, execution_time_utc: str) -> str:
+    compact_time = (
+        execution_time_utc.replace("-", "")
+        .replace(":", "")
+        .replace("+0000", "Z")
+        .replace("+00:00", "Z")
+    )
+    return f"{config.stage}:{compact_time}:cfg{_config_signature(config)}"
+
+
+def _config_signature(config: C2ExecutionConfig) -> str:
+    payload = {
+        "stage": config.stage,
+        "upstream_c1_config": str(config.upstream_c1_config),
+        "dataset_path": str(config.dataset_path),
+        "fu13_config_path": str(config.fu13_config_path),
+        "dataset_boundary": config.dataset_boundary,
+        "window_mode": config.window_mode,
+        "context_length": config.context_length,
+        "prediction_length": config.prediction_length,
+        "max_windows": config.max_windows,
+        "mask_ratio": config.mask_ratio,
+        "seed": config.seed,
+        "task_policy": {
+            task_id.value: model_ids for task_id, model_ids in config.task_policy.items()
+        },
+        "allow_download": config.allow_download,
+        "model_cache_dir": config.model_cache_dir,
+        "strict_model_success": config.strict_model_success,
+        "no_network_by_default": config.no_network_by_default,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()[:12]
+
+
+def _environment_boundary(config: C2ExecutionConfig) -> str:
+    return (
+        f"no_network_by_default:{str(config.no_network_by_default).lower()};"
+        f"allow_download:{str(config.allow_download).lower()};"
+        f"model_cache_dir:{_value(config.model_cache_dir)}"
+    )
+
+
 def _decision_notes(status: C2ModelTaskStatus, baseline_reference: str) -> list[str]:
     return [
         f"candidate_status:{status.value}",
@@ -758,6 +829,66 @@ def _load_bool(raw: dict[str, Any], key: str, default: bool) -> bool:
     if not isinstance(value, bool):
         raise C2OpenModelConfigError(f"C2 {key} must be a boolean")
     return value
+
+
+def _load_required_string(raw: dict[str, Any], key: str) -> str:
+    if key not in raw:
+        raise C2OpenModelConfigError(f"C2 {key} is required")
+    value = raw[key]
+    if not isinstance(value, str) or not value.strip():
+        raise C2OpenModelConfigError(f"C2 {key} must be a non-empty string")
+    return value
+
+
+def _load_window_mode(raw: dict[str, Any]) -> str:
+    value = _load_required_string(raw, "window_mode")
+    if value not in {"cross-stage", "stage-local"}:
+        raise C2OpenModelConfigError("C2 window_mode must be cross-stage or stage-local")
+    return value
+
+
+def _load_positive_int(raw: dict[str, Any], key: str) -> int:
+    value = _load_int(raw, key)
+    if value <= 0:
+        raise C2OpenModelConfigError(f"C2 {key} must be a positive integer")
+    return value
+
+
+def _load_min_int(raw: dict[str, Any], key: str, *, minimum: int) -> int:
+    value = _load_int(raw, key)
+    if value < minimum:
+        raise C2OpenModelConfigError(f"C2 {key} must be >= {minimum}")
+    return value
+
+
+def _load_nonnegative_int(raw: dict[str, Any], key: str) -> int:
+    value = _load_int(raw, key)
+    if value < 0:
+        raise C2OpenModelConfigError(f"C2 {key} must be a non-negative integer")
+    return value
+
+
+def _load_int(raw: dict[str, Any], key: str) -> int:
+    if key not in raw:
+        raise C2OpenModelConfigError(f"C2 {key} is required")
+    value = raw[key]
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise C2OpenModelConfigError(f"C2 {key} must be an integer")
+    return value
+
+
+def _load_mask_ratio(raw: dict[str, Any], key: str) -> float:
+    if key not in raw:
+        raise C2OpenModelConfigError(f"C2 {key} is required")
+    value = raw[key]
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise C2OpenModelConfigError(f"C2 {key} must be a number")
+    ratio = float(value)
+    if not math.isfinite(ratio):
+        raise C2OpenModelConfigError(f"C2 {key} must be finite")
+    if ratio <= 0 or ratio > 1:
+        raise C2OpenModelConfigError(f"C2 {key} must be > 0 and <= 1")
+    return ratio
 
 
 def _value(value: object) -> str:
