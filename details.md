@@ -6,6 +6,7 @@
 
 | 日期 | 记录 |
 | --- | --- |
+| 2026-06-05 | C2 开源模型系统评测已进入执行入口：核心配置为 `configs/c_stage_c2_open_model_evaluation.yaml`，命令为 `uv run b08-model-core experiment c-stage-c2 --config configs/c_stage_c2_open_model_evaluation.yaml --output reports/c_stage_c2_open_model_evaluation.md`；该阶段固定覆盖 TTM、MOMENT、Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS、UniTS，成功标准是 audit + model-task attempt + 结构化失败记录，不要求全部模型成功运行。 |
 | 2026-06-05 | C1 证据执行框架进入实施：本阶段目标是把前期 FU13 pipeline、C0 契约、baseline/TTM、E1-E3 任务口径和统一报告收束为可执行评测准备，而不是继续扩写文档或直接进入 B 阶段自研训练。README/details 已同步明确后续路线：C2 系统开源模型评测、开源生态数据集整理支线、以及基于证据的条件性自研模型准备。 |
 | 2026-06-04 | C 阶段最小证据实验规划已进入执行入口：核心契约为 `configs/c_stage_minimum_evidence.yaml`，阅读入口为 `docs/research/c-stage-minimum-evidence-register.html`，报告模板为 `reports/c_stage_minimum_evidence_template.md`；该阶段只建立 `E1-E5` 证据包、`P1-P5` 技术效果样例和 `CT4_decision_gate`，不直接进入 B 阶段自研基础模型训练。 |
 | 2026-06-04 | 认可 A 阶段学术主线 spec，并进入 writing-plans 与 subagent-driven 执行：下一阶段短期第一目标聚焦论文、专利、学术综述和模型路线等知识成果，第二目标承接统一数据语料、开源模型适配、训练评测 workflow 等工程化产品成果；必要重构不作为模糊债务后置，而通过整体重构蓝图和主线必要重构审计进入执行门。 |
