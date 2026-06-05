@@ -1,0 +1,33 @@
+stage: C1_evidence_execution
+contract_path: configs/c_stage_minimum_evidence.yaml
+dataset:
+  fu13_observations: data/processed/fu13_real_observations.parquet
+  fu13_config: configs/fu13_real_data_schema.yaml
+  boundary: internal_fu13_no_raw_data_committed
+enabled_evidence:
+  - E1_forecasting_residual
+  - E2_representation
+  - E3_imputation
+window:
+  window_mode: cross-stage
+  context_length: 90
+  prediction_length: 16
+  max_windows: 40
+models:
+  baseline:
+    enabled: true
+  ttm:
+    enabled: true
+    model_cache_dir: hf_cache
+    allow_download: false
+  moment:
+    enabled: true
+  units:
+    enabled: true
+outputs:
+  report: reports/c_stage_c1_evidence_report.md
+execution_policy:
+  strict_model_success: false
+  no_network_by_default: true
+  record_failure: true
+  do_not_over_claim: true
