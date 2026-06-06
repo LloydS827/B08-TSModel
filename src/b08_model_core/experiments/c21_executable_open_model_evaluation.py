@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+import math
 from pathlib import Path
 from typing import Any
 
@@ -159,7 +160,10 @@ def _load_positive_number(raw: dict[str, Any], key: str) -> float:
     value = raw.get(key)
     if not isinstance(value, int | float) or isinstance(value, bool) or value <= 0:
         raise C21ConfigError(f"{key} must be a positive number")
-    return float(value)
+    value = float(value)
+    if not math.isfinite(value):
+        raise C21ConfigError(f"{key} must be finite")
+    return value
 
 
 def _load_mask_ratio(raw: dict[str, Any], key: str) -> float:
