@@ -2,8 +2,10 @@ import sys
 import types
 
 import numpy as np
+import pytest
 
 import b08_model_core.adapters.open_models.base as open_model_base
+from b08_model_core.adapters.open_models import build_open_model_adapter
 from b08_model_core.adapters.open_models.base import (
     AdapterExecutionContext,
     AdapterFailure,
@@ -74,6 +76,17 @@ def test_base_imputation_contract_accepts_mask_policy_and_returns_unsupported_ta
     assert isinstance(failure, AdapterFailure)
     assert failure.status == OpenModelAdapterStatus.UNSUPPORTED_TASK
     assert failure.failure_stage == "execute"
+
+
+def test_adapter_factory_returns_all_c21_adapters_without_importing_optional_packages():
+    for model_id in ["ttm", "chronos", "timesfm", "moirai_uni2ts", "moment", "units"]:
+        adapter = build_open_model_adapter(model_id)
+        assert adapter.model_id == model_id
+
+
+def test_adapter_factory_rejects_unknown_model():
+    with pytest.raises(ValueError, match="unknown open model adapter"):
+        build_open_model_adapter("unknown")
 
 
 def test_dependency_status_reports_missing_dotted_module_without_raising():
