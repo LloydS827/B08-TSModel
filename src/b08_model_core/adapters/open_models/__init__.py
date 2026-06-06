@@ -12,7 +12,7 @@ from b08_model_core.adapters.open_models.base import (
     AdapterTaskOutput,
     OpenModelAdapter,
     OpenModelAdapterStatus,
-    dependency_status,
+    dependency_status as _dependency_status,
 )
 from b08_model_core.experiments.c21_executable_open_model_evaluation import C21TaskId
 
@@ -26,7 +26,7 @@ class _DependencyFirstOpenModelAdapter(OpenModelAdapter):
         self,
         context: AdapterExecutionContext,
     ) -> AdapterReadiness | AdapterFailure:
-        dependency = dependency_status(self.required_modules)
+        dependency = _dependency_status(self.required_modules)
         if dependency != "available":
             return self._missing_dependency("inspect", dependency, context)
         return AdapterReadiness(
@@ -45,7 +45,7 @@ class _DependencyFirstOpenModelAdapter(OpenModelAdapter):
         self,
         context: AdapterExecutionContext,
     ) -> OpenModelAdapter | AdapterFailure:
-        dependency = dependency_status(self.required_modules)
+        dependency = _dependency_status(self.required_modules)
         if dependency != "available":
             return self._missing_dependency("load", dependency, context)
 
@@ -143,11 +143,20 @@ class _DependencyFirstOpenModelAdapter(OpenModelAdapter):
 
     @staticmethod
     def _load_exception_status(exc: Exception) -> tuple[OpenModelAdapterStatus, str]:
+        import re
+
         detail = str(exc).lower()
         if any(
             token in detail
-            for token in ("weight", "checkpoint", "cache", "download", "offline")
-        ):
+            for token in (
+                "weight",
+                "checkpoint",
+                "offline",
+                "not found in cache",
+                "cache file",
+                "cache dir",
+            )
+        ) or re.search(r"(?<![a-z0-9_])download(?![a-z0-9_])", detail):
             return OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS, "missing_or_blocked"
         if any(token in detail for token in ("license", "interface", "api", "review")):
             return OpenModelAdapterStatus.LICENSE_OR_INTERFACE_NEEDS_REVIEW, "not_checked"

@@ -4,6 +4,7 @@ import types
 import numpy as np
 import pytest
 
+import b08_model_core.adapters.open_models as open_models
 import b08_model_core.adapters.open_models.base as open_model_base
 from b08_model_core.adapters.open_models import build_open_model_adapter
 from b08_model_core.adapters.open_models.base import (
@@ -87,6 +88,19 @@ def test_adapter_factory_returns_all_c21_adapters_without_importing_optional_pac
 def test_adapter_factory_rejects_unknown_model():
     with pytest.raises(ValueError, match="unknown open model adapter"):
         build_open_model_adapter("unknown")
+
+
+def test_package_root_does_not_expose_dependency_status():
+    assert not hasattr(open_models, "dependency_status")
+
+
+def test_cached_download_import_error_is_not_weight_failure():
+    adapter = build_open_model_adapter("chronos")
+    status, _weight_status = adapter._load_exception_status(
+        RuntimeError("cached_download import error")
+    )
+    assert status != OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS
+    assert status == OpenModelAdapterStatus.RUNTIME_FAILED
 
 
 def test_dependency_status_reports_missing_dotted_module_without_raising():
