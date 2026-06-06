@@ -7,6 +7,7 @@ from b08_model_core.adapters.open_models.base import (
     AdapterTaskOutput,
     OpenModelAdapter,
     OpenModelAdapterStatus,
+    dependency_status,
 )
 from b08_model_core.experiments.c21_executable_open_model_evaluation import C21TaskId
 
@@ -60,3 +61,10 @@ def test_base_adapter_returns_unsupported_task_for_missing_method():
     assert isinstance(failure, AdapterFailure)
     assert failure.status == OpenModelAdapterStatus.UNSUPPORTED_TASK
     assert failure.failure_stage == "execute"
+
+
+def test_dependency_status_reports_missing_dotted_module_without_raising():
+    assert (
+        dependency_status(["definitely_missing_parent.child"])
+        == "missing:definitely_missing_parent.child"
+    )

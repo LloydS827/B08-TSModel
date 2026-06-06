@@ -87,6 +87,9 @@ class AdapterFailure:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
+AdapterRunResult = AdapterTaskOutput | AdapterFailure
+
+
 class OpenModelAdapter:
     model_id = ""
     supported_tasks: tuple[C21TaskId, ...] = ()
@@ -108,21 +111,21 @@ class OpenModelAdapter:
         self,
         windows: Iterable[Any],
         context: AdapterExecutionContext,
-    ) -> AdapterFailure:
+    ) -> AdapterRunResult:
         return self.unsupported_task(C21TaskId.FORECASTING, windows, context)
 
     def run_representation(
         self,
         windows: Iterable[Any],
         context: AdapterExecutionContext,
-    ) -> AdapterFailure:
+    ) -> AdapterRunResult:
         return self.unsupported_task(C21TaskId.REPRESENTATION, windows, context)
 
     def run_imputation(
         self,
         windows: Iterable[Any],
         context: AdapterExecutionContext,
-    ) -> AdapterFailure:
+    ) -> AdapterRunResult:
         return self.unsupported_task(C21TaskId.IMPUTATION, windows, context)
 
     def unsupported_task(
@@ -130,7 +133,7 @@ class OpenModelAdapter:
         task_id: C21TaskId,
         windows: Iterable[Any],
         context: AdapterExecutionContext,
-    ) -> AdapterFailure:
+    ) -> AdapterRunResult:
         return AdapterFailure(
             model_id=self.model_id,
             task_id=task_id,
@@ -160,7 +163,10 @@ def dependency_status(
 
 
 def _module_available(module_name: str) -> bool:
-    return find_spec(module_name) is not None
+    try:
+        return find_spec(module_name) is not None
+    except ModuleNotFoundError:
+        return False
 
 
 def _safe_len(value: Iterable[Any]) -> int | None:
