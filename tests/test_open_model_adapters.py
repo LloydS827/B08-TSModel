@@ -7,6 +7,7 @@ import pytest
 import b08_model_core.adapters.open_models as open_models
 import b08_model_core.adapters.open_models.base as open_model_base
 from b08_model_core.adapters.open_models import build_open_model_adapter
+from b08_model_core.adapters.open_models.ttm import TTMOpenModelAdapter
 from b08_model_core.adapters.open_models.base import (
     AdapterExecutionContext,
     AdapterFailure,
@@ -17,6 +18,29 @@ from b08_model_core.adapters.open_models.base import (
     dependency_status,
 )
 from b08_model_core.experiments.c21_executable_open_model_evaluation import C21TaskId
+from b08_model_core.tasks.window_builder import ModelWindow
+
+
+@pytest.fixture
+def model_windows():
+    windows = []
+    for index in range(2):
+        x = np.arange(8, dtype=float).reshape(4, 2) + index
+        y = np.arange(4, dtype=float).reshape(2, 2) + index
+        windows.append(
+            ModelWindow(
+                X=x,
+                mask=np.ones_like(x, dtype=bool),
+                delta_t=np.zeros(x.shape[0]),
+                stage_token=np.array(["stage"] * x.shape[0], dtype=object),
+                sensor_token=["sensor_0", "sensor_1"],
+                domain_token=["domain", "domain"],
+                device_token="FU13",
+                y=y,
+                degradation_label="normal",
+            )
+        )
+    return windows
 
 
 class FakeAdapter(OpenModelAdapter):
@@ -83,6 +107,32 @@ def test_adapter_factory_returns_all_c21_adapters_without_importing_optional_pac
     for model_id in ["ttm", "chronos", "timesfm", "moirai_uni2ts", "moment", "units"]:
         adapter = build_open_model_adapter(model_id)
         assert adapter.model_id == model_id
+
+
+def test_ttm_adapter_runs_forecasting_when_runtime_is_injected(monkeypatch, model_windows):
+    adapter = TTMOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(adapter, "_predict_with_ttm", lambda windows, context: np.stack([w.y for w in windows]))
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    output = adapter.run_forecasting(model_windows[:2], context)
+
+    assert output.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert output.predictions.shape == np.stack([w.y for w in model_windows[:2]]).shape
+
+
+def test_ttm_adapter_reports_missing_dependency_without_runtime(monkeypatch, model_windows):
+    adapter = TTMOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: False)
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    readiness = adapter.inspect_environment(context)
+    output = adapter.run_forecasting(model_windows[:1], context)
+
+    assert readiness.status == OpenModelAdapterStatus.MISSING_DEPENDENCY
+    assert readiness.failure_stage == "inspect"
+    assert output.status == OpenModelAdapterStatus.MISSING_DEPENDENCY
+    assert output.failure_stage == "execute"
 
 
 def test_adapter_factory_rejects_unknown_model():
