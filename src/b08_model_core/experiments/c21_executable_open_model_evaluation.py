@@ -295,20 +295,21 @@ def render_c21_cache_manifest(result: C21RunResult) -> str:
         f"| download_allowed | {_cell(result.config_allows_download)} |",
         f"| dataset_boundary | {_cell(result.dataset_boundary)} |",
         "",
-        "| model_id | task_id | cache_dir | weight_status | actual_network_used | model_ref |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| model_id | task_id | adapter_name | cache_dir | weight_status | actual_network_used | model_ref |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     if result.task_results:
         for task_result in result.task_results:
             lines.append(
                 (
                     f"| {_cell(task_result.model_id)} | {_cell(task_result.task_id)} | "
-                    f"{_cell(task_result.cache_dir)} | {_cell(task_result.weight_status)} | "
+                    f"{_cell(task_result.adapter_name)} | {_cell(task_result.cache_dir)} | "
+                    f"{_cell(task_result.weight_status)} | "
                     f"{_cell(task_result.actual_network_used)} | {_cell(task_result.model_ref)} |"
                 )
             )
     else:
-        lines.append("| none | none | none | none | none | none |")
+        lines.append("| none | none | none | none | none | none | none |")
     return "\n".join(lines) + "\n"
 
 

@@ -301,9 +301,12 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "experiment" and args.experiment_command == "c-stage-c21":
         try:
+            from b08_model_core.adapters.open_models import build_open_model_adapter
+
             config = load_c21_executable_config(args.config)
             config.report_path = Path(args.output)
-            result = run_c21_executable_evaluation(config)
+            result = run_c21_executable_evaluation(config, adapter_factory=build_open_model_adapter)
+            result.config_path = args.config
             output = Path(args.output)
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(render_c21_report(result), encoding="utf-8")

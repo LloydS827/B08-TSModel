@@ -223,9 +223,15 @@ def test_cli_c_stage_c21_writes_report_when_models_fail_structurally(tmp_path, m
     assert output.exists()
     text = output.read_text(encoding="utf-8")
     assert "C2.1 Executable Open Model Evaluation Report" in text
+    assert str(config_path) in text
     assert "config_allows_network" in text
     assert "- config_allows_network: false" in text
     assert "config_allows_download" in text
+    assert "TTMOpenModelAdapter" in text
+    assert "AdapterNotConfigured" not in text
+    cache_manifest = (tmp_path / "c21_cache_manifest.md").read_text(encoding="utf-8")
+    assert "TTMOpenModelAdapter" in cache_manifest
+    assert "AdapterNotConfigured" not in cache_manifest
 
 
 def test_cli_c_stage_c21_strict_mode_returns_nonzero_but_writes_report(tmp_path):
