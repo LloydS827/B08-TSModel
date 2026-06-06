@@ -761,8 +761,9 @@ def _attempt_timeout(seconds: float):
     try:
         yield
     finally:
-        signal.signal(signal.SIGALRM, old_handler)
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
         elapsed = time.monotonic() - started
+        signal.signal(signal.SIGALRM, old_handler)
         signal.setitimer(
             signal.ITIMER_REAL,
             _restored_timer_seconds(old_timer[0], elapsed),

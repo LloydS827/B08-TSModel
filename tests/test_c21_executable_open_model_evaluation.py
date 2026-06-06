@@ -380,27 +380,35 @@ def test_runner_maps_non_ready_readiness_to_inspect_failure(tmp_path):
 
 
 def test_attempt_timeout_restores_outer_timer_after_elapsed(monkeypatch):
-    setitimer_calls = []
+    events = []
     monotonic_values = iter([100.0, 100.25])
 
     def fake_setitimer(which, seconds, interval=0.0):
-        setitimer_calls.append((which, seconds, interval))
-        if len(setitimer_calls) == 1:
+        events.append(("setitimer", which, seconds, interval))
+        if len([event for event in events if event[0] == "setitimer"]) == 1:
             return (1.0, 0.0)
         return (0.0, 0.0)
 
     monkeypatch.setattr(c21_eval.signal, "getsignal", lambda signum: "old-handler")
-    monkeypatch.setattr(c21_eval.signal, "signal", lambda signum, handler: None)
+    monkeypatch.setattr(
+        c21_eval.signal,
+        "signal",
+        lambda signum, handler: events.append(("signal", signum, handler)),
+    )
     monkeypatch.setattr(c21_eval.signal, "setitimer", fake_setitimer)
     monkeypatch.setattr(c21_eval.time, "monotonic", lambda: next(monotonic_values))
 
     with c21_eval._attempt_timeout(0.5):
         pass
 
-    assert setitimer_calls == [
-        (c21_eval.signal.ITIMER_REAL, 0.5, 0.0),
-        (c21_eval.signal.ITIMER_REAL, 0.75, 0.0),
+    assert [event[:3] for event in events] == [
+        ("signal", c21_eval.signal.SIGALRM, events[0][2]),
+        ("setitimer", c21_eval.signal.ITIMER_REAL, 0.5),
+        ("setitimer", c21_eval.signal.ITIMER_REAL, 0.0),
+        ("signal", c21_eval.signal.SIGALRM, "old-handler"),
+        ("setitimer", c21_eval.signal.ITIMER_REAL, 0.75),
     ]
+    assert events[-1] == ("setitimer", c21_eval.signal.ITIMER_REAL, 0.75, 0.0)
 
 
 def _sample_c21_run_result_with_all_required_attempts() -> C21RunResult:
