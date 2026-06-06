@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 import math
 from pathlib import Path
@@ -60,6 +60,223 @@ class C21ExecutionConfig:
 class C21ModelTaskAttempt:
     model_id: str
     task_id: C21TaskId
+
+
+@dataclass
+class C21ModelTaskResult:
+    model_id: str
+    display_name: str
+    task_id: C21TaskId
+    status: Any
+    metrics: dict[str, Any]
+    baseline_metrics: dict[str, Any]
+    failure_stage: str
+    failure_reason: str
+    error_type: str
+    error_detail: str
+    dependency_status: str
+    weight_status: str
+    input_shape: dict[str, Any]
+    output_shape: dict[str, Any]
+    runtime_seconds: float | None
+    adapter_name: str
+    model_ref: str | None
+    cache_dir: str | Path | None
+    actual_network_used: bool | str | None
+
+
+@dataclass
+class C21RunResult:
+    run_id: str
+    config_path: str | Path
+    upstream_c2_config: str | Path
+    dataset_boundary: str
+    config_allows_network: bool
+    config_allows_download: bool
+    cache_dir: str | Path
+    tested_windows: int
+    task_results: list[C21ModelTaskResult]
+    invalid_claims: list[str]
+    c3_handoff_notes: list[str] = field(
+        default_factory=lambda: [
+            "C2.1 records executable adapter status and failure evidence only.",
+            "C3 must re-check dependencies, weights, licenses, and interfaces before promotion.",
+        ]
+    )
+    b_decision_notes: list[str] = field(
+        default_factory=lambda: [
+            "C2.1 results are not a B-stage self-training Go decision.",
+            "Offline executable checks must not be interpreted as production alert readiness.",
+        ]
+    )
+
+
+def render_c21_report(result: C21RunResult) -> str:
+    lines = [
+        "# C2.1 Executable Open Model Evaluation Report",
+        "",
+        "## Report Metadata",
+        "",
+        f"- run_id: {_value(result.run_id)}",
+        f"- config_path: {_value(result.config_path)}",
+        f"- upstream_c2_config: {_value(result.upstream_c2_config)}",
+        f"- dataset_boundary: {_value(result.dataset_boundary)}",
+        f"- tested_windows: {_value(result.tested_windows)}",
+        f"- config_allows_network: {_value(result.config_allows_network)}",
+        f"- config_allows_download: {_value(result.config_allows_download)}",
+        f"- cache_dir: {_value(result.cache_dir)}",
+        "",
+        "## Executive Summary",
+        "",
+        f"- model_task_attempts: {len(result.task_results)}",
+        "- scope: executable open model adapter result schema and offline-safe report rendering.",
+        "- boundary: no runner, CLI, concrete adapter, external cache, download, or model call is performed.",
+        "",
+        "## Adapter Readiness Table",
+        "",
+        (
+            "| model_id | display_name | adapter_name | status | dependency_status | "
+            "weight_status | model_ref | cache_dir | actual_network_used |"
+        ),
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+
+    for task_result in _readiness_results(result.task_results):
+        lines.append(
+            (
+                f"| {_cell(task_result.model_id)} | {_cell(task_result.display_name)} | "
+                f"{_cell(task_result.adapter_name)} | {_cell(task_result.status)} | "
+                f"{_cell(task_result.dependency_status)} | {_cell(task_result.weight_status)} | "
+                f"{_cell(task_result.model_ref)} | {_cell(task_result.cache_dir)} | "
+                f"{_cell(task_result.actual_network_used)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Model-Task Result Matrix",
+            "",
+            (
+                "| model_id | task_id | display_name | status | metrics | baseline_metrics | "
+                "failure_stage | failure_reason | error_type | error_detail | input_shape | output_shape | "
+                "runtime_seconds |"
+            ),
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for task_result in result.task_results:
+        lines.append(
+            (
+                f"| {_cell(task_result.model_id)} | {_cell(task_result.task_id)} | "
+                f"{_cell(task_result.display_name)} | {_cell(task_result.status)} | "
+                f"{_cell(task_result.metrics)} | {_cell(task_result.baseline_metrics)} | "
+                f"{_cell(task_result.failure_stage)} | {_cell(task_result.failure_reason)} | "
+                f"{_cell(task_result.error_type)} | {_cell(task_result.error_detail)} | "
+                f"{_cell(task_result.input_shape)} | {_cell(task_result.output_shape)} | "
+                f"{_cell(task_result.runtime_seconds)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Forecasting Comparison",
+            "",
+            "| model_id | status | metrics | baseline_metrics | runtime_seconds | failure_reason |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for task_result in result.task_results:
+        if task_result.task_id != C21TaskId.FORECASTING:
+            continue
+        lines.append(
+            (
+                f"| {_cell(task_result.model_id)} | {_cell(task_result.status)} | "
+                f"{_cell(task_result.metrics)} | {_cell(task_result.baseline_metrics)} | "
+                f"{_cell(task_result.runtime_seconds)} | {_cell(task_result.failure_reason)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Representation And Imputation Results",
+            "",
+            "| model_id | task_id | status | metrics | baseline_metrics | runtime_seconds | failure_reason |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for task_result in result.task_results:
+        if task_result.task_id not in {C21TaskId.REPRESENTATION, C21TaskId.IMPUTATION}:
+            continue
+        lines.append(
+            (
+                f"| {_cell(task_result.model_id)} | {_cell(task_result.task_id)} | "
+                f"{_cell(task_result.status)} | {_cell(task_result.metrics)} | "
+                f"{_cell(task_result.baseline_metrics)} | {_cell(task_result.runtime_seconds)} | "
+                f"{_cell(task_result.failure_reason)} |"
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Failure Taxonomy",
+            "",
+            "| status | model_id | task_id | failure_stage | reason | detail |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    failure_results = [task_result for task_result in result.task_results if task_result.failure_reason]
+    if failure_results:
+        for task_result in failure_results:
+            lines.append(
+                (
+                    f"| {_cell(task_result.status)} | {_cell(task_result.model_id)} | "
+                    f"{_cell(task_result.task_id)} | {_cell(task_result.failure_stage)} | "
+                    f"{_cell(task_result.failure_reason)} | {_cell(task_result.error_detail)} |"
+                )
+            )
+    else:
+        lines.append("| none | none | none | none | none | none |")
+
+    lines.extend(["", "## Cache Manifest", ""])
+    lines.extend(render_c21_cache_manifest(result).rstrip().splitlines())
+    lines.extend(["", "## C2 -> C3 Handoff", ""])
+    lines.extend(f"- {_value(note)}" for note in (result.c3_handoff_notes or ["none"]))
+    lines.extend(["", "## C2 -> B Decision Notes", ""])
+    lines.extend(f"- {_value(note)}" for note in (result.b_decision_notes or ["none"]))
+    lines.extend(["", "## Invalid Claims", ""])
+    lines.extend(f"- {_value(claim)}" for claim in (result.invalid_claims or ["none"]))
+    return "\n".join(lines) + "\n"
+
+
+def render_c21_cache_manifest(result: C21RunResult) -> str:
+    lines = [
+        "| key | value |",
+        "| --- | --- |",
+        f"| run_id | {_cell(result.run_id)} |",
+        f"| cache_dir | {_cell(result.cache_dir)} |",
+        f"| network_allowed | {_cell(result.config_allows_network)} |",
+        f"| download_allowed | {_cell(result.config_allows_download)} |",
+        f"| dataset_boundary | {_cell(result.dataset_boundary)} |",
+        "",
+        "| model_id | task_id | cache_dir | weight_status | actual_network_used | model_ref |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    if result.task_results:
+        for task_result in result.task_results:
+            lines.append(
+                (
+                    f"| {_cell(task_result.model_id)} | {_cell(task_result.task_id)} | "
+                    f"{_cell(task_result.cache_dir)} | {_cell(task_result.weight_status)} | "
+                    f"{_cell(task_result.actual_network_used)} | {_cell(task_result.model_ref)} |"
+                )
+            )
+    else:
+        lines.append("| none | none | none | none | none | none |")
+    return "\n".join(lines) + "\n"
 
 
 def load_c21_executable_config(path: str | Path) -> C21ExecutionConfig:
@@ -181,3 +398,33 @@ def _load_bool(raw: dict[str, Any], key: str) -> bool:
     if not isinstance(value, bool):
         raise C21ConfigError(f"{key} must be a boolean")
     return value
+
+
+def _readiness_results(task_results: list[C21ModelTaskResult]) -> list[C21ModelTaskResult]:
+    by_model_id: dict[str, C21ModelTaskResult] = {}
+    for task_result in task_results:
+        by_model_id.setdefault(task_result.model_id, task_result)
+    return list(by_model_id.values())
+
+
+def _value(value: object) -> str:
+    enum_value = getattr(value, "value", None)
+    if enum_value is not None:
+        return _value(enum_value)
+    if value is None or (isinstance(value, str) and value == ""):
+        return "not_available"
+    if isinstance(value, bool):
+        return str(value).lower()
+    if isinstance(value, dict):
+        if not value:
+            return "not_available"
+        return ", ".join(f"{key}={_value(item)}" for key, item in value.items())
+    if isinstance(value, list | tuple):
+        if not value:
+            return "not_available"
+        return ", ".join(_value(item) for item in value)
+    return str(value)
+
+
+def _cell(value: object) -> str:
+    return _value(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").replace("|", "\\|")
