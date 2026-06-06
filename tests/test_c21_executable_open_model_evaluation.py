@@ -227,6 +227,9 @@ def test_cli_c_stage_c21_writes_report_when_models_fail_structurally(tmp_path, m
     assert "config_allows_network" in text
     assert "- config_allows_network: false" in text
     assert "config_allows_download" in text
+    assert "- config_allows_download: false" in text
+    assert "no CLI" not in text
+    assert "concrete adapter factory" not in text
     assert "TTMOpenModelAdapter" in text
     assert "AdapterNotConfigured" not in text
     cache_manifest = (tmp_path / "c21_cache_manifest.md").read_text(encoding="utf-8")

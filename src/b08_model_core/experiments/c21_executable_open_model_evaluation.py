@@ -163,7 +163,11 @@ def render_c21_report(result: C21RunResult) -> str:
         "",
         f"- model_task_attempts: {len(result.task_results)}",
         "- scope: offline executable open model adapter attempts and report rendering.",
-        "- boundary: no CLI, concrete adapter factory, external cache download, or real open model call is performed.",
+        (
+            "- boundary: network and download are disabled by default; no external cache "
+            "download or fake success is performed, and real model calls run only when "
+            "adapter dependencies, cache, and interfaces succeed."
+        ),
         "",
         "## Adapter Readiness Table",
         "",
