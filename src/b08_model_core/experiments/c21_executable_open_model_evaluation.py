@@ -1,12 +1,28 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from enum import StrEnum
 import math
 from pathlib import Path
+import signal
+import time
 from typing import Any
+import warnings
 
+import numpy as np
+import pandas as pd
 import yaml
+
+from b08_model_core.baselines.robust_forecaster import RobustStageForecaster
+from b08_model_core.evaluation.metrics import forecasting_metrics
+from b08_model_core.experiments.c1_evidence import (
+    apply_deterministic_mask,
+    reconstruction_metrics,
+    simple_statistical_embedding,
+)
+from b08_model_core.tasks.window_builder import build_model_windows
 
 
 class C21ConfigError(ValueError):
@@ -110,6 +126,23 @@ class C21RunResult:
         ]
     )
 
+    @property
+    def has_required_attempt_failure(self) -> bool:
+        from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+
+        by_attempt = {
+            (task_result.model_id, task_result.task_id): task_result
+            for task_result in self.task_results
+        }
+        for model_id, task_ids in REQUIRED_C21_TASKS.items():
+            for task_id in task_ids:
+                task_result = by_attempt.get((model_id, task_id))
+                if task_result is None:
+                    return True
+                if task_result.status != OpenModelAdapterStatus.AVAILABLE_AND_RAN:
+                    return True
+        return False
+
 
 def render_c21_report(result: C21RunResult) -> str:
     lines = [
@@ -129,8 +162,8 @@ def render_c21_report(result: C21RunResult) -> str:
         "## Executive Summary",
         "",
         f"- model_task_attempts: {len(result.task_results)}",
-        "- scope: executable open model adapter result schema and offline-safe report rendering.",
-        "- boundary: no runner, CLI, concrete adapter, external cache, download, or model call is performed.",
+        "- scope: offline executable open model adapter attempts and report rendering.",
+        "- boundary: no CLI, concrete adapter factory, external cache download, or real open model call is performed.",
         "",
         "## Adapter Readiness Table",
         "",
@@ -330,6 +363,374 @@ def build_c21_attempts(config: C21ExecutionConfig) -> list[C21ModelTaskAttempt]:
         for model_id, task_ids in REQUIRED_C21_TASKS.items()
         for task_id in task_ids
     ]
+
+
+def run_c21_executable_evaluation(
+    config: C21ExecutionConfig | str | Path,
+    adapter_factory: Any = None,
+) -> C21RunResult:
+    from b08_model_core.adapters.open_models.base import AdapterExecutionContext
+
+    config_source: str | Path = "provided_config"
+    if not isinstance(config, C21ExecutionConfig):
+        config_source = config
+        config = load_c21_executable_config(config)
+
+    df = pd.read_parquet(config.dataset_path)
+    windows = build_model_windows(
+        df,
+        context_length=config.context_length,
+        prediction_length=config.prediction_length,
+        stride=config.prediction_length,
+        allow_cross_stage=(config.window_mode == "cross-stage"),
+    )[: config.max_windows]
+    if not windows:
+        raise ValueError("not enough windows for C2.1 executable evaluation")
+
+    baselines = {
+        C21TaskId.FORECASTING: _safe_forecasting_baseline(windows),
+        C21TaskId.REPRESENTATION: _safe_representation_baseline(windows),
+        C21TaskId.IMPUTATION: _safe_imputation_baseline(config, windows),
+    }
+    task_results: list[C21ModelTaskResult] = []
+
+    for attempt in build_c21_attempts(config):
+        adapter = _adapter_for_attempt(adapter_factory, attempt.model_id)
+        context = AdapterExecutionContext(
+            allow_network=config.allow_network,
+            allow_download=config.allow_download,
+            cache_dir=config.cache_dir,
+            timeout_seconds_per_model=config.timeout_seconds_per_model,
+            metadata={
+                "stage": config.stage,
+                "dataset_boundary": config.dataset_boundary,
+                "model_id": attempt.model_id,
+                "task_id": attempt.task_id.value,
+            },
+        )
+        baseline_metrics = baselines.get(attempt.task_id, {"baseline": "not_run"})
+        started = time.monotonic()
+        try:
+            raw_result = _run_attempt_with_timeout(
+                config.timeout_seconds_per_model,
+                lambda: _run_adapter_attempt(attempt, adapter, windows, config, context),
+            )
+            task_results.append(
+                _adapter_result_to_c21_result(
+                    raw_result,
+                    attempt,
+                    adapter,
+                    baseline_metrics,
+                    context,
+                )
+            )
+        except TimeoutError as exc:
+            task_results.append(
+                _failure_result(
+                    attempt,
+                    adapter,
+                    baseline_metrics,
+                    context,
+                    status_name="TIMEOUT",
+                    failure_stage="execute",
+                    failure_reason=f"model-task attempt exceeded {config.timeout_seconds_per_model} seconds",
+                    error_type=type(exc).__name__,
+                    error_detail=str(exc),
+                    runtime_seconds=time.monotonic() - started,
+                )
+            )
+        except Exception as exc:
+            task_results.append(
+                _failure_result(
+                    attempt,
+                    adapter,
+                    baseline_metrics,
+                    context,
+                    status_name="RUNTIME_FAILED",
+                    failure_stage="execute",
+                    failure_reason="model-task attempt raised an exception",
+                    error_type=type(exc).__name__,
+                    error_detail=str(exc),
+                    runtime_seconds=time.monotonic() - started,
+                )
+            )
+
+    execution_time_utc = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return C21RunResult(
+        run_id=f"c21-executable-{execution_time_utc}",
+        config_path=config_source,
+        upstream_c2_config=config.upstream_c2_config,
+        dataset_boundary=config.dataset_boundary,
+        config_allows_network=config.allow_network,
+        config_allows_download=config.allow_download,
+        cache_dir=config.cache_dir,
+        tested_windows=len(windows),
+        task_results=task_results,
+        invalid_claims=[
+            "不得解释为生产告警",
+            "不得解释为生产能力",
+            "不得解释为真实 open model 权重已下载或已验证",
+            "不得解释为 C3 或 B 阶段 Go 决策",
+        ],
+    )
+
+
+def _safe_forecasting_baseline(windows: list[object]) -> dict[str, Any]:
+    try:
+        split = max(1, int(len(windows) * 0.7))
+        train = windows[:split]
+        test = windows[split:] or windows[-1:]
+        predictions = RobustStageForecaster().fit(train).predict(test)
+        metrics = forecasting_metrics(predictions, test)
+        return {
+            "baseline": "RobustStageForecaster",
+            **metrics,
+            "train_windows": len(train),
+            "test_windows": len(test),
+        }
+    except Exception as exc:
+        return {"baseline": "not_run", "reason": str(exc)}
+
+
+def _safe_representation_baseline(windows: list[object]) -> dict[str, Any]:
+    try:
+        embeddings = [simple_statistical_embedding(window.X) for window in windows]
+        return {
+            "baseline": "statistical_embedding",
+            "embedding_windows": len(embeddings),
+            "embedding_features": len(embeddings[0]) if embeddings else 0,
+        }
+    except Exception as exc:
+        return {"baseline": "not_run", "reason": str(exc)}
+
+
+def _safe_imputation_baseline(
+    config: C21ExecutionConfig,
+    windows: list[object],
+) -> dict[str, Any]:
+    try:
+        metrics_by_window = []
+        for index, window in enumerate(windows):
+            masked, mask = apply_deterministic_mask(
+                window.X,
+                mask_ratio=config.mask_ratio,
+                seed=config.seed + index,
+            )
+            median_source = np.asarray(window.X, dtype=float).copy()
+            median_source[mask] = np.nan
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                medians = np.nanmedian(median_source, axis=0)
+            fallback_medians = np.median(np.asarray(window.X, dtype=float), axis=0)
+            medians = np.where(np.isnan(medians), fallback_medians, medians)
+            medians = np.nan_to_num(medians, nan=0.0)
+            reconstructed = masked.copy()
+            reconstructed[mask] = np.take(medians, np.where(mask)[1])
+            metrics_by_window.append(reconstruction_metrics(window.X, reconstructed, mask))
+
+        mae_values = [metric["mae"] for metric in metrics_by_window if metric["mae"] is not None]
+        rmse_values = [metric["rmse"] for metric in metrics_by_window if metric["rmse"] is not None]
+        return {
+            "baseline": "simple_reconstruction_baseline",
+            "mae": float(np.mean(mae_values)) if mae_values else None,
+            "rmse": float(np.mean(rmse_values)) if rmse_values else None,
+            "count": int(sum(int(metric["count"]) for metric in metrics_by_window)),
+        }
+    except Exception as exc:
+        return {"baseline": "not_run", "reason": str(exc)}
+
+
+def _adapter_for_attempt(adapter_factory: Any, model_id: str) -> Any:
+    if adapter_factory is None:
+        return None
+    if isinstance(adapter_factory, dict):
+        return adapter_factory.get(model_id)
+    if callable(adapter_factory):
+        return adapter_factory(model_id)
+    return None
+
+
+def _run_adapter_attempt(
+    attempt: C21ModelTaskAttempt,
+    adapter: Any,
+    windows: list[object],
+    config: C21ExecutionConfig,
+    context: Any,
+) -> Any:
+    from b08_model_core.adapters.open_models.base import AdapterFailure, OpenModelAdapterStatus
+
+    if adapter is None:
+        return AdapterFailure(
+            model_id=attempt.model_id,
+            task_id=attempt.task_id,
+            status=OpenModelAdapterStatus.LICENSE_OR_INTERFACE_NEEDS_REVIEW,
+            failure_stage="inspect",
+            failure_reason="adapter not configured; real adapter factory pending",
+            error_type="AdapterNotConfigured",
+            error_detail=attempt.model_id,
+            dependency_status="unknown",
+            weight_status="not_checked",
+            input_shape={"windows": len(windows)},
+            cache_dir=context.cache_dir,
+            actual_network_used=False,
+        )
+
+    inspected = adapter.inspect_environment(context)
+    if isinstance(inspected, AdapterFailure):
+        return inspected
+
+    loaded = adapter.load(context)
+    if attempt.task_id == C21TaskId.FORECASTING:
+        return loaded.run_forecasting(windows, context)
+    if attempt.task_id == C21TaskId.REPRESENTATION:
+        return loaded.run_representation(windows, context)
+    if attempt.task_id == C21TaskId.IMPUTATION:
+        return loaded.run_imputation(
+            windows,
+            {"mask_ratio": config.mask_ratio, "seed": config.seed},
+            context,
+        )
+    raise ValueError(f"unsupported C2.1 task_id: {attempt.task_id}")
+
+
+def _adapter_result_to_c21_result(
+    raw_result: Any,
+    attempt: C21ModelTaskAttempt,
+    adapter: Any,
+    baseline_metrics: dict[str, Any],
+    context: Any,
+) -> C21ModelTaskResult:
+    from b08_model_core.adapters.open_models.base import AdapterFailure, AdapterTaskOutput
+
+    if isinstance(raw_result, AdapterTaskOutput):
+        return C21ModelTaskResult(
+            model_id=raw_result.model_id or attempt.model_id,
+            display_name=_display_name(adapter, raw_result.model_id or attempt.model_id),
+            task_id=raw_result.task_id,
+            status=raw_result.status,
+            metrics=dict(raw_result.metrics),
+            baseline_metrics=dict(raw_result.baseline_metrics or baseline_metrics),
+            failure_stage="",
+            failure_reason="",
+            error_type="",
+            error_detail="",
+            dependency_status="available",
+            weight_status="not_checked",
+            input_shape=dict(raw_result.input_shape),
+            output_shape=dict(raw_result.output_shape),
+            runtime_seconds=_runtime_seconds(raw_result),
+            adapter_name=raw_result.adapter_name or _adapter_name(adapter),
+            model_ref=raw_result.model_ref,
+            cache_dir=raw_result.cache_dir or context.cache_dir,
+            actual_network_used=raw_result.actual_network_used
+            if raw_result.actual_network_used is not None
+            else False,
+        )
+    if isinstance(raw_result, AdapterFailure):
+        return C21ModelTaskResult(
+            model_id=raw_result.model_id or attempt.model_id,
+            display_name=_display_name(adapter, raw_result.model_id or attempt.model_id),
+            task_id=attempt.task_id,
+            status=raw_result.status,
+            metrics={},
+            baseline_metrics=dict(baseline_metrics),
+            failure_stage=raw_result.failure_stage,
+            failure_reason=raw_result.failure_reason,
+            error_type=raw_result.error_type,
+            error_detail=raw_result.error_detail,
+            dependency_status=raw_result.dependency_status,
+            weight_status=raw_result.weight_status,
+            input_shape=dict(raw_result.input_shape),
+            output_shape={},
+            runtime_seconds=raw_result.runtime_seconds,
+            adapter_name=raw_result.adapter_name or _adapter_name(adapter),
+            model_ref=raw_result.model_ref,
+            cache_dir=raw_result.cache_dir or context.cache_dir,
+            actual_network_used=raw_result.actual_network_used
+            if raw_result.actual_network_used is not None
+            else False,
+        )
+    raise TypeError(f"adapter returned unsupported result type: {type(raw_result).__name__}")
+
+
+def _failure_result(
+    attempt: C21ModelTaskAttempt,
+    adapter: Any,
+    baseline_metrics: dict[str, Any],
+    context: Any,
+    *,
+    status_name: str,
+    failure_stage: str,
+    failure_reason: str,
+    error_type: str,
+    error_detail: str,
+    runtime_seconds: float,
+) -> C21ModelTaskResult:
+    from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+
+    return C21ModelTaskResult(
+        model_id=attempt.model_id,
+        display_name=_display_name(adapter, attempt.model_id),
+        task_id=attempt.task_id,
+        status=getattr(OpenModelAdapterStatus, status_name),
+        metrics={},
+        baseline_metrics=dict(baseline_metrics),
+        failure_stage=failure_stage,
+        failure_reason=failure_reason,
+        error_type=error_type,
+        error_detail=error_detail,
+        dependency_status="unknown",
+        weight_status="not_checked",
+        input_shape={},
+        output_shape={},
+        runtime_seconds=runtime_seconds,
+        adapter_name=_adapter_name(adapter),
+        model_ref=None,
+        cache_dir=context.cache_dir,
+        actual_network_used=False,
+    )
+
+
+def _runtime_seconds(raw_result: Any) -> float | None:
+    if raw_result.runtime_seconds is not None:
+        return raw_result.runtime_seconds
+    value = raw_result.metrics.get("runtime_seconds")
+    return float(value) if isinstance(value, int | float) else None
+
+
+def _display_name(adapter: Any, fallback: str) -> str:
+    if adapter is None:
+        return fallback
+    return str(getattr(adapter, "display_name", None) or fallback)
+
+
+def _adapter_name(adapter: Any) -> str:
+    return "" if adapter is None else adapter.__class__.__name__
+
+
+class _AttemptTimeout(TimeoutError):
+    pass
+
+
+def _run_attempt_with_timeout(seconds: float, run: Any) -> Any:
+    with _attempt_timeout(seconds):
+        return run()
+
+
+@contextmanager
+def _attempt_timeout(seconds: float):
+    old_handler = signal.getsignal(signal.SIGALRM)
+
+    def _raise_timeout(signum: int, frame: Any) -> None:
+        raise _AttemptTimeout(f"attempt timed out after {seconds} seconds")
+
+    signal.signal(signal.SIGALRM, _raise_timeout)
+    old_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, old_timer[0], old_timer[1])
+        signal.signal(signal.SIGALRM, old_handler)
 
 
 def _load_mapping(raw: dict[str, Any] | Path, key: str | None = None) -> dict[str, Any]:

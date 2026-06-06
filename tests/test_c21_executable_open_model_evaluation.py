@@ -1,8 +1,14 @@
 from pathlib import Path
+import time
 
+import pandas as pd
 import pytest
 
-from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+from b08_model_core.adapters.open_models.base import (
+    AdapterFailure,
+    AdapterTaskOutput,
+    OpenModelAdapterStatus,
+)
 from b08_model_core.experiments.c21_executable_open_model_evaluation import (
     C21ConfigError,
     C21ModelTaskResult,
@@ -13,6 +19,7 @@ from b08_model_core.experiments.c21_executable_open_model_evaluation import (
     load_c21_executable_config,
     render_c21_cache_manifest,
     render_c21_report,
+    run_c21_executable_evaluation,
 )
 
 
@@ -194,6 +201,120 @@ def test_c21_cache_manifest_records_network_and_weight_boundary():
     assert "actual_network_used" in text
 
 
+class AlwaysRunsForecastingAdapter:
+    model_id = "ttm"
+    display_name = "TTM / TinyTimeMixer"
+
+    def inspect_environment(self, context):
+        return None
+
+    def load(self, context):
+        return self
+
+    def run_forecasting(self, windows, context):
+        y = [window.y for window in windows]
+        return AdapterTaskOutput(
+            model_id=self.model_id,
+            task_id=C21TaskId.FORECASTING,
+            status=OpenModelAdapterStatus.AVAILABLE_AND_RAN,
+            predictions=y,
+            metrics={"runtime_seconds": 0.01},
+            input_shape={"windows": len(windows)},
+            output_shape={"predictions": len(y)},
+        )
+
+
+class MissingDependencyAdapter:
+    model_id = "chronos"
+    display_name = "Chronos / Chronos-Bolt"
+
+    def inspect_environment(self, context):
+        return AdapterFailure(
+            model_id=self.model_id,
+            task_id=C21TaskId.FORECASTING,
+            status=OpenModelAdapterStatus.MISSING_DEPENDENCY,
+            failure_stage="inspect",
+            failure_reason="dependency modules are unavailable",
+            error_type="MissingDependency",
+            error_detail="chronos",
+        )
+
+
+class TimeoutAdapter:
+    model_id = "timesfm"
+    display_name = "TimesFM"
+
+    def inspect_environment(self, context):
+        return None
+
+    def load(self, context):
+        return self
+
+    def run_forecasting(self, windows, context):
+        time.sleep(0.05)
+        return AdapterTaskOutput(
+            model_id=self.model_id,
+            task_id=C21TaskId.FORECASTING,
+            status=OpenModelAdapterStatus.AVAILABLE_AND_RAN,
+            predictions=[window.y for window in windows],
+            metrics={"runtime_seconds": 0.05},
+            input_shape={"windows": len(windows)},
+            output_shape={"predictions": len(windows)},
+        )
+
+
+class LaterRunsForecastingAdapter(AlwaysRunsForecastingAdapter):
+    model_id = "moirai_uni2ts"
+    display_name = "Moirai / Uni2TS"
+
+
+def test_runner_continues_when_one_model_fails(tmp_path):
+    config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={
+            "ttm": AlwaysRunsForecastingAdapter(),
+            "chronos": MissingDependencyAdapter(),
+        },
+    )
+    statuses = {(item.model_id, item.status) for item in result.task_results}
+    assert ("ttm", OpenModelAdapterStatus.AVAILABLE_AND_RAN) in statuses
+    assert ("chronos", OpenModelAdapterStatus.MISSING_DEPENDENCY) in statuses
+    assert len({(item.model_id, item.task_id) for item in result.task_results}) == 8
+
+
+def test_strict_mode_detects_required_attempt_failures(tmp_path):
+    config = _write_c21_fixture_config(tmp_path, strict_model_success=True)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"chronos": MissingDependencyAdapter()},
+    )
+    assert result.has_required_attempt_failure is True
+
+
+def test_runner_maps_timeout_per_model_task_attempt(tmp_path):
+    config = _write_c21_fixture_config(
+        tmp_path,
+        strict_model_success=False,
+        timeout_seconds_per_model=0.01,
+    )
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={
+            "timesfm": TimeoutAdapter(),
+            "moirai_uni2ts": LaterRunsForecastingAdapter(),
+        },
+    )
+    timesfm = next(item for item in result.task_results if item.model_id == "timesfm")
+    moirai = next(item for item in result.task_results if item.model_id == "moirai_uni2ts")
+    assert timesfm.status == OpenModelAdapterStatus.TIMEOUT
+    assert timesfm.failure_stage == "execute"
+    assert moirai.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+
+
 def _sample_c21_run_result_with_all_required_attempts() -> C21RunResult:
     task_results = [
         C21ModelTaskResult(
@@ -233,3 +354,67 @@ def _sample_c21_run_result_with_all_required_attempts() -> C21RunResult:
         task_results=task_results,
         invalid_claims=["do not treat as production alert decision"],
     )
+
+
+def _write_c21_fixture_config(
+    tmp_path: Path,
+    *,
+    strict_model_success: bool = False,
+    timeout_seconds_per_model: float = 1.0,
+):
+    config_path = tmp_path / "c21_fixture.yaml"
+    config_path.write_text(
+        f"""
+stage: C2_1_executable_open_model_evaluation
+upstream_c2_config: configs/c_stage_c2_open_model_evaluation.yaml
+dataset:
+  fu13_observations: {tmp_path / "observations.parquet"}
+  fu13_config: {tmp_path / "fu13_schema.yaml"}
+  boundary: fixture_internal_fu13
+window:
+  window_mode: cross-stage
+  context_length: 8
+  prediction_length: 2
+  max_windows: 4
+  mask_ratio: 0.2
+  seed: 7
+execution_policy:
+  allow_network: false
+  allow_download: false
+  strict_model_success: {str(strict_model_success).lower()}
+  record_failure: true
+  do_not_over_claim: true
+  continue_on_model_failure: true
+  timeout_seconds_per_model: {timeout_seconds_per_model}
+model_cache_policy:
+  cache_dir: {tmp_path / "hf_cache"}
+  reuse_existing_cache: true
+  write_cache_manifest: true
+outputs:
+  report: {tmp_path / "c21_report.md"}
+  cache_manifest: {tmp_path / "c21_cache_manifest.md"}
+""".lstrip(),
+        encoding="utf-8",
+    )
+    (tmp_path / "fu13_schema.yaml").write_text("fixture: true\n", encoding="utf-8")
+    return load_c21_executable_config(config_path)
+
+
+def _write_fixture_observations(path: Path) -> None:
+    timestamps = pd.date_range("2026-01-01", periods=12, freq="min")
+    rows = []
+    for sensor_index, sensor_id in enumerate(["sensor_a", "sensor_b"]):
+        for index, timestamp in enumerate(timestamps):
+            rows.append(
+                {
+                    "device_id": "device_fixture",
+                    "batch_id": "batch_fixture",
+                    "stage": "heating" if index < 6 else "holding",
+                    "timestamp": timestamp,
+                    "sensor_id": sensor_id,
+                    "domain": "thermal",
+                    "value": float(index + sensor_index),
+                    "degradation_label": "normal",
+                }
+            )
+    pd.DataFrame(rows).to_parquet(path)
