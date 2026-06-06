@@ -11,7 +11,6 @@ from b08_model_core.adapters.open_models.base import (
     AdapterTaskOutput,
     OpenModelAdapter,
     OpenModelAdapterStatus,
-    dependency_status,
 )
 
 __all__ = [
@@ -21,5 +20,4 @@ __all__ = [
     "AdapterTaskOutput",
     "OpenModelAdapter",
     "OpenModelAdapterStatus",
-    "dependency_status",
 ]
