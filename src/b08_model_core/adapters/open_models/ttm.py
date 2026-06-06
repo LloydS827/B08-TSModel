@@ -146,7 +146,7 @@ class TTMOpenModelAdapter(_DependencyFirstOpenModelAdapter):
             adapter_name=self.__class__.__name__,
             model_ref=self.model_ref,
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self._network_usage(context),
             metadata={"weight_status": weight_status},
         )
 
@@ -229,7 +229,7 @@ class TTMOpenModelAdapter(_DependencyFirstOpenModelAdapter):
             runtime_seconds=runtime_seconds,
             model_ref=self.model_ref,
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self._network_usage(context),
         )
 
     @staticmethod
@@ -252,3 +252,11 @@ class TTMOpenModelAdapter(_DependencyFirstOpenModelAdapter):
             "X": list(np.asarray(first.X).shape) if first is not None else None,
             "y": list(np.asarray(first.y).shape) if first is not None else None,
         }
+
+    @staticmethod
+    def _network_usage(context: AdapterExecutionContext) -> bool | str:
+        if context.allow_download:
+            return "download_allowed_not_verified"
+        if context.allow_network:
+            return "network_allowed_not_verified"
+        return False

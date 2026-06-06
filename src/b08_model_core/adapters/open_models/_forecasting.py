@@ -20,6 +20,9 @@ from b08_model_core.experiments.c21_executable_open_model_evaluation import C21T
 class _ForecastingOpenModelAdapter(_DependencyFirstOpenModelAdapter):
     official_api_detail = ""
 
+    def __init__(self, runtime_predictor: Any | None = None) -> None:
+        self._runtime_predictor = runtime_predictor
+
     def inspect_environment(
         self,
         context: AdapterExecutionContext,
@@ -147,7 +150,7 @@ class _ForecastingOpenModelAdapter(_DependencyFirstOpenModelAdapter):
             adapter_name=self.__class__.__name__,
             model_ref=self.model_ref,
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self._network_usage(context),
             metadata={
                 **self._execution_metadata(context),
                 "dependency_status": dependency,
@@ -159,7 +162,9 @@ class _ForecastingOpenModelAdapter(_DependencyFirstOpenModelAdapter):
         self,
         windows: list[Any],
         context: AdapterExecutionContext,
-    ) -> AdapterFailure:
+    ) -> Any:
+        if self._runtime_predictor is not None:
+            return self._runtime_predictor(windows, context)
         for module_name in self.required_modules:
             self._import_dependency(module_name)
         return self._failure(
@@ -233,7 +238,7 @@ class _ForecastingOpenModelAdapter(_DependencyFirstOpenModelAdapter):
             runtime_seconds=runtime_seconds,
             model_ref=self.model_ref,
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self._network_usage(context),
             metadata=self._execution_metadata(context),
         )
 
@@ -252,3 +257,11 @@ class _ForecastingOpenModelAdapter(_DependencyFirstOpenModelAdapter):
             "allow_network": context.allow_network,
             "allow_download": context.allow_download,
         }
+
+    @staticmethod
+    def _network_usage(context: AdapterExecutionContext) -> bool | str:
+        if context.allow_download:
+            return "download_allowed_not_verified"
+        if context.allow_network:
+            return "network_allowed_not_verified"
+        return False

@@ -328,6 +328,14 @@ class TimeoutAdapter:
         )
 
 
+class RaisesRuntimeAdapter(AlwaysRunsForecastingAdapter):
+    model_id = "ttm"
+    display_name = "TTM / TinyTimeMixer"
+
+    def run_forecasting(self, windows, context):
+        raise RuntimeError("boom after opt-in runtime started")
+
+
 class LaterRunsForecastingAdapter(AlwaysRunsForecastingAdapter):
     model_id = "moirai_uni2ts"
     display_name = "Moirai / Uni2TS"
@@ -368,6 +376,28 @@ class NonReadyReadinessAdapter(AlwaysRunsForecastingAdapter):
         )
 
 
+class AlwaysRunsImputationAdapter:
+    model_id = "moment"
+    display_name = "MOMENT"
+
+    def inspect_environment(self, context):
+        return None
+
+    def load(self, context):
+        return self
+
+    def run_imputation(self, windows, mask_policy, context):
+        return AdapterTaskOutput(
+            model_id=self.model_id,
+            task_id=C21TaskId.IMPUTATION,
+            status=OpenModelAdapterStatus.AVAILABLE_AND_RAN,
+            imputations=[window.X for window in windows],
+            metrics={"runtime_seconds": 0.01},
+            input_shape={"windows": len(windows)},
+            output_shape={"imputations": len(windows)},
+        )
+
+
 def test_runner_continues_when_one_model_fails(tmp_path):
     config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
     _write_fixture_observations(tmp_path / "observations.parquet")
@@ -382,6 +412,42 @@ def test_runner_continues_when_one_model_fails(tmp_path):
     assert ("ttm", OpenModelAdapterStatus.AVAILABLE_AND_RAN) in statuses
     assert ("chronos", OpenModelAdapterStatus.MISSING_DEPENDENCY) in statuses
     assert len({(item.model_id, item.task_id) for item in result.task_results}) == 8
+
+
+def test_runner_adds_task_quality_metrics_for_successful_forecasting(tmp_path):
+    config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"ttm": AlwaysRunsForecastingAdapter()},
+    )
+
+    ttm = next(item for item in result.task_results if item.model_id == "ttm")
+    assert ttm.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert ttm.metrics["mae"] == 0.0
+    assert ttm.metrics["rmse"] == 0.0
+    assert ttm.metrics["count"] > 0
+
+
+def test_runner_adds_task_quality_metrics_for_successful_imputation(tmp_path):
+    config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"moment": AlwaysRunsImputationAdapter()},
+    )
+
+    moment = next(
+        item
+        for item in result.task_results
+        if item.model_id == "moment" and item.task_id == C21TaskId.IMPUTATION
+    )
+    assert moment.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert moment.metrics["mae"] == 0.0
+    assert moment.metrics["rmse"] == 0.0
+    assert moment.metrics["count"] > 0
 
 
 def test_runner_preserves_success_output_metadata_weight_status(tmp_path):
@@ -430,6 +496,45 @@ def test_runner_maps_timeout_per_model_task_attempt(tmp_path):
     assert moirai.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
 
 
+def test_runner_timeout_failure_preserves_opt_in_network_boundary(tmp_path):
+    config = _write_c21_fixture_config(
+        tmp_path,
+        allow_network=True,
+        allow_download=True,
+        strict_model_success=False,
+        timeout_seconds_per_model=0.01,
+    )
+    _write_fixture_observations(tmp_path / "observations.parquet")
+
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"timesfm": TimeoutAdapter()},
+    )
+
+    timesfm = next(item for item in result.task_results if item.model_id == "timesfm")
+    assert timesfm.status == OpenModelAdapterStatus.TIMEOUT
+    assert timesfm.actual_network_used == "download_allowed_not_verified"
+
+
+def test_runner_exception_failure_preserves_opt_in_network_boundary(tmp_path):
+    config = _write_c21_fixture_config(
+        tmp_path,
+        allow_network=True,
+        allow_download=True,
+        strict_model_success=False,
+    )
+    _write_fixture_observations(tmp_path / "observations.parquet")
+
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"ttm": RaisesRuntimeAdapter()},
+    )
+
+    ttm = next(item for item in result.task_results if item.model_id == "ttm")
+    assert ttm.status == OpenModelAdapterStatus.RUNTIME_FAILED
+    assert ttm.actual_network_used == "download_allowed_not_verified"
+
+
 def test_runner_preserves_load_failure_without_executing_task(tmp_path):
     config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
     _write_fixture_observations(tmp_path / "observations.parquet")
@@ -455,6 +560,29 @@ def test_runner_maps_non_ready_readiness_to_inspect_failure(tmp_path):
     assert chronos.failure_stage == "inspect"
     assert chronos.dependency_status == "missing:chronos"
     assert chronos.weight_status == "not_checked"
+
+
+def test_c21_config_rejects_download_without_network(tmp_path):
+    with pytest.raises(C21ConfigError, match="allow_download requires allow_network"):
+        _write_c21_fixture_config(tmp_path, allow_download=True)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("record_failure", "false", "record_failure=false is not supported"),
+        ("continue_on_model_failure", "false", "continue_on_model_failure=false is not supported"),
+        ("reuse_existing_cache", "false", "reuse_existing_cache=false is not supported"),
+    ],
+)
+def test_c21_config_rejects_unimplemented_failure_policy_values(
+    tmp_path,
+    field,
+    value,
+    message,
+):
+    with pytest.raises(C21ConfigError, match=message):
+        _write_c21_fixture_config(tmp_path, **{field: value == "true"})
 
 
 def test_attempt_timeout_restores_outer_timer_after_elapsed(monkeypatch):
@@ -534,8 +662,13 @@ def _sample_c21_run_result_with_all_required_attempts() -> C21RunResult:
 def _write_c21_fixture_config(
     tmp_path: Path,
     *,
+    allow_network: bool = False,
+    allow_download: bool = False,
     strict_model_success: bool = False,
+    record_failure: bool = True,
+    continue_on_model_failure: bool = True,
     timeout_seconds_per_model: float = 1.0,
+    reuse_existing_cache: bool = True,
 ):
     config_path = tmp_path / "c21_fixture.yaml"
     config_path.write_text(
@@ -554,16 +687,16 @@ window:
   mask_ratio: 0.2
   seed: 7
 execution_policy:
-  allow_network: false
-  allow_download: false
+  allow_network: {str(allow_network).lower()}
+  allow_download: {str(allow_download).lower()}
   strict_model_success: {str(strict_model_success).lower()}
-  record_failure: true
+  record_failure: {str(record_failure).lower()}
   do_not_over_claim: true
-  continue_on_model_failure: true
+  continue_on_model_failure: {str(continue_on_model_failure).lower()}
   timeout_seconds_per_model: {timeout_seconds_per_model}
 model_cache_policy:
   cache_dir: {tmp_path / "hf_cache"}
-  reuse_existing_cache: true
+  reuse_existing_cache: {str(reuse_existing_cache).lower()}
   write_cache_manifest: true
 outputs:
   report: {tmp_path / "c21_report.md"}

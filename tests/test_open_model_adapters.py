@@ -128,6 +128,25 @@ def test_ttm_adapter_runs_forecasting_when_runtime_is_injected(monkeypatch, mode
     assert output.predictions.shape == np.stack([w.y for w in model_windows[:2]]).shape
 
 
+def test_ttm_adapter_records_download_allowed_as_network_not_verified(
+    monkeypatch,
+    model_windows,
+):
+    adapter = TTMOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_predict_with_ttm",
+        lambda windows, context: np.stack([w.y for w in windows]),
+    )
+    context = AdapterExecutionContext(True, True, "hf_cache", 900)
+
+    output = adapter.run_forecasting(model_windows[:2], context)
+
+    assert output.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert output.actual_network_used == "download_allowed_not_verified"
+
+
 def test_ttm_adapter_reports_missing_dependency_without_runtime(monkeypatch, model_windows):
     adapter = TTMOpenModelAdapter()
     monkeypatch.setattr(adapter, "_dependency_available", lambda name: False)
@@ -191,6 +210,41 @@ def test_forecasting_adapter_runs_with_injected_runtime(
     assert output.input_shape["windows"] == 2
     assert output.output_shape["predictions"] == list(expected.shape)
     assert output.actual_network_used is False
+
+
+def test_forecasting_adapter_accepts_explicit_runtime_hook(
+    monkeypatch,
+    model_windows,
+):
+    adapter = ChronosOpenModelAdapter(
+        runtime_predictor=lambda windows, context: np.stack([window.y for window in windows])
+    )
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    output = adapter.run_forecasting(model_windows[:2], context)
+
+    assert output.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert output.predictions.shape == np.stack([w.y for w in model_windows[:2]]).shape
+
+
+def test_forecasting_adapter_records_download_allowed_as_network_not_verified(
+    monkeypatch,
+    model_windows,
+):
+    adapter = ChronosOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_predict",
+        lambda windows, context: np.stack([window.y for window in windows]),
+    )
+    context = AdapterExecutionContext(True, True, "hf_cache", 900)
+
+    output = adapter.run_forecasting(model_windows[:2], context)
+
+    assert output.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert output.actual_network_used == "download_allowed_not_verified"
 
 
 def test_chronos_adapter_rejects_prediction_shape_mismatch(monkeypatch, model_windows):
@@ -319,6 +373,47 @@ def test_units_adapter_attempts_representation_and_imputation_with_injected_runt
     assert imp.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
     assert imp.imputations.shape == np.stack([w.X for w in model_windows[:2]]).shape
     assert imp.output_shape["imputations"] == list(imp.imputations.shape)
+
+
+def test_representation_imputation_adapter_accepts_explicit_runtime_hooks(
+    monkeypatch,
+    model_windows,
+):
+    adapter = MomentOpenModelAdapter(
+        embedding_runtime=lambda windows, context: np.ones((len(windows), 4)),
+        imputation_runtime=lambda windows, mask_policy, context: np.stack(
+            [window.X for window in windows]
+        ),
+    )
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    rep = adapter.run_representation(model_windows[:2], context)
+    imp = adapter.run_imputation(model_windows[:2], {"mask_ratio": 0.2}, context)
+
+    assert rep.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert rep.representations.shape == (2, 4)
+    assert imp.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert imp.imputations.shape == np.stack([w.X for w in model_windows[:2]]).shape
+
+
+def test_representation_adapter_records_download_allowed_as_network_not_verified(
+    monkeypatch,
+    model_windows,
+):
+    adapter = MomentOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_embed",
+        lambda windows, context: np.ones((len(windows), 4)),
+    )
+    context = AdapterExecutionContext(True, True, "hf_cache", 900)
+
+    output = adapter.run_representation(model_windows[:2], context)
+
+    assert output.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert output.actual_network_used == "download_allowed_not_verified"
 
 
 @pytest.mark.parametrize(

@@ -328,6 +328,19 @@ def load_c21_executable_config(path: str | Path) -> C21ExecutionConfig:
     stage = _load_required_string(raw, "stage")
     if stage != "C2_1_executable_open_model_evaluation":
         raise C21ConfigError("C2.1 stage must be C2_1_executable_open_model_evaluation")
+    allow_network = _load_bool(execution_policy, "allow_network")
+    allow_download = _load_bool(execution_policy, "allow_download")
+    record_failure = _load_bool(execution_policy, "record_failure")
+    continue_on_model_failure = _load_bool(execution_policy, "continue_on_model_failure")
+    reuse_existing_cache = _load_bool(model_cache_policy, "reuse_existing_cache")
+    if allow_download and not allow_network:
+        raise C21ConfigError("allow_download requires allow_network=true")
+    if not record_failure:
+        raise C21ConfigError("record_failure=false is not supported")
+    if not continue_on_model_failure:
+        raise C21ConfigError("continue_on_model_failure=false is not supported")
+    if not reuse_existing_cache:
+        raise C21ConfigError("reuse_existing_cache=false is not supported")
 
     return C21ExecutionConfig(
         stage=stage,
@@ -341,18 +354,18 @@ def load_c21_executable_config(path: str | Path) -> C21ExecutionConfig:
         max_windows=_load_positive_int(window, "max_windows"),
         mask_ratio=_load_mask_ratio(window, "mask_ratio"),
         seed=_load_nonnegative_int(window, "seed"),
-        allow_network=_load_bool(execution_policy, "allow_network"),
-        allow_download=_load_bool(execution_policy, "allow_download"),
+        allow_network=allow_network,
+        allow_download=allow_download,
         strict_model_success=_load_bool(execution_policy, "strict_model_success"),
-        record_failure=_load_bool(execution_policy, "record_failure"),
+        record_failure=record_failure,
         do_not_over_claim=_load_bool(execution_policy, "do_not_over_claim"),
-        continue_on_model_failure=_load_bool(execution_policy, "continue_on_model_failure"),
+        continue_on_model_failure=continue_on_model_failure,
         timeout_seconds_per_model=_load_positive_number(
             execution_policy,
             "timeout_seconds_per_model",
         ),
         cache_dir=Path(_load_required_string(model_cache_policy, "cache_dir")),
-        reuse_existing_cache=_load_bool(model_cache_policy, "reuse_existing_cache"),
+        reuse_existing_cache=reuse_existing_cache,
         write_cache_manifest=_load_bool(model_cache_policy, "write_cache_manifest"),
         report_path=Path(_load_required_string(outputs, "report")),
         cache_manifest_path=Path(_load_required_string(outputs, "cache_manifest")),
@@ -426,7 +439,9 @@ def run_c21_executable_evaluation(
                     attempt,
                     adapter,
                     baseline_metrics,
+                    config,
                     context,
+                    windows,
                 )
             )
         except TimeoutError as exc:
@@ -634,18 +649,22 @@ def _adapter_result_to_c21_result(
     attempt: C21ModelTaskAttempt,
     adapter: Any,
     baseline_metrics: dict[str, Any],
+    config: C21ExecutionConfig,
     context: Any,
+    windows: list[object],
 ) -> C21ModelTaskResult:
     from b08_model_core.adapters.open_models.base import AdapterFailure, AdapterTaskOutput
 
     if isinstance(raw_result, AdapterTaskOutput):
         metadata = dict(raw_result.metadata)
+        metrics = dict(raw_result.metrics)
+        metrics.update(_task_quality_metrics(raw_result, config, windows))
         return C21ModelTaskResult(
             model_id=raw_result.model_id or attempt.model_id,
             display_name=_display_name(adapter, raw_result.model_id or attempt.model_id),
             task_id=raw_result.task_id,
             status=raw_result.status,
-            metrics=dict(raw_result.metrics),
+            metrics=metrics,
             baseline_metrics=dict(raw_result.baseline_metrics or baseline_metrics),
             failure_stage="",
             failure_reason="",
@@ -659,9 +678,7 @@ def _adapter_result_to_c21_result(
             adapter_name=raw_result.adapter_name or _adapter_name(adapter),
             model_ref=raw_result.model_ref,
             cache_dir=raw_result.cache_dir or context.cache_dir,
-            actual_network_used=raw_result.actual_network_used
-            if raw_result.actual_network_used is not None
-            else False,
+            actual_network_used=_network_usage_value(raw_result.actual_network_used, context),
         )
     if isinstance(raw_result, AdapterFailure):
         return C21ModelTaskResult(
@@ -683,11 +700,61 @@ def _adapter_result_to_c21_result(
             adapter_name=raw_result.adapter_name or _adapter_name(adapter),
             model_ref=raw_result.model_ref,
             cache_dir=raw_result.cache_dir or context.cache_dir,
-            actual_network_used=raw_result.actual_network_used
-            if raw_result.actual_network_used is not None
-            else False,
+            actual_network_used=_network_usage_value(raw_result.actual_network_used, context),
         )
     raise TypeError(f"adapter returned unsupported result type: {type(raw_result).__name__}")
+
+
+def _task_quality_metrics(
+    raw_result: Any,
+    config: C21ExecutionConfig,
+    windows: list[object],
+) -> dict[str, Any]:
+    from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+
+    if raw_result.status != OpenModelAdapterStatus.AVAILABLE_AND_RAN:
+        return {}
+    try:
+        if raw_result.task_id == C21TaskId.FORECASTING and raw_result.predictions is not None:
+            return forecasting_metrics({"y_hat": np.asarray(raw_result.predictions, dtype=float)}, windows)
+        if raw_result.task_id == C21TaskId.IMPUTATION and raw_result.imputations is not None:
+            return _imputation_quality_metrics(raw_result.imputations, config, windows)
+    except Exception as exc:
+        return {"task_metrics": "not_run", "task_metrics_reason": str(exc)}
+    return {}
+
+
+def _imputation_quality_metrics(
+    imputations: Any,
+    config: C21ExecutionConfig,
+    windows: list[object],
+) -> dict[str, Any]:
+    reconstructed = np.asarray(imputations, dtype=float)
+    metrics_by_window = []
+    for index, window in enumerate(windows):
+        _masked, mask = apply_deterministic_mask(
+            window.X,
+            mask_ratio=config.mask_ratio,
+            seed=config.seed + index,
+        )
+        metrics_by_window.append(reconstruction_metrics(window.X, reconstructed[index], mask))
+    mae_values = [metric["mae"] for metric in metrics_by_window if metric["mae"] is not None]
+    rmse_values = [metric["rmse"] for metric in metrics_by_window if metric["rmse"] is not None]
+    return {
+        "mae": float(np.mean(mae_values)) if mae_values else None,
+        "rmse": float(np.mean(rmse_values)) if rmse_values else None,
+        "count": int(sum(int(metric["count"]) for metric in metrics_by_window)),
+    }
+
+
+def _network_usage_value(value: Any, context: Any) -> Any:
+    if value is not None:
+        return value
+    if context.allow_download:
+        return "download_allowed_not_verified"
+    if context.allow_network:
+        return "network_allowed_not_verified"
+    return False
 
 
 def _failure_result(
@@ -724,7 +791,7 @@ def _failure_result(
         adapter_name=_adapter_name(adapter),
         model_ref=None,
         cache_dir=context.cache_dir,
-        actual_network_used=False,
+        actual_network_used=_network_usage_value(None, context),
     )
 
 

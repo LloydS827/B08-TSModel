@@ -20,6 +20,14 @@ from b08_model_core.experiments.c21_executable_open_model_evaluation import C21T
 class _RepresentationImputationOpenModelAdapter(_DependencyFirstOpenModelAdapter):
     official_api_detail = ""
 
+    def __init__(
+        self,
+        embedding_runtime: Any | None = None,
+        imputation_runtime: Any | None = None,
+    ) -> None:
+        self._embedding_runtime = embedding_runtime
+        self._imputation_runtime = imputation_runtime
+
     def inspect_environment(
         self,
         context: AdapterExecutionContext,
@@ -156,7 +164,7 @@ class _RepresentationImputationOpenModelAdapter(_DependencyFirstOpenModelAdapter
             adapter_name=self.__class__.__name__,
             model_ref=self.model_ref,
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self._network_usage(context),
             metadata={
                 **self._execution_metadata(context),
                 "dependency_status": dependency,
@@ -273,7 +281,7 @@ class _RepresentationImputationOpenModelAdapter(_DependencyFirstOpenModelAdapter
             adapter_name=self.__class__.__name__,
             model_ref=self.model_ref,
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self._network_usage(context),
             metadata={
                 **self._execution_metadata(context),
                 "dependency_status": dependency,
@@ -286,7 +294,9 @@ class _RepresentationImputationOpenModelAdapter(_DependencyFirstOpenModelAdapter
         self,
         windows: list[Any],
         context: AdapterExecutionContext,
-    ) -> AdapterFailure:
+    ) -> Any:
+        if self._embedding_runtime is not None:
+            return self._embedding_runtime(windows, context)
         for module_name in self.required_modules:
             self._import_dependency(module_name)
         return self._interface_review_failure(
@@ -301,7 +311,9 @@ class _RepresentationImputationOpenModelAdapter(_DependencyFirstOpenModelAdapter
         windows: list[Any],
         mask_policy: Mapping[str, object],
         context: AdapterExecutionContext,
-    ) -> AdapterFailure:
+    ) -> Any:
+        if self._imputation_runtime is not None:
+            return self._imputation_runtime(windows, mask_policy, context)
         for module_name in self.required_modules:
             self._import_dependency(module_name)
         return self._interface_review_failure(
@@ -394,7 +406,7 @@ class _RepresentationImputationOpenModelAdapter(_DependencyFirstOpenModelAdapter
             runtime_seconds=runtime_seconds,
             model_ref=self.model_ref,
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self._network_usage(context),
             metadata={
                 **self._execution_metadata(context),
                 **({} if metadata_extra is None else metadata_extra),
@@ -415,6 +427,14 @@ class _RepresentationImputationOpenModelAdapter(_DependencyFirstOpenModelAdapter
             "allow_network": context.allow_network,
             "allow_download": context.allow_download,
         }
+
+    @staticmethod
+    def _network_usage(context: AdapterExecutionContext) -> bool | str:
+        if context.allow_download:
+            return "download_allowed_not_verified"
+        if context.allow_network:
+            return "network_allowed_not_verified"
+        return False
 
     @staticmethod
     def _finite_value_ratio(values: np.ndarray) -> float:
