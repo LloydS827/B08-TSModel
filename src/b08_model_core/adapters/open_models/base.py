@@ -166,7 +166,7 @@ def dependency_status(
 def _module_available(module_name: str) -> bool:
     try:
         return find_spec(module_name) is not None
-    except ModuleNotFoundError:
+    except Exception:
         return False
 
 

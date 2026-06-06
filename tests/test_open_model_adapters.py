@@ -1,5 +1,9 @@
+import sys
+import types
+
 import numpy as np
 
+import b08_model_core.adapters.open_models.base as open_model_base
 from b08_model_core.adapters.open_models.base import (
     AdapterExecutionContext,
     AdapterFailure,
@@ -77,3 +81,25 @@ def test_dependency_status_reports_missing_dotted_module_without_raising():
         dependency_status(["definitely_missing_parent.child"])
         == "missing:definitely_missing_parent.child"
     )
+
+
+def test_dependency_status_reports_loaded_module_without_spec_as_missing(monkeypatch):
+    module_name = "c21_loaded_without_spec"
+    module = types.ModuleType(module_name)
+    module.__spec__ = None
+    monkeypatch.setitem(sys.modules, module_name, module)
+
+    assert dependency_status([module_name]) == f"missing:{module_name}"
+
+
+def test_dependency_status_reports_dotted_parent_spec_exception_as_missing(monkeypatch):
+    module_name = "c21_parent.child"
+
+    def raise_runtime_error(name):
+        if name == module_name:
+            raise RuntimeError("simulated parent import failure")
+        return None
+
+    monkeypatch.setattr(open_model_base, "find_spec", raise_runtime_error)
+
+    assert dependency_status([module_name]) == f"missing:{module_name}"
