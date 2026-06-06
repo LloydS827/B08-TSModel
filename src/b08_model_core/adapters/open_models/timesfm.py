@@ -1,4 +1,4 @@
-from b08_model_core.adapters.open_models.chronos import _ForecastingOpenModelAdapter
+from b08_model_core.adapters.open_models._forecasting import _ForecastingOpenModelAdapter
 from b08_model_core.experiments.c21_executable_open_model_evaluation import C21TaskId
 
 

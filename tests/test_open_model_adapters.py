@@ -246,6 +246,22 @@ def test_cached_download_import_error_is_not_weight_failure():
     assert status == OpenModelAdapterStatus.RUNTIME_FAILED
 
 
+@pytest.mark.parametrize(
+    "message",
+    [
+        "weighted loss produced nan",
+        "lightweight runtime failed",
+    ],
+)
+def test_weight_substrings_are_not_blocked_weight_failures(message):
+    adapter = build_open_model_adapter("chronos")
+
+    status, _weight_status = adapter._load_exception_status(RuntimeError(message))
+
+    assert status != OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS
+    assert status == OpenModelAdapterStatus.RUNTIME_FAILED
+
+
 def test_dependency_status_reports_missing_dotted_module_without_raising():
     assert (
         dependency_status(["definitely_missing_parent.child"])

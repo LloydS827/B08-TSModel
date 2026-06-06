@@ -226,6 +226,16 @@ class AlwaysRunsForecastingAdapter:
         )
 
 
+class MetadataRunsForecastingAdapter(AlwaysRunsForecastingAdapter):
+    def run_forecasting(self, windows, context):
+        result = super().run_forecasting(windows, context)
+        result.metadata = {
+            "dependency_status": "available",
+            "weight_status": "available",
+        }
+        return result
+
+
 class MissingDependencyAdapter:
     model_id = "chronos"
     display_name = "Chronos / Chronos-Bolt"
@@ -319,6 +329,21 @@ def test_runner_continues_when_one_model_fails(tmp_path):
     assert ("ttm", OpenModelAdapterStatus.AVAILABLE_AND_RAN) in statuses
     assert ("chronos", OpenModelAdapterStatus.MISSING_DEPENDENCY) in statuses
     assert len({(item.model_id, item.task_id) for item in result.task_results}) == 8
+
+
+def test_runner_preserves_success_output_metadata_weight_status(tmp_path):
+    config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"ttm": MetadataRunsForecastingAdapter()},
+    )
+
+    ttm = next(item for item in result.task_results if item.model_id == "ttm")
+    assert ttm.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert ttm.dependency_status == "available"
+    assert ttm.weight_status == "available"
 
 
 def test_strict_mode_detects_required_attempt_failures(tmp_path):

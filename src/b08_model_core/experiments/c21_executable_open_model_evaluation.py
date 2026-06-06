@@ -634,6 +634,7 @@ def _adapter_result_to_c21_result(
     from b08_model_core.adapters.open_models.base import AdapterFailure, AdapterTaskOutput
 
     if isinstance(raw_result, AdapterTaskOutput):
+        metadata = dict(raw_result.metadata)
         return C21ModelTaskResult(
             model_id=raw_result.model_id or attempt.model_id,
             display_name=_display_name(adapter, raw_result.model_id or attempt.model_id),
@@ -645,8 +646,8 @@ def _adapter_result_to_c21_result(
             failure_reason="",
             error_type="",
             error_detail="",
-            dependency_status="available",
-            weight_status="not_checked",
+            dependency_status=metadata.get("dependency_status", "available"),
+            weight_status=metadata.get("weight_status", "not_checked"),
             input_shape=dict(raw_result.input_shape),
             output_shape=dict(raw_result.output_shape),
             runtime_seconds=_runtime_seconds(raw_result),

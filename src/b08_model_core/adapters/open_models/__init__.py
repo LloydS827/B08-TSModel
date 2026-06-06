@@ -149,13 +149,15 @@ class _DependencyFirstOpenModelAdapter(OpenModelAdapter):
         if any(
             token in detail
             for token in (
-                "weight",
                 "checkpoint",
                 "offline",
                 "not found in cache",
                 "cache file",
                 "cache dir",
             )
+        ) or re.search(
+            r"(?<![a-z0-9_])weights?(?![a-z0-9_])",
+            detail,
         ) or re.search(r"(?<![a-z0-9_])download(?![a-z0-9_])", detail):
             return OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS, "missing_or_blocked"
         if any(token in detail for token in ("license", "interface", "api", "review")):
