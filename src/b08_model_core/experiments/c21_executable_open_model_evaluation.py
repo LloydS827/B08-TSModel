@@ -751,16 +751,31 @@ def _run_attempt_with_timeout(seconds: float, run: Any) -> Any:
 @contextmanager
 def _attempt_timeout(seconds: float):
     old_handler = signal.getsignal(signal.SIGALRM)
+    old_timer = signal.setitimer(signal.ITIMER_REAL, 0.0)
     started = time.monotonic()
+    setup_complete = False
 
     def _raise_timeout(signum: int, frame: Any) -> None:
         raise _AttemptTimeout(f"attempt timed out after {seconds} seconds")
 
-    signal.signal(signal.SIGALRM, _raise_timeout)
-    old_timer = signal.setitimer(signal.ITIMER_REAL, seconds)
     try:
-        yield
-    finally:
+        signal.signal(signal.SIGALRM, _raise_timeout)
+        signal.setitimer(signal.ITIMER_REAL, seconds)
+        setup_complete = True
+        try:
+            yield
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0.0)
+            elapsed = time.monotonic() - started
+            signal.signal(signal.SIGALRM, old_handler)
+            signal.setitimer(
+                signal.ITIMER_REAL,
+                _restored_timer_seconds(old_timer[0], elapsed),
+                old_timer[1],
+            )
+    except BaseException:
+        if setup_complete:
+            raise
         signal.setitimer(signal.ITIMER_REAL, 0.0)
         elapsed = time.monotonic() - started
         signal.signal(signal.SIGALRM, old_handler)
@@ -769,6 +784,7 @@ def _attempt_timeout(seconds: float):
             _restored_timer_seconds(old_timer[0], elapsed),
             old_timer[1],
         )
+        raise
 
 
 def _restored_timer_seconds(old_remaining: float, elapsed: float) -> float:

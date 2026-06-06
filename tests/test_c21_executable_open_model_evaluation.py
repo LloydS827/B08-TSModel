@@ -402,7 +402,8 @@ def test_attempt_timeout_restores_outer_timer_after_elapsed(monkeypatch):
         pass
 
     assert [event[:3] for event in events] == [
-        ("signal", c21_eval.signal.SIGALRM, events[0][2]),
+        ("setitimer", c21_eval.signal.ITIMER_REAL, 0.0),
+        ("signal", c21_eval.signal.SIGALRM, events[1][2]),
         ("setitimer", c21_eval.signal.ITIMER_REAL, 0.5),
         ("setitimer", c21_eval.signal.ITIMER_REAL, 0.0),
         ("signal", c21_eval.signal.SIGALRM, "old-handler"),
