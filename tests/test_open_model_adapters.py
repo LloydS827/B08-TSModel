@@ -7,6 +7,11 @@ import pytest
 import b08_model_core.adapters.open_models as open_models
 import b08_model_core.adapters.open_models.base as open_model_base
 from b08_model_core.adapters.open_models import build_open_model_adapter
+from b08_model_core.adapters.open_models.chronos import ChronosOpenModelAdapter
+from b08_model_core.adapters.open_models.moirai_uni2ts import (
+    MoiraiUni2TSOpenModelAdapter,
+)
+from b08_model_core.adapters.open_models.timesfm import TimesFMOpenModelAdapter
 from b08_model_core.adapters.open_models.ttm import TTMOpenModelAdapter
 from b08_model_core.adapters.open_models.base import (
     AdapterExecutionContext,
@@ -133,6 +138,94 @@ def test_ttm_adapter_reports_missing_dependency_without_runtime(monkeypatch, mod
     assert readiness.failure_stage == "inspect"
     assert output.status == OpenModelAdapterStatus.MISSING_DEPENDENCY
     assert output.failure_stage == "execute"
+
+
+@pytest.mark.parametrize(
+    "adapter_class",
+    [
+        ChronosOpenModelAdapter,
+        TimesFMOpenModelAdapter,
+        MoiraiUni2TSOpenModelAdapter,
+    ],
+)
+def test_forecasting_adapter_reports_missing_dependency(adapter_class, monkeypatch):
+    adapter = adapter_class()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: False)
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    failure = adapter.inspect_environment(context)
+
+    assert failure.status == OpenModelAdapterStatus.MISSING_DEPENDENCY
+    assert failure.failure_stage == "inspect"
+
+
+@pytest.mark.parametrize(
+    "adapter_class",
+    [
+        ChronosOpenModelAdapter,
+        TimesFMOpenModelAdapter,
+        MoiraiUni2TSOpenModelAdapter,
+    ],
+)
+def test_forecasting_adapter_runs_with_injected_runtime(
+    adapter_class,
+    monkeypatch,
+    model_windows,
+):
+    adapter = adapter_class()
+    expected = np.stack([window.y for window in model_windows[:2]])
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_predict",
+        lambda windows, context: np.stack([window.y for window in windows]),
+    )
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    output = adapter.run_forecasting(model_windows[:2], context)
+
+    assert output.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert output.predictions.shape == expected.shape
+    assert output.input_shape["windows"] == 2
+    assert output.output_shape["predictions"] == list(expected.shape)
+    assert output.actual_network_used is False
+
+
+def test_chronos_adapter_rejects_prediction_shape_mismatch(monkeypatch, model_windows):
+    adapter = ChronosOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_predict",
+        lambda windows, context: np.zeros((len(windows), 1, 1)),
+    )
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    failure = adapter.run_forecasting(model_windows[:2], context)
+
+    assert failure.status == OpenModelAdapterStatus.UNSUPPORTED_WINDOW_SHAPE
+    assert failure.expected_shape_or_constraint == str(
+        np.stack([window.y for window in model_windows[:2]]).shape
+    )
+
+
+def test_chronos_adapter_maps_offline_runtime_exception_to_blocked_weights(
+    monkeypatch,
+    model_windows,
+):
+    adapter = ChronosOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+
+    def fail_to_download(_windows, _context):
+        raise RuntimeError("offline mode blocked checkpoint download")
+
+    monkeypatch.setattr(adapter, "_predict", fail_to_download)
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    failure = adapter.run_forecasting(model_windows[:1], context)
+
+    assert failure.status == OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS
+    assert failure.weight_status == "missing_or_blocked"
 
 
 def test_adapter_factory_rejects_unknown_model():
