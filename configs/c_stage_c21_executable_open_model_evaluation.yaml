@@ -1,0 +1,28 @@
+stage: C2_1_executable_open_model_evaluation
+upstream_c2_config: configs/c_stage_c2_open_model_evaluation.yaml
+dataset:
+  fu13_observations: data/processed/fu13_real_observations.parquet
+  fu13_config: configs/fu13_real_data_schema.yaml
+  boundary: internal_fu13_no_raw_data_committed
+window:
+  window_mode: cross-stage
+  context_length: 90
+  prediction_length: 16
+  max_windows: 40
+  mask_ratio: 0.2
+  seed: 7
+execution_policy:
+  allow_network: false
+  allow_download: false
+  strict_model_success: false
+  record_failure: true
+  do_not_over_claim: true
+  continue_on_model_failure: true
+  timeout_seconds_per_model: 900
+model_cache_policy:
+  cache_dir: hf_cache
+  reuse_existing_cache: true
+  write_cache_manifest: true
+outputs:
+  report: reports/c_stage_c21_executable_open_model_evaluation.md
+  cache_manifest: reports/c_stage_c21_model_cache_manifest.md
