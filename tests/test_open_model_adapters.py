@@ -11,8 +11,10 @@ from b08_model_core.adapters.open_models.chronos import ChronosOpenModelAdapter
 from b08_model_core.adapters.open_models.moirai_uni2ts import (
     MoiraiUni2TSOpenModelAdapter,
 )
+from b08_model_core.adapters.open_models.moment import MomentOpenModelAdapter
 from b08_model_core.adapters.open_models.timesfm import TimesFMOpenModelAdapter
 from b08_model_core.adapters.open_models.ttm import TTMOpenModelAdapter
+from b08_model_core.adapters.open_models.units import UniTSOpenModelAdapter
 from b08_model_core.adapters.open_models.base import (
     AdapterExecutionContext,
     AdapterFailure,
@@ -226,6 +228,126 @@ def test_chronos_adapter_maps_offline_runtime_exception_to_blocked_weights(
 
     assert failure.status == OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS
     assert failure.weight_status == "missing_or_blocked"
+
+
+@pytest.mark.parametrize(
+    "adapter_class",
+    [
+        MomentOpenModelAdapter,
+        UniTSOpenModelAdapter,
+    ],
+)
+def test_representation_imputation_adapter_reports_missing_dependency(
+    adapter_class,
+    monkeypatch,
+):
+    adapter = adapter_class()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: False)
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    failure = adapter.inspect_environment(context)
+
+    assert failure.status == OpenModelAdapterStatus.MISSING_DEPENDENCY
+    assert failure.failure_stage == "inspect"
+
+
+def test_moment_adapter_attempts_representation_and_imputation_with_injected_runtime(
+    monkeypatch,
+    model_windows,
+):
+    adapter = MomentOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_embed",
+        lambda windows, context: np.ones((len(windows), 4)),
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_impute",
+        lambda windows, mask_policy, context: np.stack([w.X for w in windows]),
+    )
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    rep = adapter.run_representation(model_windows[:2], context)
+    imp = adapter.run_imputation(
+        model_windows[:2],
+        {"mask_ratio": 0.2, "seed": 7},
+        context,
+    )
+
+    assert rep.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert rep.representations.shape == (2, 4)
+    assert rep.output_shape["representations"] == [2, 4]
+    assert rep.output_shape["embedding_shape"] == [2, 4]
+    assert rep.metrics["finite_value_ratio"] == 1.0
+    assert imp.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert imp.imputations.shape == np.stack([w.X for w in model_windows[:2]]).shape
+    assert imp.output_shape["imputations"] == list(imp.imputations.shape)
+
+
+def test_units_adapter_attempts_representation_and_imputation_with_injected_runtime(
+    monkeypatch,
+    model_windows,
+):
+    adapter = UniTSOpenModelAdapter()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_embed",
+        lambda windows, context: np.ones((len(windows), 4)),
+    )
+    monkeypatch.setattr(
+        adapter,
+        "_impute",
+        lambda windows, mask_policy, context: np.stack([w.X for w in windows]),
+    )
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    rep = adapter.run_representation(model_windows[:2], context)
+    imp = adapter.run_imputation(
+        model_windows[:2],
+        {"mask_ratio": 0.2, "seed": 7},
+        context,
+    )
+
+    assert rep.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert rep.representations.shape == (2, 4)
+    assert rep.output_shape["representations"] == [2, 4]
+    assert rep.output_shape["embedding_shape"] == [2, 4]
+    assert rep.metrics["finite_value_ratio"] == 1.0
+    assert imp.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert imp.imputations.shape == np.stack([w.X for w in model_windows[:2]]).shape
+    assert imp.output_shape["imputations"] == list(imp.imputations.shape)
+
+
+@pytest.mark.parametrize(
+    "adapter_class",
+    [
+        MomentOpenModelAdapter,
+        UniTSOpenModelAdapter,
+    ],
+)
+def test_representation_imputation_adapter_rejects_imputation_shape_mismatch(
+    adapter_class,
+    monkeypatch,
+    model_windows,
+):
+    adapter = adapter_class()
+    monkeypatch.setattr(adapter, "_dependency_available", lambda name: True)
+    monkeypatch.setattr(
+        adapter,
+        "_impute",
+        lambda windows, mask_policy, context: np.zeros((len(windows), 1, 1)),
+    )
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+
+    failure = adapter.run_imputation(model_windows[:2], {"mask_ratio": 0.2}, context)
+
+    assert failure.status == OpenModelAdapterStatus.UNSUPPORTED_WINDOW_SHAPE
+    assert failure.expected_shape_or_constraint == str(
+        np.stack([w.X for w in model_windows[:2]]).shape
+    )
 
 
 def test_adapter_factory_rejects_unknown_model():
