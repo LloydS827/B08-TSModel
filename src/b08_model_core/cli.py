@@ -18,6 +18,12 @@ from b08_model_core.experiments.c2_open_model_evaluation import (
     render_c2_open_model_report,
     run_c2_open_model_evaluation,
 )
+from b08_model_core.experiments.c21_executable_open_model_evaluation import (
+    load_c21_executable_config,
+    render_c21_cache_manifest,
+    render_c21_report,
+    run_c21_executable_evaluation,
+)
 from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
@@ -136,6 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     c_stage_c2 = experiment_sub.add_parser("c-stage-c2")
     c_stage_c2.add_argument("--config", required=True)
     c_stage_c2.add_argument("--output", required=True)
+    c_stage_c21 = experiment_sub.add_parser("c-stage-c21")
+    c_stage_c21.add_argument("--config", required=True)
+    c_stage_c21.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -288,6 +297,22 @@ def main(argv: list[str] | None = None) -> int:
         except (FileNotFoundError, ValueError, OSError, PermissionError):
             return 1
         if config.strict_model_success and _has_c2_candidate_model_failure(result.task_results):
+            return 1
+        return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c21":
+        try:
+            config = load_c21_executable_config(args.config)
+            config.report_path = Path(args.output)
+            result = run_c21_executable_evaluation(config)
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_c21_report(result), encoding="utf-8")
+            if config.write_cache_manifest:
+                config.cache_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                config.cache_manifest_path.write_text(render_c21_cache_manifest(result), encoding="utf-8")
+        except (FileNotFoundError, ValueError, OSError, PermissionError):
+            return 1
+        if config.strict_model_success and result.has_required_attempt_failure:
             return 1
         return 0
     raise ValueError(args.command)

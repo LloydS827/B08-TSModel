@@ -10,6 +10,7 @@ from b08_model_core.adapters.open_models.base import (
     AdapterTaskOutput,
     OpenModelAdapterStatus,
 )
+from b08_model_core.cli import main
 import b08_model_core.experiments.c21_executable_open_model_evaluation as c21_eval
 from b08_model_core.experiments.c21_executable_open_model_evaluation import (
     C21ConfigError,
@@ -201,6 +202,49 @@ def test_c21_cache_manifest_records_network_and_weight_boundary():
     text = render_c21_cache_manifest(result)
     assert "download_allowed" in text
     assert "actual_network_used" in text
+
+
+def test_cli_c_stage_c21_writes_report_when_models_fail_structurally(tmp_path, monkeypatch):
+    _write_c21_fixture_config(tmp_path, strict_model_success=False)
+    config_path = tmp_path / "c21_fixture.yaml"
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    output = tmp_path / "c21.md"
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c21",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output),
+        ]
+    )
+    assert exit_code == 0
+    assert output.exists()
+    text = output.read_text(encoding="utf-8")
+    assert "C2.1 Executable Open Model Evaluation Report" in text
+    assert "config_allows_network" in text
+    assert "- config_allows_network: false" in text
+    assert "config_allows_download" in text
+
+
+def test_cli_c_stage_c21_strict_mode_returns_nonzero_but_writes_report(tmp_path):
+    _write_c21_fixture_config(tmp_path, strict_model_success=True)
+    config_path = tmp_path / "c21_fixture.yaml"
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    output = tmp_path / "c21.md"
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c21",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output),
+        ]
+    )
+    assert exit_code == 1
+    assert output.exists()
 
 
 class AlwaysRunsForecastingAdapter:
