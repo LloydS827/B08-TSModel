@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping
 
 from b08_model_core.experiments.c21_executable_open_model_evaluation import C21TaskId
 
@@ -124,6 +124,7 @@ class OpenModelAdapter:
     def run_imputation(
         self,
         windows: Iterable[Any],
+        mask_policy: Mapping[str, object],
         context: AdapterExecutionContext,
     ) -> AdapterRunResult:
         return self.unsupported_task(C21TaskId.IMPUTATION, windows, context)

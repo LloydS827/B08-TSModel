@@ -63,6 +63,15 @@ def test_base_adapter_returns_unsupported_task_for_missing_method():
     assert failure.failure_stage == "execute"
 
 
+def test_base_imputation_contract_accepts_mask_policy_and_returns_unsupported_task():
+    adapter = FakeAdapter()
+    context = AdapterExecutionContext(False, False, "hf_cache", 900)
+    failure = adapter.run_imputation([], {"mask_ratio": 0.2, "seed": 7}, context)
+    assert isinstance(failure, AdapterFailure)
+    assert failure.status == OpenModelAdapterStatus.UNSUPPORTED_TASK
+    assert failure.failure_stage == "execute"
+
+
 def test_dependency_status_reports_missing_dotted_module_without_raising():
     assert (
         dependency_status(["definitely_missing_parent.child"])
