@@ -6,9 +6,11 @@ import pytest
 
 from b08_model_core.adapters.open_models.base import (
     AdapterFailure,
+    AdapterReadiness,
     AdapterTaskOutput,
     OpenModelAdapterStatus,
 )
+import b08_model_core.experiments.c21_executable_open_model_evaluation as c21_eval
 from b08_model_core.experiments.c21_executable_open_model_evaluation import (
     C21ConfigError,
     C21ModelTaskResult,
@@ -268,6 +270,41 @@ class LaterRunsForecastingAdapter(AlwaysRunsForecastingAdapter):
     display_name = "Moirai / Uni2TS"
 
 
+class LoadFailureAdapter(AlwaysRunsForecastingAdapter):
+    model_id = "timesfm"
+    display_name = "TimesFM"
+
+    def load(self, context):
+        return AdapterFailure(
+            model_id=self.model_id,
+            task_id=C21TaskId.FORECASTING,
+            status=OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS,
+            failure_stage="load",
+            failure_reason="weights unavailable in offline cache",
+            error_type="MissingWeights",
+            error_detail="timesfm",
+            weight_status="missing:timesfm",
+        )
+
+
+class NonReadyReadinessAdapter(AlwaysRunsForecastingAdapter):
+    model_id = "chronos"
+    display_name = "Chronos / Chronos-Bolt"
+
+    def inspect_environment(self, context):
+        return AdapterReadiness(
+            model_id=self.model_id,
+            dependency_status="missing:chronos",
+            weight_status="not_checked",
+            adapter_status=OpenModelAdapterStatus.MISSING_DEPENDENCY,
+            adapter_name=self.__class__.__name__,
+            model_ref="chronos-bolt",
+            cache_dir=context.cache_dir,
+            actual_network_used=False,
+            known_limitations=("dependency modules are unavailable",),
+        )
+
+
 def test_runner_continues_when_one_model_fails(tmp_path):
     config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
     _write_fixture_observations(tmp_path / "observations.parquet")
@@ -313,6 +350,57 @@ def test_runner_maps_timeout_per_model_task_attempt(tmp_path):
     assert timesfm.status == OpenModelAdapterStatus.TIMEOUT
     assert timesfm.failure_stage == "execute"
     assert moirai.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+
+
+def test_runner_preserves_load_failure_without_executing_task(tmp_path):
+    config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"timesfm": LoadFailureAdapter()},
+    )
+    timesfm = next(item for item in result.task_results if item.model_id == "timesfm")
+    assert timesfm.status == OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS
+    assert timesfm.failure_stage == "load"
+    assert timesfm.failure_reason == "weights unavailable in offline cache"
+
+
+def test_runner_maps_non_ready_readiness_to_inspect_failure(tmp_path):
+    config = _write_c21_fixture_config(tmp_path, strict_model_success=False)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    result = run_c21_executable_evaluation(
+        config,
+        adapter_factory={"chronos": NonReadyReadinessAdapter()},
+    )
+    chronos = next(item for item in result.task_results if item.model_id == "chronos")
+    assert chronos.status == OpenModelAdapterStatus.MISSING_DEPENDENCY
+    assert chronos.failure_stage == "inspect"
+    assert chronos.dependency_status == "missing:chronos"
+    assert chronos.weight_status == "not_checked"
+
+
+def test_attempt_timeout_restores_outer_timer_after_elapsed(monkeypatch):
+    setitimer_calls = []
+    monotonic_values = iter([100.0, 100.25])
+
+    def fake_setitimer(which, seconds, interval=0.0):
+        setitimer_calls.append((which, seconds, interval))
+        if len(setitimer_calls) == 1:
+            return (1.0, 0.0)
+        return (0.0, 0.0)
+
+    monkeypatch.setattr(c21_eval.signal, "getsignal", lambda signum: "old-handler")
+    monkeypatch.setattr(c21_eval.signal, "signal", lambda signum, handler: None)
+    monkeypatch.setattr(c21_eval.signal, "setitimer", fake_setitimer)
+    monkeypatch.setattr(c21_eval.time, "monotonic", lambda: next(monotonic_values))
+
+    with c21_eval._attempt_timeout(0.5):
+        pass
+
+    assert setitimer_calls == [
+        (c21_eval.signal.ITIMER_REAL, 0.5, 0.0),
+        (c21_eval.signal.ITIMER_REAL, 0.75, 0.0),
+    ]
 
 
 def _sample_c21_run_result_with_all_required_attempts() -> C21RunResult:

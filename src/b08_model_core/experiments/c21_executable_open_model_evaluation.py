@@ -557,7 +557,11 @@ def _run_adapter_attempt(
     config: C21ExecutionConfig,
     context: Any,
 ) -> Any:
-    from b08_model_core.adapters.open_models.base import AdapterFailure, OpenModelAdapterStatus
+    from b08_model_core.adapters.open_models.base import (
+        AdapterFailure,
+        AdapterReadiness,
+        OpenModelAdapterStatus,
+    )
 
     if adapter is None:
         return AdapterFailure(
@@ -578,8 +582,12 @@ def _run_adapter_attempt(
     inspected = adapter.inspect_environment(context)
     if isinstance(inspected, AdapterFailure):
         return inspected
+    if isinstance(inspected, AdapterReadiness) and inspected.adapter_status != OpenModelAdapterStatus.READY:
+        return _readiness_to_failure(inspected, attempt)
 
     loaded = adapter.load(context)
+    if isinstance(loaded, AdapterFailure):
+        return loaded
     if attempt.task_id == C21TaskId.FORECASTING:
         return loaded.run_forecasting(windows, context)
     if attempt.task_id == C21TaskId.REPRESENTATION:
@@ -591,6 +599,29 @@ def _run_adapter_attempt(
             context,
         )
     raise ValueError(f"unsupported C2.1 task_id: {attempt.task_id}")
+
+
+def _readiness_to_failure(readiness: Any, attempt: C21ModelTaskAttempt) -> Any:
+    from b08_model_core.adapters.open_models.base import AdapterFailure
+
+    limitations = ", ".join(readiness.known_limitations)
+    failure_reason = limitations or f"{readiness.model_id} adapter is not ready"
+    return AdapterFailure(
+        model_id=readiness.model_id or attempt.model_id,
+        task_id=attempt.task_id,
+        status=readiness.adapter_status,
+        failure_stage="inspect",
+        failure_reason=failure_reason,
+        error_type="AdapterReadiness",
+        error_detail=_value(readiness.metadata),
+        dependency_status=readiness.dependency_status,
+        weight_status=readiness.weight_status,
+        adapter_name=readiness.adapter_name,
+        model_ref=readiness.model_ref,
+        cache_dir=readiness.cache_dir,
+        actual_network_used=readiness.actual_network_used,
+        metadata=dict(readiness.metadata),
+    )
 
 
 def _adapter_result_to_c21_result(
@@ -720,6 +751,7 @@ def _run_attempt_with_timeout(seconds: float, run: Any) -> Any:
 @contextmanager
 def _attempt_timeout(seconds: float):
     old_handler = signal.getsignal(signal.SIGALRM)
+    started = time.monotonic()
 
     def _raise_timeout(signum: int, frame: Any) -> None:
         raise _AttemptTimeout(f"attempt timed out after {seconds} seconds")
@@ -729,8 +761,20 @@ def _attempt_timeout(seconds: float):
     try:
         yield
     finally:
-        signal.setitimer(signal.ITIMER_REAL, old_timer[0], old_timer[1])
         signal.signal(signal.SIGALRM, old_handler)
+        elapsed = time.monotonic() - started
+        signal.setitimer(
+            signal.ITIMER_REAL,
+            _restored_timer_seconds(old_timer[0], elapsed),
+            old_timer[1],
+        )
+
+
+def _restored_timer_seconds(old_remaining: float, elapsed: float) -> float:
+    if old_remaining <= 0:
+        return 0.0
+    remaining = max(0.0, old_remaining - elapsed)
+    return remaining if remaining > 0 else 1e-6
 
 
 def _load_mapping(raw: dict[str, Any] | Path, key: str | None = None) -> dict[str, Any]:
