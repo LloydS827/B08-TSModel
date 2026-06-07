@@ -1,11 +1,12 @@
 # B08 设备时序基础模型进展说明
 
-更新日期：2026-06-05
+更新日期：2026-06-06
 
 ## 近期阶段台账
 
 | 日期 | 记录 |
 | --- | --- |
+| 2026-06-06 | C2.1 开源模型真实执行评测进入执行入口：核心配置为 `configs/c_stage_c21_executable_open_model_evaluation.yaml`，命令为 `uv run b08-model-core experiment c-stage-c21 --config configs/c_stage_c21_executable_open_model_evaluation.yaml --output reports/c_stage_c21_executable_open_model_evaluation.md`；该阶段在默认离线安全边界下覆盖 TTM、Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS、MOMENT、UniTS 的 executable adapter 尝试、统一 task matrix、结构化失败和 C2 -> C3 / C2 -> B 决策报告，联网下载只允许 opt-in，不改变默认可复现路径。 |
 | 2026-06-05 | C2 开源模型系统评测已进入执行入口：核心配置为 `configs/c_stage_c2_open_model_evaluation.yaml`，命令为 `uv run b08-model-core experiment c-stage-c2 --config configs/c_stage_c2_open_model_evaluation.yaml --output reports/c_stage_c2_open_model_evaluation.md`；该阶段固定覆盖 TTM、MOMENT、Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS、UniTS，成功标准是 audit + model-task attempt + 结构化失败记录，不要求全部模型成功运行。 |
 | 2026-06-05 | C1 证据执行框架进入实施：本阶段目标是把前期 FU13 pipeline、C0 契约、baseline/TTM、E1-E3 任务口径和统一报告收束为可执行评测准备，而不是继续扩写文档或直接进入 B 阶段自研训练。README/details 已同步明确后续路线：C2 系统开源模型评测、开源生态数据集整理支线、以及基于证据的条件性自研模型准备。 |
 | 2026-06-04 | C 阶段最小证据实验规划已进入执行入口：核心契约为 `configs/c_stage_minimum_evidence.yaml`，阅读入口为 `docs/research/c-stage-minimum-evidence-register.html`，报告模板为 `reports/c_stage_minimum_evidence_template.md`；该阶段只建立 `E1-E5` 证据包、`P1-P5` 技术效果样例和 `CT4_decision_gate`，不直接进入 B 阶段自研基础模型训练。 |

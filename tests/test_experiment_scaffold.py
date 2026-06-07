@@ -198,3 +198,23 @@ def test_foundation_ttm_extra_and_local_model_artifacts_are_documented():
     assert "--context-length 90" in readme
     assert "--prediction-length 16" in readme
     assert "不要把这些文件上传到 GitHub" in readme
+
+
+def test_c21_executable_evaluation_workflow_is_documented():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "c-stage-c21" in readme
+    assert "configs/c_stage_c21_executable_open_model_evaluation.yaml" in readme
+    assert "reports/c_stage_c21_executable_open_model_evaluation.md" in readme
+    assert "allow_network: false" in readme
+    assert "allow_download: false" in readme
+    assert "本机 opt-in" in readme
+
+
+def test_details_c21_executable_evaluation_ledger_is_documented():
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+
+    assert "| 2026-06-06 | C2.1 开源模型真实执行评测进入执行入口" in details
+    assert "configs/c_stage_c21_executable_open_model_evaluation.yaml" in details
+    assert "uv run b08-model-core experiment c-stage-c21" in details
+    assert "默认离线安全边界" in details

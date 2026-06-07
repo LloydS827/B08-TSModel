@@ -233,6 +233,27 @@ uv run b08-model-core experiment c-stage-c2 \
 
 `reports/c_stage_c2_open_model_evaluation.md` 是本机 ignored 报告输出，用于记录 model audit table、model-task result matrix、failure taxonomy、C2 -> C3 handoff 和 C2 -> B decision notes。
 
+C2.1 是开源模型真实执行评测入口。由于 Chronos / Chronos-Bolt、TimesFM、Moirai / Uni2TS、MOMENT、UniTS 的 API 和安装组合仍处于结构化尝试阶段，这些包、权重和 cache 均保持本机 opt-in，不加入默认依赖，也不改变 `uv sync --extra dev` 的默认可复现路径。
+
+```bash
+uv run b08-model-core experiment c-stage-c21 \
+  --config configs/c_stage_c21_executable_open_model_evaluation.yaml \
+  --output reports/c_stage_c21_executable_open_model_evaluation.md
+```
+
+默认 C2.1 配置是离线安全边界：`allow_network: false`、`allow_download: false`。C2.1 使用六类 executable adapters / task matrix：
+
+| Adapter | 任务 |
+| --- | --- |
+| TTM | forecasting |
+| Chronos / Chronos-Bolt | forecasting |
+| TimesFM | forecasting |
+| Moirai / Uni2TS | forecasting |
+| MOMENT | representation + imputation |
+| UniTS | representation + imputation |
+
+模型未运行成功时写入结构化失败，而不是让默认 workflow 依赖 optional open model packages。失败类型包括：`missing_dependency`、`missing_or_blocked_weights`、`interface_review`、unsupported window/task、`runtime_failed`、`timeout`。C2.1 报告不输出生产告警、RUL、维护建议，也不形成 B 阶段自研训练 Go decision；联网、下载、权重路径和 cache 只允许通过显式本机 opt-in 配置或 override 启用，并必须记录。
+
 后续关键任务按以下顺序推进，避免重复讨论路线：
 
 ```text
