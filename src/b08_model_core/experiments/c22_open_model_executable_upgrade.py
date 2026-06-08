@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-import math
 from pathlib import Path
 from typing import Any
 
@@ -60,7 +59,7 @@ class C22ExecutionConfig:
     record_failure: bool
     do_not_over_claim: bool
     continue_on_model_failure: bool
-    timeout_seconds_per_model: float
+    timeout_seconds_per_model: int
     cache_dir: Path
     reuse_existing_cache: bool
     write_cache_manifest: bool
@@ -114,7 +113,7 @@ def load_c22_config(path: str | Path) -> C22ExecutionConfig:
         record_failure=record_failure,
         do_not_over_claim=_load_bool(execution_policy, "do_not_over_claim"),
         continue_on_model_failure=continue_on_model_failure,
-        timeout_seconds_per_model=_load_positive_number(
+        timeout_seconds_per_model=_load_positive_int(
             execution_policy,
             "timeout_seconds_per_model",
         ),
@@ -194,16 +193,6 @@ def _load_nonnegative_int(raw: dict[str, Any], key: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise C22ConfigError(f"{key} must be a nonnegative integer")
     return value
-
-
-def _load_positive_number(raw: dict[str, Any], key: str) -> float:
-    value = raw.get(key)
-    if not isinstance(value, int | float) or isinstance(value, bool) or value <= 0:
-        raise C22ConfigError(f"{key} must be a positive number")
-    number = float(value)
-    if not math.isfinite(number):
-        raise C22ConfigError(f"{key} must be finite")
-    return number
 
 
 def _load_mask_ratio(raw: dict[str, Any], key: str) -> float:

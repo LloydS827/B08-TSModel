@@ -21,6 +21,7 @@ def test_c22_default_config_is_offline_safe():
     assert config.allow_download is False
     assert config.strict_model_success is False
     assert config.cache_dir == Path("hf_cache")
+    assert config.timeout_seconds_per_model == 900
 
 
 def test_c22_model_targets_capture_roles_and_versions():
@@ -104,15 +105,16 @@ def test_c22_rejects_non_positive_window_value(tmp_path):
         load_c22_config(config_path)
 
 
-def test_c22_rejects_non_positive_timeout(tmp_path):
+@pytest.mark.parametrize("timeout_value", ["0", "0.5"])
+def test_c22_rejects_non_positive_or_non_integer_timeout(tmp_path, timeout_value):
     config_path = _write_modified_config(
         tmp_path,
         "timeout_seconds_per_model: 900",
-        "timeout_seconds_per_model: 0",
+        f"timeout_seconds_per_model: {timeout_value}",
     )
     with pytest.raises(
         C22ConfigError,
-        match="timeout_seconds_per_model must be a positive number",
+        match="timeout_seconds_per_model must be a positive integer",
     ):
         load_c22_config(config_path)
 
