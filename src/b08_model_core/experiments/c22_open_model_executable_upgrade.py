@@ -8,9 +8,13 @@ from typing import Any
 import yaml
 
 from b08_model_core.experiments.c21_executable_open_model_evaluation import (
+    C21ExecutionConfig,
     C21ModelTaskAttempt,
+    C21ModelTaskResult,
+    C21RunResult,
     C21TaskId,
     REQUIRED_C21_TASKS,
+    run_c21_executable_evaluation,
 )
 
 
@@ -43,6 +47,50 @@ REQUIRED_C22_WATCHLIST_TARGET_IDS = (
     "ibm_flowstate_tspulse",
     "tabpfn_ts",
 )
+
+_KNOWN_TARGET_MODEL_REFS = {
+    "ttm_latest": "ibm-granite/granite-timeseries-ttm-r2",
+    "chronos_2": "amazon/chronos-2",
+    "timesfm_2_5": "google/timesfm-2.5-200m-pytorch",
+    "moirai_2_0_current_uni2ts": "Salesforce/moirai-2.0-R-small",
+    "moment_current": "AutonLab/MOMENT-1-large",
+    "units_current": "thuml/UniTS",
+}
+
+_KNOWN_FALLBACK_MODEL_REFS = {
+    "chronos_bolt": "amazon/chronos-bolt-base",
+}
+
+_TARGET_PACKAGE_HINTS = {
+    "ttm": "tsfm_public",
+    "chronos": "chronos",
+    "timesfm": "timesfm",
+    "moirai_uni2ts": "uni2ts",
+    "moment": "momentfm",
+    "units": "units",
+}
+
+_TARGET_RESOURCE_NOTES = {
+    "ttm": "CPU-compatible local cache preferred for FU13-scale windows.",
+    "chronos": (
+        "Large pretrained forecasting model; local weights and dependency review required."
+    ),
+    "timesfm": "Large forecasting model; local weights and dependency review required.",
+    "moirai_uni2ts": "Forecasting package and checkpoint compatibility require review.",
+    "moment": (
+        "Representation/imputation adapter fit requires local dependency and shape review."
+    ),
+    "units": "Unified task model; representation/imputation interface requires review.",
+}
+
+_TARGET_LICENSE_NOTES = {
+    "ttm": "review model card/license before promotion",
+    "chronos": "review model card/license before promotion",
+    "timesfm": "review model card/license before promotion",
+    "moirai_uni2ts": "review model card/license before promotion",
+    "moment": "review model card/license before promotion",
+    "units": "review model card/license before promotion",
+}
 
 
 @dataclass(frozen=True)
@@ -155,6 +203,22 @@ class C22RunResult:
         ]
     )
 
+    @property
+    def has_priority_or_core_failure(self) -> bool:
+        from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+
+        strict_roles = {
+            C22ModelRole.ANCHOR,
+            C22ModelRole.PRIORITY_REAL_EXECUTION,
+            C22ModelRole.CORE_RUN_REVIEW,
+            C22ModelRole.CORE_INTERFACE,
+        }
+        return any(
+            item.role in strict_roles
+            and item.status != OpenModelAdapterStatus.AVAILABLE_AND_RAN
+            for item in self.target_results
+        )
+
 
 def load_c22_config(path: str | Path) -> C22ExecutionConfig:
     raw = _load_mapping(Path(path))
@@ -225,6 +289,69 @@ def build_c22_core_attempts(config: C22ExecutionConfig) -> list[C21ModelTaskAtte
     ]
 
 
+def build_c21_config_from_c22(config: C22ExecutionConfig) -> C21ExecutionConfig:
+    return C21ExecutionConfig(
+        stage="C2_1_executable_open_model_evaluation",
+        upstream_c2_config=Path("configs/c_stage_c2_open_model_evaluation.yaml"),
+        dataset_path=config.dataset_path,
+        fu13_config_path=config.fu13_config_path,
+        dataset_boundary=config.dataset_boundary,
+        window_mode=config.window_mode,
+        context_length=config.context_length,
+        prediction_length=config.prediction_length,
+        max_windows=config.max_windows,
+        mask_ratio=config.mask_ratio,
+        seed=config.seed,
+        allow_network=config.allow_network,
+        allow_download=config.allow_download,
+        strict_model_success=config.strict_model_success,
+        record_failure=config.record_failure,
+        do_not_over_claim=config.do_not_over_claim,
+        continue_on_model_failure=config.continue_on_model_failure,
+        timeout_seconds_per_model=config.timeout_seconds_per_model,
+        cache_dir=config.cache_dir,
+        reuse_existing_cache=config.reuse_existing_cache,
+        write_cache_manifest=config.write_cache_manifest,
+        report_path=config.report_path,
+        cache_manifest_path=config.cache_manifest_path,
+    )
+
+
+def run_c22_open_model_executable_upgrade(
+    config_or_path: C22ExecutionConfig | str | Path,
+    *,
+    adapter_factory: Any = None,
+    c21_runner: Any = None,
+) -> C22RunResult:
+    config_source: str | Path = "provided_config"
+    if isinstance(config_or_path, C22ExecutionConfig):
+        config = config_or_path
+    else:
+        config_source = config_or_path
+        config = load_c22_config(config_or_path)
+
+    c21_config = build_c21_config_from_c22(config)
+    runner = c21_runner or run_c21_executable_evaluation
+    c21_result: C21RunResult = runner(c21_config, adapter_factory=adapter_factory)
+
+    return C22RunResult(
+        run_id=_c22_run_id(c21_result.run_id),
+        config_path=config_source,
+        upstream_c21_config=config.upstream_c21_config,
+        dataset_boundary=c21_result.dataset_boundary,
+        config_allows_network=c21_result.config_allows_network,
+        config_allows_download=c21_result.config_allows_download,
+        cache_dir=c21_result.cache_dir,
+        tested_windows=c21_result.tested_windows,
+        target_results=[
+            _c21_task_result_to_c22_target_result(task_result, config)
+            for task_result in c21_result.task_results
+        ],
+        watchlist_audit=build_frontier_watchlist_audit(config),
+        invalid_claims=_c22_invalid_claims(c21_result.invalid_claims),
+    )
+
+
 def build_frontier_watchlist_audit(
     config: C22ExecutionConfig,
 ) -> list[C22FrontierWatchlistAudit]:
@@ -232,6 +359,79 @@ def build_frontier_watchlist_audit(
         _WATCHLIST_AUDIT_BY_ID.get(target_id, _unknown_watchlist_audit(target_id))
         for target_id in config.frontier_watchlist.targets
     ]
+
+
+def _c21_task_result_to_c22_target_result(
+    task_result: C21ModelTaskResult,
+    config: C22ExecutionConfig,
+) -> C22TargetResult:
+    target = config.model_targets.get(task_result.model_id)
+    if target is None:
+        raise C22ConfigError(
+            f"C2.1 result has unknown C2.2 model target: {task_result.model_id}"
+        )
+
+    return C22TargetResult(
+        model_id=task_result.model_id,
+        role=target.role,
+        target=target.target,
+        fallback=target.fallback,
+        task_id=task_result.task_id,
+        status=task_result.status,
+        metrics=dict(task_result.metrics),
+        baseline_metrics=dict(task_result.baseline_metrics),
+        failure_stage=task_result.failure_stage,
+        failure_reason=task_result.failure_reason,
+        dependency_status=task_result.dependency_status,
+        weight_status=task_result.weight_status,
+        adapter_name=task_result.adapter_name,
+        model_ref=task_result.model_ref,
+        cache_dir=task_result.cache_dir,
+        actual_network_used=task_result.actual_network_used,
+        runtime_seconds=task_result.runtime_seconds,
+        target_metadata=_target_metadata(task_result, target),
+    )
+
+
+def _target_metadata(
+    task_result: C21ModelTaskResult,
+    target: C22ModelTarget,
+) -> dict[str, Any]:
+    return {
+        "target_model_ref": task_result.model_ref
+        or _KNOWN_TARGET_MODEL_REFS.get(target.target, target.target),
+        "fallback_model_ref": _KNOWN_FALLBACK_MODEL_REFS.get(
+            target.fallback or "",
+            target.fallback,
+        ),
+        "target_package_hint": _TARGET_PACKAGE_HINTS.get(target.model_id, "needs_review"),
+        "target_task_fit": ", ".join(task_id.value for task_id in target.tasks),
+        "target_resource_note": _TARGET_RESOURCE_NOTES.get(
+            target.model_id,
+            "resource requirements require review",
+        ),
+        "target_license_note": _TARGET_LICENSE_NOTES.get(
+            target.model_id,
+            "license requires review before promotion",
+        ),
+    }
+
+
+def _c22_run_id(c21_run_id: str) -> str:
+    if c21_run_id.startswith("c21-"):
+        return c21_run_id.replace("c21-", "c22-", 1)
+    return f"c22-from-{c21_run_id}"
+
+
+def _c22_invalid_claims(c21_invalid_claims: list[str]) -> list[str]:
+    claims = list(c21_invalid_claims)
+    for claim in (
+        "不得解释为 frontier watchlist 模型已执行",
+        "不得解释为 C2.2 watchlist 模型可进入 C3",
+    ):
+        if claim not in claims:
+            claims.append(claim)
+    return claims
 
 
 def render_c22_report(result: C22RunResult, config: C22ExecutionConfig) -> str:

@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from b08_model_core.experiments.c21_executable_open_model_evaluation import C21TaskId
+from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+from b08_model_core.experiments.c21_executable_open_model_evaluation import (
+    C21ModelTaskResult,
+    C21RunResult,
+    C21TaskId,
+)
 from b08_model_core.experiments.c22_open_model_executable_upgrade import (
     C22ConfigError,
     C22ModelRole,
@@ -11,10 +16,12 @@ from b08_model_core.experiments.c22_open_model_executable_upgrade import (
     REQUIRED_C22_MODEL_TARGET_IDS,
     REQUIRED_C22_WATCHLIST_TARGET_IDS,
     build_c22_core_attempts,
+    build_c21_config_from_c22,
     build_frontier_watchlist_audit,
     load_c22_config,
     render_c22_cache_manifest,
     render_c22_report,
+    run_c22_open_model_executable_upgrade,
 )
 
 
@@ -65,6 +72,186 @@ def test_c22_core_attempts_exclude_watchlist_targets():
     assert ("units", C21TaskId.IMPUTATION) in pairs
     assert not any(model_id == "sundial" for model_id, _ in pairs)
     assert len(pairs) == 8
+
+
+def test_build_c21_config_from_c22_populates_bridge_settings(tmp_path):
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    config.cache_dir = tmp_path / "cache"
+
+    c21_config = build_c21_config_from_c22(config)
+
+    assert c21_config.stage == "C2_1_executable_open_model_evaluation"
+    assert c21_config.upstream_c2_config == Path(
+        "configs/c_stage_c2_open_model_evaluation.yaml"
+    )
+    assert c21_config.dataset_path == config.dataset_path
+    assert c21_config.fu13_config_path == config.fu13_config_path
+    assert c21_config.dataset_boundary == config.dataset_boundary
+    assert c21_config.max_windows == config.max_windows
+    assert c21_config.allow_network is False
+    assert c21_config.allow_download is False
+    assert c21_config.cache_dir == config.cache_dir
+
+
+def test_c22_runner_wraps_c21_results_with_target_metadata(tmp_path):
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    config.cache_dir = tmp_path / "empty_cache"
+
+    def fake_c21_runner(c21_config, adapter_factory=None):
+        return C21RunResult(
+            run_id="c21-fake",
+            config_path="c21",
+            upstream_c2_config="c2",
+            dataset_boundary="internal_fu13_no_raw_data_committed",
+            config_allows_network=False,
+            config_allows_download=False,
+            cache_dir=c21_config.cache_dir,
+            tested_windows=2,
+            task_results=[
+                C21ModelTaskResult(
+                    model_id="chronos",
+                    display_name="Chronos / Chronos-Bolt",
+                    task_id=C21TaskId.FORECASTING,
+                    status=OpenModelAdapterStatus.MISSING_DEPENDENCY,
+                    metrics={},
+                    baseline_metrics={"baseline": "RobustStageForecaster"},
+                    failure_stage="inspect",
+                    failure_reason="dependency modules are unavailable",
+                    error_type="MissingDependency",
+                    error_detail="chronos",
+                    dependency_status="missing:chronos",
+                    weight_status="not_checked",
+                    input_shape={"windows": 2},
+                    output_shape={},
+                    runtime_seconds=0.0,
+                    adapter_name="ChronosOpenModelAdapter",
+                    model_ref="amazon/chronos-2",
+                    cache_dir=c21_config.cache_dir,
+                    actual_network_used=False,
+                )
+            ],
+            invalid_claims=["不得解释为生产告警"],
+        )
+
+    result = run_c22_open_model_executable_upgrade(config, c21_runner=fake_c21_runner)
+
+    assert result.tested_windows == 2
+    assert result.config_allows_network is False
+    assert result.config_allows_download is False
+    assert result.watchlist_audit
+    chronos = result.target_results[0]
+    assert chronos.model_id == "chronos"
+    assert chronos.role == C22ModelRole.PRIORITY_REAL_EXECUTION
+    assert chronos.target == "chronos_2"
+    assert chronos.fallback == "chronos_bolt"
+    assert chronos.target_metadata["target_model_ref"] == "amazon/chronos-2"
+    assert chronos.target_metadata["target_package_hint"]
+    assert chronos.target_metadata["target_task_fit"]
+    assert chronos.cache_dir == config.cache_dir
+    assert chronos.actual_network_used is False
+
+
+def test_c22_runner_offline_behavior_is_stable_with_existing_cache(tmp_path):
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    config.cache_dir = tmp_path / "existing_cache"
+    config.cache_dir.mkdir()
+
+    def fake_c21_runner(c21_config, adapter_factory=None):
+        return C21RunResult(
+            run_id="c21-fake",
+            config_path="c21",
+            upstream_c2_config="c2",
+            dataset_boundary="boundary",
+            config_allows_network=False,
+            config_allows_download=False,
+            cache_dir=c21_config.cache_dir,
+            tested_windows=0,
+            task_results=[],
+            invalid_claims=[],
+        )
+
+    result = run_c22_open_model_executable_upgrade(config, c21_runner=fake_c21_runner)
+    manifest = render_c22_cache_manifest(result)
+
+    assert "existing_cache" in manifest
+    assert "network_allowed" in manifest
+    assert result.config_allows_network is False
+    assert result.config_allows_download is False
+
+
+def test_c22_runner_passes_adapter_factory_to_c21_runner(tmp_path):
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    config.cache_dir = tmp_path / "cache"
+    adapter_factory = object()
+    captured = {}
+
+    def fake_c21_runner(c21_config, adapter_factory=None):
+        captured["adapter_factory"] = adapter_factory
+        return C21RunResult(
+            run_id="c21-fake",
+            config_path="c21",
+            upstream_c2_config="c2",
+            dataset_boundary=config.dataset_boundary,
+            config_allows_network=config.allow_network,
+            config_allows_download=config.allow_download,
+            cache_dir=c21_config.cache_dir,
+            tested_windows=0,
+            task_results=[],
+            invalid_claims=[],
+        )
+
+    run_c22_open_model_executable_upgrade(
+        config,
+        adapter_factory=adapter_factory,
+        c21_runner=fake_c21_runner,
+    )
+
+    assert captured["adapter_factory"] is adapter_factory
+
+
+def test_c22_strict_helper_considers_only_core_target_results():
+    failing_result = C22RunResult(
+        run_id="c22-test",
+        config_path="cfg",
+        upstream_c21_config="c21",
+        dataset_boundary="boundary",
+        config_allows_network=False,
+        config_allows_download=False,
+        cache_dir="hf_cache",
+        tested_windows=0,
+        target_results=[
+            C22TargetResult(
+                model_id="chronos",
+                role=C22ModelRole.PRIORITY_REAL_EXECUTION,
+                target="chronos_2",
+                fallback="chronos_bolt",
+                task_id=C21TaskId.FORECASTING,
+                status=OpenModelAdapterStatus.MISSING_DEPENDENCY,
+            )
+        ],
+        watchlist_audit=[],
+        invalid_claims=[],
+    )
+    watchlist_only_result = C22RunResult(
+        run_id="c22-test",
+        config_path="cfg",
+        upstream_c21_config="c21",
+        dataset_boundary="boundary",
+        config_allows_network=False,
+        config_allows_download=False,
+        cache_dir="hf_cache",
+        tested_windows=0,
+        target_results=[],
+        watchlist_audit=[
+            build_frontier_watchlist_audit(
+                load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+            )[0]
+        ],
+        invalid_claims=[],
+    )
+
+    assert failing_result.has_priority_or_core_failure is True
+    assert watchlist_only_result.has_priority_or_core_failure is False
 
 
 def test_c22_rejects_download_without_network(tmp_path):
