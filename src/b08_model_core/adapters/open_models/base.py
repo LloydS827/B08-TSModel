@@ -93,6 +93,12 @@ AdapterRunResult = AdapterTaskOutput | AdapterFailure
 class OpenModelAdapter:
     model_id = ""
     supported_tasks: tuple[C21TaskId, ...] = ()
+    target_model_ref: str | None = None
+    fallback_model_ref: str | None = None
+    target_package_hint = ""
+    target_license_note = ""
+    target_resource_note = ""
+    target_task_fit = ""
 
     def inspect_environment(self, context: AdapterExecutionContext) -> AdapterReadiness:
         return AdapterReadiness(
