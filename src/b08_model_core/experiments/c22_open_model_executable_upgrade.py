@@ -84,8 +84,17 @@ def load_c22_config(path: str | Path) -> C22ExecutionConfig:
 
     allow_network = _load_bool(execution_policy, "allow_network")
     allow_download = _load_bool(execution_policy, "allow_download")
+    record_failure = _load_bool(execution_policy, "record_failure")
+    continue_on_model_failure = _load_bool(execution_policy, "continue_on_model_failure")
+    reuse_existing_cache = _load_bool(model_cache_policy, "reuse_existing_cache")
     if allow_download and not allow_network:
         raise C22ConfigError("allow_download requires allow_network=true")
+    if not record_failure:
+        raise C22ConfigError("record_failure=false is not supported")
+    if not continue_on_model_failure:
+        raise C22ConfigError("continue_on_model_failure=false is not supported")
+    if not reuse_existing_cache:
+        raise C22ConfigError("reuse_existing_cache=false is not supported")
 
     return C22ExecutionConfig(
         stage=stage,
@@ -102,15 +111,15 @@ def load_c22_config(path: str | Path) -> C22ExecutionConfig:
         allow_network=allow_network,
         allow_download=allow_download,
         strict_model_success=_load_bool(execution_policy, "strict_model_success"),
-        record_failure=_load_bool(execution_policy, "record_failure"),
+        record_failure=record_failure,
         do_not_over_claim=_load_bool(execution_policy, "do_not_over_claim"),
-        continue_on_model_failure=_load_bool(execution_policy, "continue_on_model_failure"),
+        continue_on_model_failure=continue_on_model_failure,
         timeout_seconds_per_model=_load_positive_number(
             execution_policy,
             "timeout_seconds_per_model",
         ),
         cache_dir=Path(_load_required_string(model_cache_policy, "cache_dir")),
-        reuse_existing_cache=_load_bool(model_cache_policy, "reuse_existing_cache"),
+        reuse_existing_cache=reuse_existing_cache,
         write_cache_manifest=_load_bool(model_cache_policy, "write_cache_manifest"),
         model_targets=_load_model_targets(_load_mapping(raw, "model_targets")),
         frontier_watchlist=_load_watchlist(_load_mapping(raw, "frontier_watchlist")),
