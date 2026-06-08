@@ -6,10 +6,14 @@ from b08_model_core.experiments.c21_executable_open_model_evaluation import C21T
 from b08_model_core.experiments.c22_open_model_executable_upgrade import (
     C22ConfigError,
     C22ModelRole,
+    C22RunResult,
     REQUIRED_C22_MODEL_TARGET_IDS,
     REQUIRED_C22_WATCHLIST_TARGET_IDS,
     build_c22_core_attempts,
+    build_frontier_watchlist_audit,
     load_c22_config,
+    render_c22_cache_manifest,
+    render_c22_report,
 )
 
 
@@ -292,6 +296,76 @@ def test_c22_rejects_watchlist_promotion_enabled(tmp_path):
         match="frontier_watchlist.promote_to_real_execution must be false",
     ):
         load_c22_config(config_path)
+
+
+def test_c22_watchlist_audit_records_all_expected_targets():
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    audit = build_frontier_watchlist_audit(config)
+    by_id = {item.model_or_route: item for item in audit}
+    assert set(by_id) == {
+        "time_moe",
+        "sundial",
+        "timer_s1_timer_xl",
+        "kairos",
+        "toto",
+        "ibm_flowstate_tspulse",
+        "tabpfn_ts",
+    }
+    assert all(item.status == "audit_only" for item in audit)
+    assert all(item.default_c22_action == "watchlist_audit_only" for item in audit)
+    assert by_id["sundial"].promotion_condition
+
+
+def test_c22_report_contains_decision_sections():
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    result = C22RunResult(
+        run_id="c22-test",
+        config_path="cfg",
+        upstream_c21_config=config.upstream_c21_config,
+        dataset_boundary=config.dataset_boundary,
+        config_allows_network=False,
+        config_allows_download=False,
+        cache_dir="hf_cache",
+        tested_windows=0,
+        target_results=[],
+        watchlist_audit=build_frontier_watchlist_audit(config),
+        invalid_claims=["不得解释为生产告警"],
+    )
+    text = render_c22_report(result, config)
+    assert "C2.2 Open Model Executable Evaluation Upgrade Report" in text
+    assert "Versioned Model Target Matrix" in text
+    assert "Priority Real Execution Results" in text
+    assert "Core Model-Task Result Matrix" in text
+    assert "Frontier Watchlist Audit" in text
+    assert "Failure Taxonomy" in text
+    assert "C2.2 -> C3 Handoff" in text
+    assert "C2.2 -> B Decision Notes" in text
+    assert "不得解释为生产告警" in text
+    assert "time_moe" in text
+    assert "Chronos-2" in text
+    assert "TimesFM 2.5" in text
+    assert "invalid claims" in text.lower()
+
+
+def test_c22_cache_manifest_records_offline_and_cache_boundary():
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    result = C22RunResult(
+        run_id="c22-test",
+        config_path="cfg",
+        upstream_c21_config=config.upstream_c21_config,
+        dataset_boundary=config.dataset_boundary,
+        config_allows_network=False,
+        config_allows_download=False,
+        cache_dir="hf_cache",
+        tested_windows=0,
+        target_results=[],
+        watchlist_audit=[],
+        invalid_claims=[],
+    )
+    text = render_c22_cache_manifest(result)
+    assert "network_allowed" in text
+    assert "download_allowed" in text
+    assert "cache_dir" in text
 
 
 def _write_modified_config(
