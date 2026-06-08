@@ -50,11 +50,16 @@ REQUIRED_C22_WATCHLIST_TARGET_IDS = (
 
 _KNOWN_TARGET_MODEL_REFS = {
     "ttm_latest": "ibm-granite/granite-timeseries-ttm-r2",
+    "ttm_current_local_adapter": "ibm-granite/granite-timeseries-ttm-r2",
     "chronos_2": "amazon/chronos-2",
+    "chronos_bolt": "amazon/chronos-bolt-base",
     "timesfm_2_5": "google/timesfm-2.5-200m-pytorch",
     "moirai_2_0_current_uni2ts": "Salesforce/moirai-2.0-R-small",
+    "moirai_1_x_interface": "Salesforce/moirai-1.1-R-small",
     "moment_current": "AutonLab/MOMENT-1-large",
+    "moment_current_interface": "https://github.com/moment-timeseries-foundation-model/moment",
     "units_current": "thuml/UniTS",
+    "units_current_interface": "https://github.com/mims-harvard/UniTS",
 }
 
 _KNOWN_FALLBACK_MODEL_REFS = {
@@ -401,9 +406,9 @@ def _target_metadata(
     return {
         "target_model_ref": _KNOWN_TARGET_MODEL_REFS.get(target.target, target.target),
         "executed_model_ref": task_result.model_ref,
-        "fallback_model_ref": _KNOWN_FALLBACK_MODEL_REFS.get(
+        "fallback_model_ref": _KNOWN_TARGET_MODEL_REFS.get(
             target.fallback or "",
-            target.fallback,
+            _KNOWN_FALLBACK_MODEL_REFS.get(target.fallback or "", target.fallback),
         ),
         "target_package_hint": _TARGET_PACKAGE_HINTS.get(target.model_id, "needs_review"),
         "target_task_fit": ", ".join(task_id.value for task_id in target.tasks),
@@ -480,10 +485,11 @@ def render_c22_report(result: C22RunResult, config: C22ExecutionConfig) -> str:
             "## Priority Real Execution Results",
             "",
             (
-                "| model_id | display_name | task_id | target | status | metrics | baseline_metrics | "
-                "failure_stage | failure_reason | runtime_seconds |"
+                "| model_id | display_name | task_id | target | target_model_ref | "
+                "executed_model_ref | status | metrics | baseline_metrics | failure_stage | "
+                "failure_reason | runtime_seconds |"
             ),
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
     )
     priority_results = [
@@ -495,7 +501,7 @@ def render_c22_report(result: C22RunResult, config: C22ExecutionConfig) -> str:
         for item in priority_results:
             lines.append(_target_result_row(item))
     else:
-        lines.append("| none | none | none | none | none | none | none | none | none | none |")
+        lines.append("| none | none | none | none | none | none | none | none | none | none | none | none |")
 
     lines.extend(
         [
@@ -503,17 +509,18 @@ def render_c22_report(result: C22RunResult, config: C22ExecutionConfig) -> str:
             "## Core Model-Task Result Matrix",
             "",
             (
-                "| model_id | display_name | task_id | target | status | metrics | baseline_metrics | "
-                "failure_stage | failure_reason | runtime_seconds |"
+                "| model_id | display_name | task_id | target | target_model_ref | "
+                "executed_model_ref | status | metrics | baseline_metrics | failure_stage | "
+                "failure_reason | runtime_seconds |"
             ),
-            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
     )
     if result.target_results:
         for item in result.target_results:
             lines.append(_target_result_row(item))
     else:
-        lines.append("| none | none | none | none | none | none | none | none | none | none |")
+        lines.append("| none | none | none | none | none | none | none | none | none | none | none | none |")
 
     lines.extend(
         [
@@ -589,8 +596,11 @@ def render_c22_cache_manifest(result: C22RunResult) -> str:
         f"| dataset_boundary | {_cell(result.dataset_boundary)} |",
         f"| watchlist_boundary | {_cell('audit_only_no_model_download')} |",
         "",
-        "| model_id | task_id | target | fallback | adapter_name | cache_dir | weight_status | actual_network_used | model_ref |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        (
+            "| model_id | task_id | target | fallback | adapter_name | cache_dir | "
+            "weight_status | actual_network_used | target_model_ref | executed_model_ref |"
+        ),
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     if result.target_results:
         for item in result.target_results:
@@ -599,11 +609,11 @@ def render_c22_cache_manifest(result: C22RunResult) -> str:
                     f"| {_cell(item.model_id)} | {_cell(item.task_id)} | {_cell(item.target)} | "
                     f"{_cell(item.fallback)} | {_cell(item.adapter_name)} | {_cell(item.cache_dir)} | "
                     f"{_cell(item.weight_status)} | {_cell(item.actual_network_used)} | "
-                    f"{_cell(item.model_ref)} |"
+                    f"{_cell(_target_model_ref(item))} | {_cell(_executed_model_ref(item))} |"
                 )
             )
     else:
-        lines.append("| none | none | none | none | none | none | none | none | none |")
+        lines.append("| none | none | none | none | none | none | none | none | none | none |")
     return "\n".join(lines) + "\n"
 
 
@@ -771,11 +781,22 @@ def _require_exact_ids(
 def _target_result_row(item: C22TargetResult) -> str:
     return (
         f"| {_cell(item.model_id)} | {_cell(_display_name(item.model_id, item.target))} | "
-        f"{_cell(item.task_id)} | {_cell(item.target)} | {_cell(item.status)} | "
-        f"{_cell(item.metrics)} | {_cell(item.baseline_metrics)} | "
+        f"{_cell(item.task_id)} | {_cell(item.target)} | "
+        f"{_cell(_target_model_ref(item))} | {_cell(_executed_model_ref(item))} | "
+        f"{_cell(item.status)} | {_cell(item.metrics)} | {_cell(item.baseline_metrics)} | "
         f"{_cell(item.failure_stage)} | {_cell(item.failure_reason)} | "
         f"{_cell(item.runtime_seconds)} |"
     )
+
+
+def _target_model_ref(item: C22TargetResult) -> Any:
+    return item.target_metadata.get("target_model_ref") or _KNOWN_TARGET_MODEL_REFS.get(
+        item.target
+    )
+
+
+def _executed_model_ref(item: C22TargetResult) -> Any:
+    return item.target_metadata.get("executed_model_ref") or item.model_ref
 
 
 def _display_name(model_id: str, target: str) -> str:

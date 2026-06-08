@@ -199,6 +199,75 @@ def test_c22_runner_keeps_intended_target_ref_separate_from_executed_ref(tmp_pat
     assert moirai.target_metadata["executed_model_ref"] == "Salesforce/moirai-1.1-R-small"
 
 
+def test_c22_target_metadata_covers_configured_target_aliases(tmp_path):
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    config.cache_dir = tmp_path / "cache"
+
+    def fake_c21_runner(c21_config, adapter_factory=None):
+        return C21RunResult(
+            run_id="c21-fake",
+            config_path="c21",
+            upstream_c2_config="c2",
+            dataset_boundary=config.dataset_boundary,
+            config_allows_network=False,
+            config_allows_download=False,
+            cache_dir=c21_config.cache_dir,
+            tested_windows=1,
+            task_results=[
+                C21ModelTaskResult(
+                    model_id=model_id,
+                    display_name=model_id,
+                    task_id=task_ids[0],
+                    status=OpenModelAdapterStatus.MISSING_DEPENDENCY,
+                    metrics={},
+                    baseline_metrics={},
+                    failure_stage="inspect",
+                    failure_reason="dependency unavailable",
+                    error_type="MissingDependency",
+                    error_detail=model_id,
+                    dependency_status="missing",
+                    weight_status="not_checked",
+                    input_shape={},
+                    output_shape={},
+                    runtime_seconds=0.0,
+                    adapter_name=f"{model_id}Adapter",
+                    model_ref=f"executed/{model_id}",
+                    cache_dir=c21_config.cache_dir,
+                    actual_network_used=False,
+                )
+                for model_id, task_ids in {
+                    model_id: target.tasks
+                    for model_id, target in config.model_targets.items()
+                }.items()
+            ],
+            invalid_claims=[],
+        )
+
+    result = run_c22_open_model_executable_upgrade(config, c21_runner=fake_c21_runner)
+    refs_by_model = {
+        item.model_id: (
+            item.target_metadata["target_model_ref"],
+            item.target_metadata["fallback_model_ref"],
+        )
+        for item in result.target_results
+    }
+
+    assert refs_by_model == {
+        "ttm": ("ibm-granite/granite-timeseries-ttm-r2", None),
+        "chronos": ("amazon/chronos-2", "amazon/chronos-bolt-base"),
+        "timesfm": ("google/timesfm-2.5-200m-pytorch", None),
+        "moirai_uni2ts": (
+            "Salesforce/moirai-2.0-R-small",
+            "Salesforce/moirai-1.1-R-small",
+        ),
+        "moment": (
+            "https://github.com/moment-timeseries-foundation-model/moment",
+            None,
+        ),
+        "units": ("https://github.com/mims-harvard/UniTS", None),
+    }
+
+
 def test_c22_runner_offline_behavior_is_stable_with_existing_cache(tmp_path):
     config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
     config.cache_dir = tmp_path / "existing_cache"
@@ -642,15 +711,20 @@ def test_c22_report_renders_target_result_rows_and_failure_taxonomy():
                 model_ref="amazon/chronos-2",
                 cache_dir="hf_cache/chronos",
                 actual_network_used=False,
+                target_metadata={
+                    "target_model_ref": "amazon/chronos-2",
+                    "executed_model_ref": "amazon/chronos-bolt-base",
+                },
             )
         ],
         watchlist_audit=[],
         invalid_claims=[],
     )
     text = render_c22_report(result, config)
-    assert "| chronos | Chronos-2 | forecasting | chronos_2 | runtime_failed |" in text
+    assert "target_model_ref" in text
+    assert "executed_model_ref" in text
+    assert "| chronos | Chronos-2 | forecasting | chronos_2 | amazon/chronos-2 | amazon/chronos-bolt-base | runtime_failed |" in text
     assert "| chronos | forecasting | runtime_failed | execute | dependency missing |" in text
-    assert "| chronos | forecasting | chronos_2 | chronos_bolt | ChronosAdapter | hf_cache/chronos | not_checked | false | amazon/chronos-2 |" in text
 
 
 def test_c22_report_sanitizes_metadata_and_bullets():
@@ -697,7 +771,23 @@ def test_c22_cache_manifest_records_offline_and_cache_boundary():
                 adapter_name="TimesFMAdapter",
                 cache_dir="hf_cache/timesfm",
                 actual_network_used=False,
-            )
+                target_metadata={
+                    "target_model_ref": "google/timesfm-2.5-200m-pytorch",
+                    "executed_model_ref": "google/timesfm-2.5-local",
+                },
+            ),
+            C22TargetResult(
+                model_id="chronos",
+                role=C22ModelRole.PRIORITY_REAL_EXECUTION,
+                target="chronos_2",
+                fallback="chronos_bolt",
+                task_id=C21TaskId.FORECASTING,
+                status="missing_dependency",
+                adapter_name="ChronosAdapter",
+                model_ref="amazon/chronos-2",
+                cache_dir="hf_cache/chronos",
+                actual_network_used=False,
+            ),
         ],
         watchlist_audit=[],
         invalid_claims=[],
@@ -707,7 +797,10 @@ def test_c22_cache_manifest_records_offline_and_cache_boundary():
     assert "| download_allowed | false |" in text
     assert "| cache_dir | hf_cache |" in text
     assert "actual_network_used" in text
-    assert "| timesfm | forecasting | timesfm_2_5 | not_available | TimesFMAdapter | hf_cache/timesfm | not_available | false | not_available |" in text
+    assert "target_model_ref" in text
+    assert "executed_model_ref" in text
+    assert "| timesfm | forecasting | timesfm_2_5 | not_available | TimesFMAdapter | hf_cache/timesfm | not_available | false | google/timesfm-2.5-200m-pytorch | google/timesfm-2.5-local |" in text
+    assert "| chronos | forecasting | chronos_2 | chronos_bolt | ChronosAdapter | hf_cache/chronos | not_available | false | amazon/chronos-2 | amazon/chronos-2 |" in text
 
 
 def _write_modified_config(
