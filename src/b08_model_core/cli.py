@@ -24,6 +24,12 @@ from b08_model_core.experiments.c21_executable_open_model_evaluation import (
     render_c21_report,
     run_c21_executable_evaluation,
 )
+from b08_model_core.experiments.c22_open_model_executable_upgrade import (
+    load_c22_config,
+    render_c22_cache_manifest,
+    render_c22_report,
+    run_c22_open_model_executable_upgrade,
+)
 from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
@@ -145,6 +151,9 @@ def main(argv: list[str] | None = None) -> int:
     c_stage_c21 = experiment_sub.add_parser("c-stage-c21")
     c_stage_c21.add_argument("--config", required=True)
     c_stage_c21.add_argument("--output", required=True)
+    c_stage_c22 = experiment_sub.add_parser("c-stage-c22")
+    c_stage_c22.add_argument("--config", required=True)
+    c_stage_c22.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -316,6 +325,28 @@ def main(argv: list[str] | None = None) -> int:
         except (FileNotFoundError, ValueError, OSError, PermissionError):
             return 1
         if config.strict_model_success and result.has_required_attempt_failure:
+            return 1
+        return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c22":
+        try:
+            from b08_model_core.adapters.open_models import build_open_model_adapter
+
+            config = load_c22_config(args.config)
+            config.report_path = Path(args.output)
+            result = run_c22_open_model_executable_upgrade(
+                config,
+                adapter_factory=build_open_model_adapter,
+            )
+            result.config_path = args.config
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_c22_report(result, config), encoding="utf-8")
+            if config.write_cache_manifest:
+                config.cache_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+                config.cache_manifest_path.write_text(render_c22_cache_manifest(result), encoding="utf-8")
+        except (FileNotFoundError, ValueError, OSError, PermissionError):
+            return 1
+        if config.strict_model_success and result.has_priority_or_core_failure:
             return 1
         return 0
     raise ValueError(args.command)

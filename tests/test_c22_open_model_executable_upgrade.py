@@ -1,8 +1,10 @@
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+from b08_model_core.cli import main
 from b08_model_core.experiments.c21_executable_open_model_evaluation import (
     C21ModelTaskResult,
     C21RunResult,
@@ -803,6 +805,55 @@ def test_c22_cache_manifest_records_offline_and_cache_boundary():
     assert "| chronos | forecasting | chronos_2 | chronos_bolt | ChronosAdapter | hf_cache/chronos | not_available | false | amazon/chronos-2 | amazon/chronos-2 |" in text
 
 
+def test_cli_c_stage_c22_writes_report_and_cache_manifest(tmp_path):
+    _write_c22_fixture_config(tmp_path, strict_model_success=False)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    output = tmp_path / "c22.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c22",
+            "--config",
+            str(tmp_path / "c22_fixture.yaml"),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output.exists()
+    text = output.read_text(encoding="utf-8")
+    assert "C2.2 Open Model Executable Evaluation Upgrade Report" in text
+    assert "Versioned Model Target Matrix" in text
+    assert "Frontier Watchlist Audit" in text
+    assert "- config_allows_network: false" in text
+    assert "- config_allows_download: false" in text
+    cache_manifest = (tmp_path / "c22_cache_manifest.md").read_text(encoding="utf-8")
+    assert "download_allowed" in cache_manifest
+    assert "network_allowed" in cache_manifest
+
+
+def test_cli_c_stage_c22_strict_mode_returns_nonzero_but_writes_report(tmp_path):
+    _write_c22_fixture_config(tmp_path, strict_model_success=True)
+    _write_fixture_observations(tmp_path / "observations.parquet")
+    output = tmp_path / "c22.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c22",
+            "--config",
+            str(tmp_path / "c22_fixture.yaml"),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 1
+    assert output.exists()
+
+
 def _write_modified_config(
     tmp_path: Path,
     old: str,
@@ -817,3 +868,49 @@ def _write_modified_config(
     assert old in text
     config_path.write_text(text.replace(old, new, count), encoding="utf-8")
     return config_path
+
+
+def _write_c22_fixture_config(tmp_path: Path, *, strict_model_success: bool) -> None:
+    config_text = Path("configs/c_stage_c22_open_model_executable_upgrade.yaml").read_text(
+        encoding="utf-8"
+    )
+    config_text = config_text.replace(
+        "data/processed/fu13_real_observations.parquet",
+        str(tmp_path / "observations.parquet"),
+    )
+    config_text = config_text.replace(
+        "reports/c_stage_c22_open_model_executable_upgrade.md",
+        str(tmp_path / "c22.md"),
+    )
+    config_text = config_text.replace(
+        "reports/c_stage_c22_model_cache_manifest.md",
+        str(tmp_path / "c22_cache_manifest.md"),
+    )
+    config_text = config_text.replace(
+        "strict_model_success: false",
+        f"strict_model_success: {str(strict_model_success).lower()}",
+    )
+    config_text = config_text.replace("cache_dir: hf_cache", f"cache_dir: {tmp_path / 'hf_cache'}")
+    (tmp_path / "c22_fixture.yaml").write_text(config_text, encoding="utf-8")
+
+
+def _write_fixture_observations(path: Path) -> None:
+    rows = []
+    for t in range(120):
+        for sensor in ["LeakElec", "Temp"]:
+            rows.append(
+                {
+                    "timestamp": pd.Timestamp("2026-01-01") + pd.Timedelta(minutes=t),
+                    "device_id": "FU13",
+                    "batch_id": "cycle_1",
+                    "stage": "melt",
+                    "sensor_id": sensor,
+                    "value": float(t),
+                    "unit": "a.u.",
+                    "domain": "test",
+                    "quality_flag": "good",
+                    "degradation_label": "normal",
+                    "failure_proxy": "",
+                }
+            )
+    pd.DataFrame(rows).to_parquet(path, index=False)
