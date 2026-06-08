@@ -7,6 +7,7 @@ from b08_model_core.experiments.c22_open_model_executable_upgrade import (
     C22ConfigError,
     C22ModelRole,
     C22RunResult,
+    C22TargetResult,
     REQUIRED_C22_MODEL_TARGET_IDS,
     REQUIRED_C22_WATCHLIST_TARGET_IDS,
     build_c22_core_attempts,
@@ -347,6 +348,68 @@ def test_c22_report_contains_decision_sections():
     assert "invalid claims" in text.lower()
 
 
+def test_c22_report_renders_target_result_rows_and_failure_taxonomy():
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    result = C22RunResult(
+        run_id="c22-test",
+        config_path="cfg",
+        upstream_c21_config=config.upstream_c21_config,
+        dataset_boundary=config.dataset_boundary,
+        config_allows_network=False,
+        config_allows_download=False,
+        cache_dir="hf_cache",
+        tested_windows=0,
+        target_results=[
+            C22TargetResult(
+                model_id="chronos",
+                role=C22ModelRole.PRIORITY_REAL_EXECUTION,
+                target="chronos_2",
+                fallback="chronos_bolt",
+                task_id=C21TaskId.FORECASTING,
+                status="runtime_failed",
+                metrics={"mae": None},
+                baseline_metrics={"baseline": "not_run"},
+                failure_stage="execute",
+                failure_reason="dependency missing",
+                dependency_status="missing",
+                weight_status="not_checked",
+                adapter_name="ChronosAdapter",
+                model_ref="amazon/chronos-2",
+                cache_dir="hf_cache/chronos",
+                actual_network_used=False,
+            )
+        ],
+        watchlist_audit=[],
+        invalid_claims=[],
+    )
+    text = render_c22_report(result, config)
+    assert "| chronos | Chronos-2 | forecasting | chronos_2 | runtime_failed |" in text
+    assert "| chronos | forecasting | runtime_failed | execute | dependency missing |" in text
+    assert "| chronos | forecasting | chronos_2 | chronos_bolt | ChronosAdapter | hf_cache/chronos | not_checked | false | amazon/chronos-2 |" in text
+
+
+def test_c22_report_sanitizes_metadata_and_bullets():
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    result = C22RunResult(
+        run_id="c22-test",
+        config_path="cfg\n- forged: yes|pipe",
+        upstream_c21_config=config.upstream_c21_config,
+        dataset_boundary=config.dataset_boundary,
+        config_allows_network=False,
+        config_allows_download=False,
+        cache_dir="hf_cache",
+        tested_windows=0,
+        target_results=[],
+        watchlist_audit=[],
+        invalid_claims=["claim\n- forged|claim"],
+    )
+    text = render_c22_report(result, config)
+    assert "- config_path: cfg - forged: yes\\|pipe" in text
+    assert "- claim - forged\\|claim" in text
+    assert "\n- forged: yes|pipe" not in text
+    assert "\n- forged|claim" not in text
+
+
 def test_c22_cache_manifest_records_offline_and_cache_boundary():
     config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
     result = C22RunResult(
@@ -358,14 +421,28 @@ def test_c22_cache_manifest_records_offline_and_cache_boundary():
         config_allows_download=False,
         cache_dir="hf_cache",
         tested_windows=0,
-        target_results=[],
+        target_results=[
+            C22TargetResult(
+                model_id="timesfm",
+                role=C22ModelRole.PRIORITY_REAL_EXECUTION,
+                target="timesfm_2_5",
+                fallback=None,
+                task_id=C21TaskId.FORECASTING,
+                status="available_and_ran",
+                adapter_name="TimesFMAdapter",
+                cache_dir="hf_cache/timesfm",
+                actual_network_used=False,
+            )
+        ],
         watchlist_audit=[],
         invalid_claims=[],
     )
     text = render_c22_cache_manifest(result)
-    assert "network_allowed" in text
-    assert "download_allowed" in text
-    assert "cache_dir" in text
+    assert "| network_allowed | false |" in text
+    assert "| download_allowed | false |" in text
+    assert "| cache_dir | hf_cache |" in text
+    assert "actual_network_used" in text
+    assert "| timesfm | forecasting | timesfm_2_5 | not_available | TimesFMAdapter | hf_cache/timesfm | not_available | false | not_available |" in text
 
 
 def _write_modified_config(

@@ -123,6 +123,8 @@ class C22TargetResult:
     weight_status: str = ""
     adapter_name: str = ""
     model_ref: str | None = None
+    cache_dir: str | Path | None = None
+    actual_network_used: bool | str | None = None
     runtime_seconds: float | None = None
     target_metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -238,14 +240,14 @@ def render_c22_report(result: C22RunResult, config: C22ExecutionConfig) -> str:
         "",
         "## Report Metadata",
         "",
-        f"- run_id: {_value(result.run_id)}",
-        f"- config_path: {_value(result.config_path)}",
-        f"- upstream_c21_config: {_value(result.upstream_c21_config)}",
-        f"- dataset_boundary: {_value(result.dataset_boundary)}",
-        f"- tested_windows: {_value(result.tested_windows)}",
-        f"- config_allows_network: {_value(result.config_allows_network)}",
-        f"- config_allows_download: {_value(result.config_allows_download)}",
-        f"- cache_dir: {_value(result.cache_dir)}",
+        f"- run_id: {_text(result.run_id)}",
+        f"- config_path: {_text(result.config_path)}",
+        f"- upstream_c21_config: {_text(result.upstream_c21_config)}",
+        f"- dataset_boundary: {_text(result.dataset_boundary)}",
+        f"- tested_windows: {_text(result.tested_windows)}",
+        f"- config_allows_network: {_text(result.config_allows_network)}",
+        f"- config_allows_download: {_text(result.config_allows_download)}",
+        f"- cache_dir: {_text(result.cache_dir)}",
         "",
         "## Executive Summary",
         "",
@@ -367,11 +369,11 @@ def render_c22_report(result: C22RunResult, config: C22ExecutionConfig) -> str:
     lines.extend(["", "## Cache / Download Manifest", ""])
     lines.extend(render_c22_cache_manifest(result).rstrip().splitlines())
     lines.extend(["", "## C2.2 -> C3 Handoff", ""])
-    lines.extend(f"- {_value(note)}" for note in (result.c3_handoff_notes or ["none"]))
+    lines.extend(f"- {_text(note)}" for note in (result.c3_handoff_notes or ["none"]))
     lines.extend(["", "## C2.2 -> B Decision Notes", ""])
-    lines.extend(f"- {_value(note)}" for note in (result.b_decision_notes or ["none"]))
+    lines.extend(f"- {_text(note)}" for note in (result.b_decision_notes or ["none"]))
     lines.extend(["", "## Invalid Claims", ""])
-    lines.extend(f"- {_value(claim)}" for claim in (result.invalid_claims or ["none"]))
+    lines.extend(f"- {_text(claim)}" for claim in (result.invalid_claims or ["none"]))
     return "\n".join(lines) + "\n"
 
 
@@ -386,20 +388,21 @@ def render_c22_cache_manifest(result: C22RunResult) -> str:
         f"| dataset_boundary | {_cell(result.dataset_boundary)} |",
         f"| watchlist_boundary | {_cell('audit_only_no_model_download')} |",
         "",
-        "| model_id | task_id | target | fallback | adapter_name | cache_dir | weight_status | model_ref |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| model_id | task_id | target | fallback | adapter_name | cache_dir | weight_status | actual_network_used | model_ref |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     if result.target_results:
         for item in result.target_results:
             lines.append(
                 (
                     f"| {_cell(item.model_id)} | {_cell(item.task_id)} | {_cell(item.target)} | "
-                    f"{_cell(item.fallback)} | {_cell(item.adapter_name)} | {_cell(result.cache_dir)} | "
-                    f"{_cell(item.weight_status)} | {_cell(item.model_ref)} |"
+                    f"{_cell(item.fallback)} | {_cell(item.adapter_name)} | {_cell(item.cache_dir)} | "
+                    f"{_cell(item.weight_status)} | {_cell(item.actual_network_used)} | "
+                    f"{_cell(item.model_ref)} |"
                 )
             )
     else:
-        lines.append("| none | none | none | none | none | none | none | none |")
+        lines.append("| none | none | none | none | none | none | none | none | none |")
     return "\n".join(lines) + "\n"
 
 
@@ -653,7 +656,7 @@ def _value(value: object) -> str:
     return str(value)
 
 
-def _cell(value: object) -> str:
+def _text(value: object) -> str:
     return (
         _value(value)
         .replace("\r\n", " ")
@@ -661,6 +664,10 @@ def _cell(value: object) -> str:
         .replace("\r", " ")
         .replace("|", "\\|")
     )
+
+
+def _cell(value: object) -> str:
+    return _text(value)
 
 
 _WATCHLIST_AUDIT_BY_ID = {
