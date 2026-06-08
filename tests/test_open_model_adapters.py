@@ -122,6 +122,8 @@ def test_chronos_adapter_declares_chronos2_primary_and_bolt_fallback():
     assert adapter.target_model_ref == "amazon/chronos-2"
     assert adapter.fallback_model_ref == "amazon/chronos-bolt-base"
     assert "chronos" in adapter.target_package_hint.lower()
+    assert adapter.target_license_note.strip()
+    assert adapter.target_resource_note.strip()
     assert "forecasting" in adapter.target_task_fit
 
 
@@ -131,6 +133,8 @@ def test_timesfm_adapter_declares_timesfm25_target():
     assert adapter.target_model_ref == "google/timesfm-2.5-200m-pytorch"
     assert adapter.fallback_model_ref is None
     assert "timesfm" in adapter.target_package_hint.lower()
+    assert adapter.target_license_note.strip()
+    assert adapter.target_resource_note.strip()
     assert "forecasting" in adapter.target_task_fit
 
 
@@ -141,13 +145,23 @@ def test_moirai_adapter_declares_moirai20_target_and_license_note():
     assert adapter.fallback_model_ref == "Salesforce/moirai-1.1-R-small"
     assert "uni2ts" in adapter.target_package_hint.lower()
     assert "license" in adapter.target_license_note.lower()
+    assert adapter.target_resource_note.strip()
+    assert "forecasting" in adapter.target_task_fit
 
 
 def test_moment_and_units_adapters_declare_interface_targets():
     moment = MomentOpenModelAdapter()
     units = UniTSOpenModelAdapter()
+    assert moment.target_model_ref == moment.model_ref
+    assert moment.target_package_hint.strip()
+    assert moment.target_license_note.strip()
+    assert moment.target_resource_note.strip()
     assert "representation" in moment.target_task_fit
     assert "imputation" in moment.target_task_fit
+    assert units.target_model_ref == units.model_ref
+    assert units.target_package_hint.strip()
+    assert units.target_license_note.strip()
+    assert units.target_resource_note.strip()
     assert "representation" in units.target_task_fit
     assert "imputation" in units.target_task_fit
 
