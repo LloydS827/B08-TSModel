@@ -151,6 +151,54 @@ def test_c22_runner_wraps_c21_results_with_target_metadata(tmp_path):
     assert chronos.actual_network_used is False
 
 
+def test_c22_runner_keeps_intended_target_ref_separate_from_executed_ref(tmp_path):
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    config.cache_dir = tmp_path / "cache"
+
+    def fake_c21_runner(c21_config, adapter_factory=None):
+        return C21RunResult(
+            run_id="c21-fake",
+            config_path="c21",
+            upstream_c2_config="c2",
+            dataset_boundary=config.dataset_boundary,
+            config_allows_network=False,
+            config_allows_download=False,
+            cache_dir=c21_config.cache_dir,
+            tested_windows=1,
+            task_results=[
+                C21ModelTaskResult(
+                    model_id="moirai_uni2ts",
+                    display_name="Moirai / Uni2TS",
+                    task_id=C21TaskId.FORECASTING,
+                    status=OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS,
+                    metrics={},
+                    baseline_metrics={"baseline": "RobustStageForecaster"},
+                    failure_stage="inspect",
+                    failure_reason="weights unavailable",
+                    error_type="MissingWeights",
+                    error_detail="moirai",
+                    dependency_status="available",
+                    weight_status="missing",
+                    input_shape={"windows": 1},
+                    output_shape={},
+                    runtime_seconds=0.0,
+                    adapter_name="MoiraiOpenModelAdapter",
+                    model_ref="Salesforce/moirai-1.1-R-small",
+                    cache_dir=c21_config.cache_dir,
+                    actual_network_used=False,
+                )
+            ],
+            invalid_claims=[],
+        )
+
+    result = run_c22_open_model_executable_upgrade(config, c21_runner=fake_c21_runner)
+
+    moirai = result.target_results[0]
+    assert moirai.target == "moirai_2_0_current_uni2ts"
+    assert moirai.target_metadata["target_model_ref"] == "Salesforce/moirai-2.0-R-small"
+    assert moirai.target_metadata["executed_model_ref"] == "Salesforce/moirai-1.1-R-small"
+
+
 def test_c22_runner_offline_behavior_is_stable_with_existing_cache(tmp_path):
     config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
     config.cache_dir = tmp_path / "existing_cache"
@@ -209,7 +257,7 @@ def test_c22_runner_passes_adapter_factory_to_c21_runner(tmp_path):
     assert captured["adapter_factory"] is adapter_factory
 
 
-def test_c22_strict_helper_considers_only_core_target_results():
+def test_c22_strict_helper_detects_status_and_missing_core_target_failures():
     failing_result = C22RunResult(
         run_id="c22-test",
         config_path="cfg",
@@ -232,7 +280,7 @@ def test_c22_strict_helper_considers_only_core_target_results():
         watchlist_audit=[],
         invalid_claims=[],
     )
-    watchlist_only_result = C22RunResult(
+    missing_attempts_result = C22RunResult(
         run_id="c22-test",
         config_path="cfg",
         upstream_c21_config="c21",
@@ -251,7 +299,37 @@ def test_c22_strict_helper_considers_only_core_target_results():
     )
 
     assert failing_result.has_priority_or_core_failure is True
-    assert watchlist_only_result.has_priority_or_core_failure is False
+    assert missing_attempts_result.has_priority_or_core_failure is True
+
+
+def test_c22_strict_helper_ignores_watchlist_when_required_targets_ran():
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    result = C22RunResult(
+        run_id="c22-test",
+        config_path="cfg",
+        upstream_c21_config="c21",
+        dataset_boundary="boundary",
+        config_allows_network=False,
+        config_allows_download=False,
+        cache_dir="hf_cache",
+        tested_windows=0,
+        target_results=[
+            C22TargetResult(
+                model_id=model_id,
+                role=target.role,
+                target=target.target,
+                fallback=target.fallback,
+                task_id=task_id,
+                status=OpenModelAdapterStatus.AVAILABLE_AND_RAN,
+            )
+            for model_id, target in config.model_targets.items()
+            for task_id in target.tasks
+        ],
+        watchlist_audit=build_frontier_watchlist_audit(config),
+        invalid_claims=[],
+    )
+
+    assert result.has_priority_or_core_failure is False
 
 
 def test_c22_rejects_download_without_network(tmp_path):

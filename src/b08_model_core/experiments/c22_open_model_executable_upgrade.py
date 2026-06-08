@@ -207,17 +207,18 @@ class C22RunResult:
     def has_priority_or_core_failure(self) -> bool:
         from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
 
-        strict_roles = {
-            C22ModelRole.ANCHOR,
-            C22ModelRole.PRIORITY_REAL_EXECUTION,
-            C22ModelRole.CORE_RUN_REVIEW,
-            C22ModelRole.CORE_INTERFACE,
-        }
-        return any(
-            item.role in strict_roles
-            and item.status != OpenModelAdapterStatus.AVAILABLE_AND_RAN
+        by_attempt = {
+            (item.model_id, item.task_id): item
             for item in self.target_results
-        )
+        }
+        for model_id, task_ids in REQUIRED_C21_TASKS.items():
+            for task_id in task_ids:
+                item = by_attempt.get((model_id, task_id))
+                if item is None:
+                    return True
+                if item.status != OpenModelAdapterStatus.AVAILABLE_AND_RAN:
+                    return True
+        return False
 
 
 def load_c22_config(path: str | Path) -> C22ExecutionConfig:
@@ -398,8 +399,8 @@ def _target_metadata(
     target: C22ModelTarget,
 ) -> dict[str, Any]:
     return {
-        "target_model_ref": task_result.model_ref
-        or _KNOWN_TARGET_MODEL_REFS.get(target.target, target.target),
+        "target_model_ref": _KNOWN_TARGET_MODEL_REFS.get(target.target, target.target),
+        "executed_model_ref": task_result.model_ref,
         "fallback_model_ref": _KNOWN_FALLBACK_MODEL_REFS.get(
             target.fallback or "",
             target.fallback,
