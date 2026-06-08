@@ -155,6 +155,48 @@ def test_c22_rejects_unknown_task(tmp_path):
         load_c22_config(config_path)
 
 
+def test_c22_rejects_wrong_task_set_for_model(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        "tasks: [forecasting]",
+        "tasks: [representation]",
+        count=1,
+    )
+    with pytest.raises(
+        C22ConfigError,
+        match="model_targets.ttm.tasks must match C2.1 required tasks",
+    ):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_missing_required_task_for_model(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        "tasks: [representation, imputation]",
+        "tasks: [representation]",
+        count=1,
+    )
+    with pytest.raises(
+        C22ConfigError,
+        match="model_targets.moment.tasks must match C2.1 required tasks",
+    ):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_duplicate_task_for_model(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        "tasks: [representation, imputation]",
+        "tasks: [representation, representation]",
+        count=1,
+    )
+    with pytest.raises(
+        C22ConfigError,
+        match="model_targets.moment.tasks must match C2.1 required tasks",
+    ):
+        load_c22_config(config_path)
+
+
 def test_c22_rejects_missing_required_model_target(tmp_path):
     config_path = _write_modified_config(
         tmp_path,
@@ -230,6 +272,25 @@ def test_c22_rejects_duplicate_watchlist_target(tmp_path):
         "    - sundial\n    - sundial\n",
     )
     with pytest.raises(C22ConfigError, match="frontier_watchlist.targets must contain exactly"):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_watchlist_audit_only_false(tmp_path):
+    config_path = _write_modified_config(tmp_path, "  audit_only: true", "  audit_only: false")
+    with pytest.raises(C22ConfigError, match="frontier_watchlist.audit_only must be true"):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_watchlist_promotion_enabled(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        "  promote_to_real_execution: false",
+        "  promote_to_real_execution: true",
+    )
+    with pytest.raises(
+        C22ConfigError,
+        match="frontier_watchlist.promote_to_real_execution must be false",
+    ):
         load_c22_config(config_path)
 
 

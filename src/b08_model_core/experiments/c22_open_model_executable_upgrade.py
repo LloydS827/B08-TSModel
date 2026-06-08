@@ -10,6 +10,7 @@ import yaml
 from b08_model_core.experiments.c21_executable_open_model_evaluation import (
     C21ModelTaskAttempt,
     C21TaskId,
+    REQUIRED_C21_TASKS,
 )
 
 
@@ -238,12 +239,17 @@ def _load_model_targets(raw: dict[str, Any]) -> dict[str, C22ModelTarget]:
             raise C22ConfigError("model target ids must be non-empty strings")
         if not isinstance(value, dict):
             raise C22ConfigError(f"model_targets.{model_id} must be a mapping")
+        task_ids = _load_task_ids(value, model_id)
+        if task_ids != REQUIRED_C21_TASKS[model_id]:
+            raise C22ConfigError(
+                f"model_targets.{model_id}.tasks must match C2.1 required tasks"
+            )
         targets[model_id] = C22ModelTarget(
             model_id=model_id,
             role=_load_model_role(value, model_id),
             target=_load_required_string(value, "target"),
             fallback=_load_optional_string(value, "fallback"),
-            tasks=_load_task_ids(value, model_id),
+            tasks=task_ids,
         )
     return targets
 
@@ -275,6 +281,13 @@ def _load_task_ids(raw: dict[str, Any], model_id: str) -> tuple[C21TaskId, ...]:
 
 
 def _load_watchlist(raw: dict[str, Any]) -> C22WatchlistConfig:
+    audit_only = _load_bool(raw, "audit_only")
+    promote_to_real_execution = _load_bool(raw, "promote_to_real_execution")
+    if not audit_only:
+        raise C22ConfigError("frontier_watchlist.audit_only must be true")
+    if promote_to_real_execution:
+        raise C22ConfigError("frontier_watchlist.promote_to_real_execution must be false")
+
     targets = raw.get("targets")
     if not isinstance(targets, list):
         raise C22ConfigError("frontier_watchlist.targets must be a list")
@@ -287,8 +300,8 @@ def _load_watchlist(raw: dict[str, Any]) -> C22WatchlistConfig:
     )
 
     return C22WatchlistConfig(
-        audit_only=_load_bool(raw, "audit_only"),
-        promote_to_real_execution=_load_bool(raw, "promote_to_real_execution"),
+        audit_only=audit_only,
+        promote_to_real_execution=promote_to_real_execution,
         targets=tuple(targets),
     )
 
