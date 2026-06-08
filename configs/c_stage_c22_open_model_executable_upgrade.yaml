@@ -1,0 +1,66 @@
+stage: C2_2_open_model_executable_upgrade
+upstream_c21_config: configs/c_stage_c21_executable_open_model_evaluation.yaml
+dataset:
+  fu13_observations: data/processed/fu13_real_observations.parquet
+  fu13_config: configs/fu13_real_data_schema.yaml
+  boundary: internal_fu13_no_raw_data_committed
+window:
+  window_mode: cross-stage
+  context_length: 90
+  prediction_length: 16
+  max_windows: 40
+  mask_ratio: 0.2
+  seed: 7
+execution_policy:
+  allow_network: false
+  allow_download: false
+  strict_model_success: false
+  record_failure: true
+  do_not_over_claim: true
+  continue_on_model_failure: true
+  timeout_seconds_per_model: 900
+model_cache_policy:
+  cache_dir: hf_cache
+  reuse_existing_cache: true
+  write_cache_manifest: true
+model_targets:
+  ttm:
+    role: anchor
+    target: ttm_current_local_adapter
+    tasks: [forecasting]
+  chronos:
+    role: priority_real_execution
+    target: chronos_2
+    fallback: chronos_bolt
+    tasks: [forecasting]
+  timesfm:
+    role: priority_real_execution
+    target: timesfm_2_5
+    tasks: [forecasting]
+  moirai_uni2ts:
+    role: core_run_review
+    target: moirai_2_0_current_uni2ts
+    fallback: moirai_1_x_interface
+    tasks: [forecasting]
+  moment:
+    role: core_interface
+    target: moment_current_interface
+    tasks: [representation, imputation]
+  units:
+    role: core_interface
+    target: units_current_interface
+    tasks: [representation, imputation]
+frontier_watchlist:
+  audit_only: true
+  promote_to_real_execution: false
+  targets:
+    - time_moe
+    - sundial
+    - timer_s1_timer_xl
+    - kairos
+    - toto
+    - ibm_flowstate_tspulse
+    - tabpfn_ts
+outputs:
+  report: reports/c_stage_c22_open_model_executable_upgrade.md
+  cache_manifest: reports/c_stage_c22_model_cache_manifest.md
