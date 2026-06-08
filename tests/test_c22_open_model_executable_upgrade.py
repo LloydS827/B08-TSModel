@@ -6,6 +6,8 @@ from b08_model_core.experiments.c21_executable_open_model_evaluation import C21T
 from b08_model_core.experiments.c22_open_model_executable_upgrade import (
     C22ConfigError,
     C22ModelRole,
+    REQUIRED_C22_MODEL_TARGET_IDS,
+    REQUIRED_C22_WATCHLIST_TARGET_IDS,
     build_c22_core_attempts,
     load_c22_config,
 )
@@ -26,6 +28,7 @@ def test_c22_default_config_is_offline_safe():
 
 def test_c22_model_targets_capture_roles_and_versions():
     config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    assert tuple(config.model_targets) == REQUIRED_C22_MODEL_TARGET_IDS
     assert config.model_targets["ttm"].role == C22ModelRole.ANCHOR
     assert config.model_targets["chronos"].role == C22ModelRole.PRIORITY_REAL_EXECUTION
     assert config.model_targets["chronos"].target == "chronos_2"
@@ -40,6 +43,11 @@ def test_c22_model_targets_capture_roles_and_versions():
         C21TaskId.REPRESENTATION,
         C21TaskId.IMPUTATION,
     )
+
+
+def test_c22_default_watchlist_contains_exact_frontier_targets():
+    config = load_c22_config("configs/c_stage_c22_open_model_executable_upgrade.yaml")
+    assert config.frontier_watchlist.targets == REQUIRED_C22_WATCHLIST_TARGET_IDS
 
 
 def test_c22_core_attempts_exclude_watchlist_targets():
@@ -144,6 +152,84 @@ def test_c22_rejects_unknown_task(tmp_path):
         C22ConfigError,
         match="model_targets.moment.tasks contains unknown task: classification",
     ):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_missing_required_model_target(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        """  chronos:
+    role: priority_real_execution
+    target: chronos_2
+    fallback: chronos_bolt
+    tasks: [forecasting]
+""",
+        "",
+    )
+    with pytest.raises(C22ConfigError, match="model_targets must contain exactly"):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_extra_model_target(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        """frontier_watchlist:
+""",
+        """  sundial:
+    role: core_run_review
+    target: sundial_watchlist
+    tasks: [forecasting]
+frontier_watchlist:
+""",
+    )
+    with pytest.raises(C22ConfigError, match="model_targets must contain exactly"):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_missing_watchlist_target(tmp_path):
+    config_path = _write_modified_config(tmp_path, "    - sundial\n", "")
+    with pytest.raises(C22ConfigError, match="frontier_watchlist.targets must contain exactly"):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_empty_watchlist_targets(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        """  targets:
+    - time_moe
+    - sundial
+    - timer_s1_timer_xl
+    - kairos
+    - toto
+    - ibm_flowstate_tspulse
+    - tabpfn_ts
+""",
+        "  targets: []\n",
+    )
+    with pytest.raises(C22ConfigError, match="frontier_watchlist.targets must contain exactly"):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_extra_watchlist_target(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        """outputs:
+""",
+        """    - extra_frontier_model
+outputs:
+""",
+    )
+    with pytest.raises(C22ConfigError, match="frontier_watchlist.targets must contain exactly"):
+        load_c22_config(config_path)
+
+
+def test_c22_rejects_duplicate_watchlist_target(tmp_path):
+    config_path = _write_modified_config(
+        tmp_path,
+        "    - sundial\n",
+        "    - sundial\n    - sundial\n",
+    )
+    with pytest.raises(C22ConfigError, match="frontier_watchlist.targets must contain exactly"):
         load_c22_config(config_path)
 
 

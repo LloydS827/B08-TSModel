@@ -24,6 +24,26 @@ class C22ModelRole(StrEnum):
     CORE_INTERFACE = "core_interface"
 
 
+REQUIRED_C22_MODEL_TARGET_IDS = (
+    "ttm",
+    "chronos",
+    "timesfm",
+    "moirai_uni2ts",
+    "moment",
+    "units",
+)
+
+REQUIRED_C22_WATCHLIST_TARGET_IDS = (
+    "time_moe",
+    "sundial",
+    "timer_s1_timer_xl",
+    "kairos",
+    "toto",
+    "ibm_flowstate_tspulse",
+    "tabpfn_ts",
+)
+
+
 @dataclass(frozen=True)
 class C22ModelTarget:
     model_id: str
@@ -206,6 +226,12 @@ def _load_mask_ratio(raw: dict[str, Any], key: str) -> float:
 
 
 def _load_model_targets(raw: dict[str, Any]) -> dict[str, C22ModelTarget]:
+    _require_exact_ids(
+        tuple(raw),
+        REQUIRED_C22_MODEL_TARGET_IDS,
+        "model_targets",
+    )
+
     targets: dict[str, C22ModelTarget] = {}
     for model_id, value in raw.items():
         if not isinstance(model_id, str) or not model_id:
@@ -219,8 +245,6 @@ def _load_model_targets(raw: dict[str, Any]) -> dict[str, C22ModelTarget]:
             fallback=_load_optional_string(value, "fallback"),
             tasks=_load_task_ids(value, model_id),
         )
-    if not targets:
-        raise C22ConfigError("model_targets must not be empty")
     return targets
 
 
@@ -256,9 +280,28 @@ def _load_watchlist(raw: dict[str, Any]) -> C22WatchlistConfig:
         raise C22ConfigError("frontier_watchlist.targets must be a list")
     if not all(isinstance(target, str) and target for target in targets):
         raise C22ConfigError("frontier_watchlist.targets must contain non-empty strings")
+    _require_exact_ids(
+        tuple(targets),
+        REQUIRED_C22_WATCHLIST_TARGET_IDS,
+        "frontier_watchlist.targets",
+    )
 
     return C22WatchlistConfig(
         audit_only=_load_bool(raw, "audit_only"),
         promote_to_real_execution=_load_bool(raw, "promote_to_real_execution"),
         targets=tuple(targets),
     )
+
+
+def _require_exact_ids(
+    actual_ids: tuple[str, ...],
+    required_ids: tuple[str, ...],
+    label: str,
+) -> None:
+    actual_set = set(actual_ids)
+    required_set = set(required_ids)
+    has_duplicates = len(actual_ids) != len(actual_set)
+    if actual_set != required_set or has_duplicates:
+        raise C22ConfigError(
+            f"{label} must contain exactly: {', '.join(required_ids)}"
+        )
