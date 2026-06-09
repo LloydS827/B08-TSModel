@@ -1,0 +1,137 @@
+stage: C3_public_dataset_registry
+latest_source_calibration:
+  enabled: true
+  policy: watchlist_only
+  note: "Only records whether new 2025-2026 candidates should enter watchlist; no dataset download in C3 first loop."
+outputs:
+  report: reports/c_stage_c3_public_dataset_registry.md
+datasets:
+  - dataset_id: fu13_internal
+    display_name: FU13 Internal Device Data
+    dataset_role: internal_anchor
+    source_type: internal
+    official_source_url: internal_no_public_url
+    source_status: needs_review
+    license_status: needs_review
+    redistribution_status: needs_review
+    training_use_status: needs_review
+    task_families: [forecasting, imputation, representation, weak_label]
+    label_semantics: "quality_flag, stage, and failure_proxy are weak or operational labels; no confirmed production fault/RUL labels."
+    schema_mapping_status: mapped
+    canonical_mapping_notes: "Already mapped to B08 canonical observations for FU13 pipeline validation."
+    split_policy: time_or_cycle_split_required
+    leakage_risks: "Cycle reconstruction and stage metadata must not leak target labels into probes."
+    allowed_metrics: [forecasting_mae, forecasting_rmse, mask_reconstruction_error, linear_probe_macro_f1]
+    go_no_go_prerequisites:
+      - internal_source_and_training_boundary_confirmed
+      - weak_label_semantics_documented
+    invalid_claims:
+      - 不得解释为生产告警
+      - 不得解释为 RUL 精确估计
+      - 不得解释为自动维修建议
+    next_action: "Confirm internal use boundary and keep as C3 anchor."
+    risk_level: medium
+  - dataset_id: nasa_cmapss
+    display_name: NASA C-MAPSS Turbofan Engine Degradation
+    dataset_role: open_benchmark_candidate
+    source_type: official_public
+    official_source_url: needs_review
+    source_status: needs_review
+    license_status: needs_review
+    redistribution_status: needs_review
+    training_use_status: needs_review
+    task_families: [rul, forecasting, representation]
+    label_semantics: "Run-to-failure trajectories can support RUL-style evaluation after source, split, and label semantics review."
+    schema_mapping_status: planned
+    canonical_mapping_notes: "Map engine unit, cycle, operating setting, and sensor columns into canonical observation fields before evaluation."
+    split_policy: unit_run_split_required
+    leakage_risks: "Same engine unit or run-to-failure trajectory must not appear across train and validation/test splits."
+    allowed_metrics: [rul_mae, rul_rmse, trend_forecasting_error]
+    go_no_go_prerequisites:
+      - official_source_confirmed
+      - license_and_training_use_reviewed
+      - unit_run_split_policy_documented
+    invalid_claims:
+      - 不得解释为 FU13 现场 RUL 已可用
+      - 不得解释为生产告警
+      - 不得解释为自动维修建议
+    next_action: "Confirm official source, license, and unit/run split before minimal download."
+    risk_level: high
+  - dataset_id: ims_bearing
+    display_name: NASA IMS Bearing Data
+    dataset_role: open_benchmark_candidate
+    source_type: official_public
+    official_source_url: needs_review
+    source_status: needs_review
+    license_status: needs_review
+    redistribution_status: needs_review
+    training_use_status: needs_review
+    task_families: [forecasting, representation, fault_classification]
+    label_semantics: "Bearing degradation and fault process labels require review before classification or degradation claims."
+    schema_mapping_status: planned
+    canonical_mapping_notes: "Map bearing test run, timestamp, channel, and vibration measurements into canonical observation fields."
+    split_policy: test_run_split_required
+    leakage_risks: "Bearing run, time-adjacent windows, and fault progression metadata must not leak across splits."
+    allowed_metrics: [forecasting_mae, forecasting_rmse, linear_probe_macro_f1]
+    go_no_go_prerequisites:
+      - official_source_confirmed
+      - license_and_training_use_reviewed
+      - bearing_run_split_policy_documented
+    invalid_claims:
+      - 不得解释为 FU13 轴承故障诊断已验证
+      - 不得解释为生产告警
+      - 不得解释为自动维修建议
+    next_action: "Confirm source and split policy before schema mapping."
+    risk_level: high
+  - dataset_id: pronostia_femto
+    display_name: PRONOSTIA / FEMTO-ST Bearing Data
+    dataset_role: open_benchmark_candidate
+    source_type: official_public
+    official_source_url: needs_review
+    source_status: needs_review
+    license_status: needs_review
+    redistribution_status: needs_review
+    training_use_status: needs_review
+    task_families: [rul, forecasting, representation]
+    label_semantics: "Accelerated bearing degradation can support RUL-style tasks only after source, license, and split review."
+    schema_mapping_status: planned
+    canonical_mapping_notes: "Map bearing id, operating condition, timestamp, and vibration channels into canonical observation fields."
+    split_policy: unit_run_split_required
+    leakage_risks: "Bearing unit, run-to-failure trajectory, and operating condition leakage must be guarded."
+    allowed_metrics: [rul_mae, rul_rmse, trend_forecasting_error]
+    go_no_go_prerequisites:
+      - official_source_confirmed
+      - license_and_training_use_reviewed
+      - unit_run_condition_split_policy_documented
+    invalid_claims:
+      - 不得解释为 FU13 现场 RUL 已可用
+      - 不得解释为生产告警
+      - 不得解释为自动维修建议
+    next_action: "Confirm official source, license, and unit/run split before minimal download."
+    risk_level: high
+  - dataset_id: tennessee_eastman_process
+    display_name: Tennessee Eastman Process
+    dataset_role: open_benchmark_candidate
+    source_type: repository
+    official_source_url: needs_review
+    source_status: needs_review
+    license_status: needs_review
+    redistribution_status: needs_review
+    training_use_status: needs_review
+    task_families: [fault_classification, anomaly_detection, representation]
+    label_semantics: "Simulated process faults may support fault classification or anomaly detection after implementation/source review."
+    schema_mapping_status: planned
+    canonical_mapping_notes: "Map process run, variable id, timestamp/sample index, operating condition, and fault id into canonical observation fields."
+    split_policy: fault_trajectory_or_condition_split_required
+    leakage_risks: "Process fault trajectory, fault injection timing, and operating condition leakage must be guarded."
+    allowed_metrics: [macro_f1, auroc, detection_delay]
+    go_no_go_prerequisites:
+      - source_implementation_confirmed
+      - license_and_training_use_reviewed
+      - fault_trajectory_split_policy_documented
+    invalid_claims:
+      - 不得解释为 FU13 工艺故障分类已验证
+      - 不得解释为生产告警
+      - 不得解释为自动维修建议
+    next_action: "Confirm source implementation and leakage-safe split policy before schema mapping."
+    risk_level: high
