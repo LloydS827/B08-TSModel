@@ -20,7 +20,9 @@ def _load_default_yaml() -> dict:
 
 
 def _write_yaml(path: Path, data: dict) -> Path:
-    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8"
+    )
     return path
 
 
@@ -41,7 +43,7 @@ def test_c31_default_config_is_offline_and_lists_classic_cmapss_files():
     assert config.download_policy.allow_write_processed is False
     assert config.license_review.decision == C31LicenseDecision.NEEDS_REVIEW
     assert len(config.download_policy.expected_files) == 12
-    assert set(expected_cmapss_files()) == set(config.download_policy.expected_files)
+    assert config.download_policy.expected_files == expected_cmapss_files()
     assert config.outputs.report == Path("reports/c_stage_c31_cmapss_minimal_ingestion.md")
 
 
@@ -54,6 +56,27 @@ def test_c31_default_runner_blocks_without_reading_raw_data():
     assert "blocked_by_license_review" in [reason.value for reason in result.blocked_reasons]
     assert result.raw_files_present == ()
     assert result.raw_files_missing == tuple(config.download_policy.expected_files)
+
+
+def test_c31_default_runner_does_not_inspect_raw_dir_when_local_raw_disabled(monkeypatch):
+    config = load_c31_cmapss_config(_DEFAULT_CONFIG)
+    inspected_paths: list[Path] = []
+    original_is_file = Path.is_file
+
+    def spy_is_file(path: Path) -> bool:
+        if (
+            path == config.download_policy.raw_dir
+            or path.parent == config.download_policy.raw_dir
+        ):
+            inspected_paths.append(path)
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", spy_is_file)
+
+    result = run_c31_cmapss_minimal_ingestion(config, config_path=_DEFAULT_CONFIG)
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert inspected_paths == []
 
 
 def test_c31_blocks_unapproved_source_even_when_license_is_schema_approved(tmp_path):
@@ -99,4 +122,33 @@ def test_c31_rejects_unsafe_download_policy_combinations(tmp_path, update, match
     path = _modified_config(tmp_path, update)
 
     with pytest.raises(C31CmapssConfigError, match=match):
+        load_c31_cmapss_config(path)
+
+
+def test_c31_rejects_full_classic_expected_files_when_subset_order_is_reordered(tmp_path):
+    def update(data: dict) -> None:
+        data["mapping_policy"].update(
+            {"subsets": ["FD002", "FD001", "FD003", "FD004"]}
+        )
+        data["download_policy"]["expected_files"] = [
+            "train_FD002.txt",
+            "test_FD002.txt",
+            "RUL_FD002.txt",
+            "train_FD001.txt",
+            "test_FD001.txt",
+            "RUL_FD001.txt",
+            "train_FD003.txt",
+            "test_FD003.txt",
+            "RUL_FD003.txt",
+            "train_FD004.txt",
+            "test_FD004.txt",
+            "RUL_FD004.txt",
+        ]
+
+    path = _modified_config(
+        tmp_path,
+        update,
+    )
+
+    with pytest.raises(C31CmapssConfigError, match="full classic"):
         load_c31_cmapss_config(path)

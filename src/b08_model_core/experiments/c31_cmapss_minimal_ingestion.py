@@ -403,18 +403,26 @@ def _validate_expected_files(
     expected_files: tuple[str, ...],
     mapping_policy: C31MappingPolicy,
 ) -> None:
+    if _is_full_classic_policy(mapping_policy):
+        if expected_files != expected_cmapss_files():
+            raise C31CmapssConfigError(
+                "download_policy.expected_files must match full classic C-MAPSS files"
+            )
+        return
+
     expected_for_policy = _expected_files_for_policy(mapping_policy)
     if expected_files != expected_for_policy:
         raise C31CmapssConfigError(
             "download_policy.expected_files must match mapping_policy subsets and file_roles"
         )
-    if (
-        mapping_policy.subsets == EXPECTED_CMAPSS_SUBSETS
-        and expected_files != expected_cmapss_files()
-    ):
-        raise C31CmapssConfigError(
-            "download_policy.expected_files must match full classic C-MAPSS files"
-        )
+
+
+def _is_full_classic_policy(mapping_policy: C31MappingPolicy) -> bool:
+    return (
+        set(mapping_policy.subsets) == set(EXPECTED_CMAPSS_SUBSETS)
+        and len(mapping_policy.subsets) == len(EXPECTED_CMAPSS_SUBSETS)
+        and mapping_policy.file_roles == EXPECTED_CMAPSS_FILE_ROLES
+    )
 
 
 def _expected_files_for_policy(mapping_policy: C31MappingPolicy) -> tuple[str, ...]:
