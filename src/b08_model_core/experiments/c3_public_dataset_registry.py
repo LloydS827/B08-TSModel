@@ -55,6 +55,24 @@ class C3RegistryConfig:
     datasets: tuple[C3DatasetEntry, ...]
 
 
+@dataclass(frozen=True)
+class C3DatasetReadiness:
+    dataset_id: str
+    readiness: str
+    reasons: tuple[str, ...]
+    next_action: str
+
+
+@dataclass(frozen=True)
+class C3RegistryRunResult:
+    stage: str
+    config_path: str | Path
+    datasets: tuple[C3DatasetEntry, ...]
+    readiness: tuple[C3DatasetReadiness, ...]
+    latest_source_calibration: dict[str, Any]
+    invalid_claims: tuple[str, ...]
+
+
 _EXPECTED_STAGE = "C3_public_dataset_registry"
 
 _REQUIRED_DATASET_FIELDS = (
@@ -103,6 +121,43 @@ _ALLOWED_VALUES = {
     "schema_mapping_status": ("mapped", "partial", "planned", "blocked", "needs_review"),
     "risk_level": ("low", "medium", "high"),
 }
+
+_ALLOWED_TASK_FAMILIES = (
+    "forecasting",
+    "imputation",
+    "representation",
+    "weak_label",
+    "fault_classification",
+    "rul",
+    "run_to_failure",
+    "anomaly_detection",
+    "process_monitoring",
+)
+
+_ALLOWED_METRICS = (
+    "forecasting_mae",
+    "forecasting_rmse",
+    "mask_reconstruction_error",
+    "linear_probe_macro_f1",
+    "rul_mae",
+    "rul_rmse",
+    "trend_forecasting_error",
+    "macro_f1",
+    "auroc",
+    "detection_delay",
+)
+
+_SOURCE_LICENSE_REVIEW_VALUES = {
+    "unknown",
+    "needs_review",
+    "restricted",
+    "not_allowed",
+    "blocked",
+    "unavailable",
+    "deprecated",
+}
+
+_READY_ACTION_TOKENS = ("ready", "training-ready", "train-ready")
 
 
 def load_c3_registry_config(path: str | Path) -> C3RegistryConfig:
@@ -167,7 +222,7 @@ def _load_dataset_entry(raw: dict[str, Any], index: int) -> C3DatasetEntry:
                 f"datasets[{index}].{field} must be one of: {allowed}"
             )
 
-    return C3DatasetEntry(
+    entry = C3DatasetEntry(
         dataset_id=_load_required_string(raw, "dataset_id", f"datasets[{index}]"),
         display_name=_load_required_string(raw, "display_name", f"datasets[{index}]"),
         dataset_role=C3DatasetRole(
@@ -207,6 +262,8 @@ def _load_dataset_entry(raw: dict[str, Any], index: int) -> C3DatasetEntry:
         next_action=_load_required_string(raw, "next_action", f"datasets[{index}]"),
         risk_level=_load_required_string(raw, "risk_level", f"datasets[{index}]"),
     )
+    _validate_dataset_safety(entry, index)
+    return entry
 
 
 def _load_mapping(
@@ -252,3 +309,281 @@ def _load_required_string_list(
             f"datasets[{dataset_index}].{key} must contain non-empty strings"
         )
     return tuple(value)
+
+
+def _validate_dataset_safety(entry: C3DatasetEntry, index: int) -> None:
+    if entry.official_source_url == "needs_review" and entry.source_status == "verified":
+        raise C3RegistryConfigError(
+            "datasets[{index}].source_status cannot be verified when "
+            "official_source_url is needs_review".format(index=index)
+        )
+
+    if _next_action_implies_ready(entry.next_action):
+        if entry.training_use_status == "unknown":
+            raise C3RegistryConfigError(
+                f"datasets[{index}].training_use_status cannot be unknown for a ready action"
+            )
+        if entry.license_status == "unknown":
+            raise C3RegistryConfigError(
+                f"datasets[{index}].license_status cannot be unknown for a ready action"
+            )
+
+
+def _next_action_implies_ready(next_action: str) -> bool:
+    normalized = next_action.lower()
+    return any(token in normalized for token in _READY_ACTION_TOKENS)
+
+
+def run_c3_public_dataset_registry(
+    config: C3RegistryConfig,
+    config_path: str | Path = "",
+) -> C3RegistryRunResult:
+    readiness = tuple(_classify_dataset_readiness(dataset) for dataset in config.datasets)
+    invalid_claims = tuple(
+        dict.fromkeys(
+            claim
+            for dataset in config.datasets
+            for claim in dataset.invalid_claims
+        )
+    )
+    return C3RegistryRunResult(
+        stage=config.stage,
+        config_path=config_path,
+        datasets=config.datasets,
+        readiness=readiness,
+        latest_source_calibration=config.latest_source_calibration,
+        invalid_claims=invalid_claims,
+    )
+
+
+def _classify_dataset_readiness(entry: C3DatasetEntry) -> C3DatasetReadiness:
+    task_mapping_reasons = _task_mapping_reasons(entry)
+    split_policy_reasons = _split_policy_reasons(entry)
+    source_license_reasons = _source_license_review_reasons(entry)
+
+    if entry.dataset_role == C3DatasetRole.WATCHLIST_CANDIDATE:
+        readiness = "watchlist_only"
+        reasons = ("dataset_role=watchlist_candidate",)
+    elif task_mapping_reasons:
+        readiness = "task_mapping_review"
+        reasons = task_mapping_reasons
+    elif split_policy_reasons:
+        readiness = "split_policy_review"
+        reasons = split_policy_reasons
+    elif source_license_reasons:
+        readiness = "needs_source_license_review"
+        reasons = source_license_reasons
+    else:
+        readiness = "ready_for_next_mapping"
+        reasons = ("registry_prerequisites_satisfied",)
+
+    return C3DatasetReadiness(
+        dataset_id=entry.dataset_id,
+        readiness=readiness,
+        reasons=reasons,
+        next_action=entry.next_action,
+    )
+
+
+def _task_mapping_reasons(entry: C3DatasetEntry) -> tuple[str, ...]:
+    reasons = [
+        f"unknown_task_family={task}"
+        for task in entry.task_families
+        if task not in _ALLOWED_TASK_FAMILIES
+    ]
+    reasons.extend(
+        f"unknown_allowed_metric={metric}"
+        for metric in entry.allowed_metrics
+        if metric not in _ALLOWED_METRICS
+    )
+    return tuple(reasons)
+
+
+def _split_policy_reasons(entry: C3DatasetEntry) -> tuple[str, ...]:
+    reasons: list[str] = []
+    task_families = set(entry.task_families)
+    split_policy = entry.split_policy.lower()
+    leakage_risks = entry.leakage_risks.lower()
+
+    if task_families.intersection({"rul", "run_to_failure"}):
+        if "unit" not in split_policy and "run" not in split_policy:
+            reasons.append("unit_or_run_split_required_for_rul")
+
+    if task_families.intersection({"process_monitoring", "fault_classification"}):
+        leakage_guard_terms = ("fault", "trajectory", "condition", "工况", "故障")
+        if not any(term in leakage_risks for term in leakage_guard_terms):
+            reasons.append("fault_or_condition_leakage_guard_required")
+
+    return tuple(reasons)
+
+
+def _source_license_review_reasons(entry: C3DatasetEntry) -> tuple[str, ...]:
+    fields = (
+        ("source_type", entry.source_type),
+        ("official_source_url", entry.official_source_url),
+        ("source_status", entry.source_status),
+        ("license_status", entry.license_status),
+        ("redistribution_status", entry.redistribution_status),
+        ("training_use_status", entry.training_use_status),
+        ("schema_mapping_status", entry.schema_mapping_status),
+    )
+    return tuple(
+        f"{field}={value}"
+        for field, value in fields
+        if value in _SOURCE_LICENSE_REVIEW_VALUES
+    )
+
+
+def render_c3_registry_report(result: C3RegistryRunResult) -> str:
+    readiness_by_id = {item.dataset_id: item for item in result.readiness}
+    lines = [
+        "# C3 Public Dataset Registry Report",
+        "",
+        (
+            "不下载公开数据原始文件，不提交公开数据或派生 parquet，"
+            "不运行模型训练。"
+        ),
+        "",
+        "## Registry Summary",
+        "",
+        f"- Stage: {result.stage}",
+        f"- Config: {result.config_path or 'in_memory'}",
+        f"- Dataset count: {len(result.datasets)}",
+        "",
+        "## Dataset Readiness Table",
+        "",
+        "| Dataset | Role | Readiness | Reasons | Next Action |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+
+    for dataset in result.datasets:
+        readiness = readiness_by_id[dataset.dataset_id]
+        lines.append(
+            "| {dataset_id} | {role} | {readiness} | {reasons} | {next_action} |".format(
+                dataset_id=dataset.dataset_id,
+                role=dataset.dataset_role.value,
+                readiness=readiness.readiness,
+                reasons=", ".join(readiness.reasons),
+                next_action=dataset.next_action,
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Source And License Audit",
+            "",
+            "| Dataset | Source | Source Status | License | Redistribution | Training Use |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for dataset in result.datasets:
+        lines.append(
+            "| {dataset_id} | {source} | {source_status} | {license_status} | "
+            "{redistribution_status} | {training_use_status} |".format(
+                dataset_id=dataset.dataset_id,
+                source=dataset.official_source_url,
+                source_status=dataset.source_status,
+                license_status=dataset.license_status,
+                redistribution_status=dataset.redistribution_status,
+                training_use_status=dataset.training_use_status,
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Task And Metric Mapping",
+            "",
+            "| Dataset | Task Families | Allowed Metrics | Label Semantics |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for dataset in result.datasets:
+        lines.append(
+            "| {dataset_id} | {tasks} | {metrics} | {labels} |".format(
+                dataset_id=dataset.dataset_id,
+                tasks=", ".join(dataset.task_families),
+                metrics=", ".join(dataset.allowed_metrics),
+                labels=dataset.label_semantics,
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Canonical Schema Mapping Status",
+            "",
+            "| Dataset | Status | Notes |",
+            "| --- | --- | --- |",
+        ]
+    )
+    for dataset in result.datasets:
+        lines.append(
+            "| {dataset_id} | {status} | {notes} |".format(
+                dataset_id=dataset.dataset_id,
+                status=dataset.schema_mapping_status,
+                notes=dataset.canonical_mapping_notes,
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Split Policy And Leakage Guard",
+            "",
+            "| Dataset | Split Policy | Leakage Risks |",
+            "| --- | --- | --- |",
+        ]
+    )
+    for dataset in result.datasets:
+        lines.append(
+            "| {dataset_id} | {split_policy} | {leakage_risks} |".format(
+                dataset_id=dataset.dataset_id,
+                split_policy=dataset.split_policy,
+                leakage_risks=dataset.leakage_risks,
+            )
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Latest Source Calibration Notes",
+            "",
+        ]
+    )
+    for key, value in result.latest_source_calibration.items():
+        lines.append(f"- {key}: {value}")
+
+    lines.extend(
+        [
+            "",
+            "## Go / No-Go For Next C3 Loop",
+            "",
+            "| Dataset | Decision | Required Next Action |",
+            "| --- | --- | --- |",
+        ]
+    )
+    for dataset in result.datasets:
+        readiness = readiness_by_id[dataset.dataset_id]
+        decision = (
+            "Go"
+            if readiness.readiness == "ready_for_next_mapping"
+            else "No-Go / Review"
+        )
+        lines.append(
+            f"| {dataset.dataset_id} | {decision}: {readiness.readiness} | "
+            f"{dataset.next_action} |"
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Invalid Claims",
+            "",
+        ]
+    )
+    for claim in result.invalid_claims:
+        lines.append(f"- {claim}")
+
+    return "\n".join(lines) + "\n"
