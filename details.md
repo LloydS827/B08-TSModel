@@ -36,9 +36,9 @@ uv run b08-model-core experiment c-stage-c22 \
 
 ## 3. 下一步计划
 
-### 3.1 执行 C2.2 报告并复核证据
+下一步主线是执行和复核 C2.2，而不是直接进入公开数据集整理或 B 阶段自研训练。整体思路是：先把 C2.2 报告跑成可复核证据，再根据模型真实运行结果决定是否进入 C3 跨数据验证；只有当 C2.2 / C3 证明开源模型存在关键缺口时，才进入 B 阶段条件性自研模型准备。
 
-下一步主线是执行和复核 C2.2，而不是直接进入公开数据集整理或 B 阶段自研训练。执行思路如下：
+具体计划如下：
 
 1. 做 C2.2 preflight：确认 `data/processed/fu13_real_observations.parquet` 是否存在、默认配置是否保持 `allow_network: false` / `allow_download: false`、本机 cache 路径是否可控、optional dependency 是否只在显式需要时安装。
 2. 先跑默认离线 C2.2：生成 `reports/c_stage_c22_open_model_executable_upgrade.md` 和 `reports/c_stage_c22_model_cache_manifest.md`，确认报告能覆盖六个核心模型和 watchlist audit。
@@ -47,15 +47,6 @@ uv run b08-model-core experiment c-stage-c22 \
 5. 复核 representation / imputation 模型：MOMENT 和 UniTS 先聚焦 representation、imputation 和 multi-task 接口核验；除非官方接口稳定，否则 forecasting 只作为补充记录。
 6. 保持 watchlist audit-only：Time-MoE、Sundial、Timer-S1 / Timer-XL、Kairos、Toto、IBM FlowState / TSPulse、TabPFN-TS 先按依赖、权重、接口、资源、license 和任务匹配度审计，不默认提升为必跑模型。
 7. 产出 C2.2 决策结论：明确哪些模型可运行，哪些需要补依赖、权重、接口、任务头或资源，哪些能力值得进入 C3，哪些缺口可能支持 B 阶段条件性自研判断。
-
-### 3.2 C3 公开数据与跨数据验证准备
-
-C3 只应承接 C2.2 之后的结果。若 C2.2 证明某些模型和任务值得继续验证，再整理公开数据集、license、schema mapping、任务标签、split policy 和跨数据指标。C3 的目标是判断模型能力是否能离开单台 FU13 样例，而不是替代 C2.2 的本机真实执行。
-
-### 3.3 B 阶段条件性自研模型准备
-
-B 阶段仍是条件性路线。只有当 C2.2 / C3 证据显示开源模型无法覆盖关键需求，且缺口足够稳定、数据规模和算力预算可被说明时，才进入自研设备时序基础模型设计。进入 B 阶段前应先形成可审查方案，包括输入格式、预训练目标、微调任务、训练 / 验证切分、最小原型、成本估计和 Go / No-Go 条件。
-
-### 3.4 文档维护规则
-
-README 继续作为任何读者的项目入口，负责说明项目定位、快速开始、标准运行命令、关键目录和安全边界。`details.md` 只维护当前阶段、每日更新和下一步计划；阶段解释和执行细节优先写入对应 spec / plan / report，避免与 README 重复。
+8. 若 C2.2 证明某些模型和任务值得继续验证，再进入 C3 公开数据与跨数据验证准备：整理公开数据集、license、schema mapping、任务标签、split policy 和跨数据指标。C3 的目标是判断模型能力是否能离开单台 FU13 样例，而不是替代 C2.2 的本机真实执行。
+9. 若 C2.2 / C3 证据显示开源模型无法覆盖关键需求，且缺口足够稳定、数据规模和算力预算可被说明，再进入 B 阶段条件性自研模型设计。进入 B 阶段前应先形成可审查方案，包括输入格式、预训练目标、微调任务、训练 / 验证切分、最小原型、成本估计和 Go / No-Go 条件。
+10. 后续文档维护继续保持分工：README 作为任何读者的项目入口，负责项目定位、快速开始、标准运行命令、关键目录和安全边界；`details.md` 只维护当前阶段、每日更新和下一步计划；阶段解释和执行细节优先写入对应 spec / plan / report，避免与 README 重复。
