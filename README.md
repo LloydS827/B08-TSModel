@@ -207,6 +207,16 @@ uv run b08-model-core experiment c-stage-c22 \
 
 C2.2 是 C2.1 的升级入口：补充版本化核心模型目标矩阵、frontier watchlist audit、cache manifest 和可决策报告。详细阶段说明和下一步执行计划见 [details.md](details.md)，设计与实现计划见文档入口中的 C2.2 spec / plan。
 
+### C3. 公开数据 registry 与跨数据验证准备
+
+```bash
+uv run b08-model-core experiment c-stage-c3 \
+  --config configs/c_stage_c3_public_dataset_registry.yaml \
+  --output reports/c_stage_c3_public_dataset_registry.md
+```
+
+C3 第一轮只验证公开数据 registry、来源/许可证/任务/schema/split 边界和报告，不下载公开数据、不提交数据文件、不运行模型训练。
+
 ## 项目边界
 
 当前不能推出：
