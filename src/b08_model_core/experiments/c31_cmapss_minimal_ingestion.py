@@ -421,7 +421,8 @@ def _is_full_classic_policy(mapping_policy: C31MappingPolicy) -> bool:
     return (
         set(mapping_policy.subsets) == set(EXPECTED_CMAPSS_SUBSETS)
         and len(mapping_policy.subsets) == len(EXPECTED_CMAPSS_SUBSETS)
-        and mapping_policy.file_roles == EXPECTED_CMAPSS_FILE_ROLES
+        and set(mapping_policy.file_roles) == set(EXPECTED_CMAPSS_FILE_ROLES)
+        and len(mapping_policy.file_roles) == len(EXPECTED_CMAPSS_FILE_ROLES)
     )
 
 
