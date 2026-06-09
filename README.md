@@ -272,6 +272,8 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 - [C2.1 开源模型真实执行设计](docs/superpowers/specs/2026-06-06-c21-open-model-executable-evaluation-design.md)
 - [C2.2 开源模型真实执行升级设计](docs/superpowers/specs/2026-06-08-c22-open-model-executable-evaluation-upgrade-design.md)
 - [C2.2 开源模型真实执行升级计划](docs/superpowers/plans/2026-06-08-c22-open-model-executable-evaluation-upgrade-plan.md)
+- [C3 公开数据 registry 设计](docs/superpowers/specs/2026-06-09-c3-public-dataset-registry-design.md)
+- [C3.1 C-MAPSS 最小接入设计](docs/superpowers/specs/2026-06-09-c31-cmapss-minimal-ingestion-design.md)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
 - [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)
 - [开源时序基础模型调研](docs/调研资料/开源时序基础模型调研.md)
