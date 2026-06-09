@@ -286,7 +286,7 @@ def _load_license_review(raw: dict[str, Any]) -> C31LicenseReview:
     ):
         _validate_allowed(value, _VALID_REVIEW_STATUSES, f"license_review.{field}")
 
-    return C31LicenseReview(
+    review = C31LicenseReview(
         decision=decision,
         license_status=license_status,
         redistribution_status=redistribution_status,
@@ -295,6 +295,8 @@ def _load_license_review(raw: dict[str, Any]) -> C31LicenseReview:
             review, "citation_required", "license_review"
         ),
     )
+    _validate_license_decision_consistency(review)
+    return review
 
 
 def _load_download_policy(
@@ -329,10 +331,12 @@ def _load_download_policy(
 def _load_mapping_policy(raw: dict[str, Any]) -> C31MappingPolicy:
     policy = _load_mapping(raw, "mapping_policy")
     subsets = _load_required_string_list(policy, "subsets", "mapping_policy")
+    _validate_unique(subsets, "mapping_policy.subsets")
     for subset in subsets:
         _validate_allowed(subset, EXPECTED_CMAPSS_SUBSETS, "mapping_policy.subsets")
 
     file_roles = _load_required_string_list(policy, "file_roles", "mapping_policy")
+    _validate_unique(file_roles, "mapping_policy.file_roles")
     for file_role in file_roles:
         _validate_allowed(
             file_role, EXPECTED_CMAPSS_FILE_ROLES, "mapping_policy.file_roles"
@@ -397,6 +401,40 @@ def _validate_download_policy(policy: C31DownloadPolicy) -> None:
         raise C31CmapssConfigError(
             "download_policy safety flags must match a documented safe combination"
         )
+
+
+def _validate_license_decision_consistency(review: C31LicenseReview) -> None:
+    if review.decision == C31LicenseDecision.APPROVED_FOR_SCHEMA_VALIDATION:
+        if review.license_status != "verified":
+            raise C31CmapssConfigError(
+                "license_review approved_for_schema_validation requires license_status=verified"
+            )
+        if review.redistribution_status not in ("not_allowed", "allowed"):
+            raise C31CmapssConfigError(
+                "license_review approved_for_schema_validation requires explicit redistribution_status"
+            )
+        if review.training_use_status not in (
+            "needs_review",
+            "research_only",
+            "allowed",
+        ):
+            raise C31CmapssConfigError(
+                "license_review approved_for_schema_validation has unsafe training_use_status"
+            )
+
+    if review.decision == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING:
+        if review.license_status != "verified":
+            raise C31CmapssConfigError(
+                "license_review approved_for_research_training requires license_status=verified"
+            )
+        if review.redistribution_status not in ("not_allowed", "allowed"):
+            raise C31CmapssConfigError(
+                "license_review approved_for_research_training requires explicit redistribution_status"
+            )
+        if review.training_use_status not in ("research_only", "allowed"):
+            raise C31CmapssConfigError(
+                "license_review approved_for_research_training requires explicit training_use_status"
+            )
 
 
 def _validate_expected_files(
@@ -511,3 +549,8 @@ def _validate_allowed(value: str, allowed_values: tuple[str, ...], field: str) -
     if value not in allowed_values:
         allowed = ", ".join(allowed_values)
         raise C31CmapssConfigError(f"{field} must be one of: {allowed}")
+
+
+def _validate_unique(values: tuple[str, ...], field: str) -> None:
+    if len(set(values)) != len(values):
+        raise C31CmapssConfigError(f"{field} must not contain duplicates")
