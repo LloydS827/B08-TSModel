@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.experiments.c3_public_dataset_registry import (
     C3DatasetRole,
     C3RegistryConfigError,
@@ -54,6 +55,27 @@ def test_c3_default_registry_config_has_initial_dataset_set():
     )
     assert config.datasets[0].dataset_role == C3DatasetRole.INTERNAL_ANCHOR
     assert all(item.invalid_claims for item in config.datasets)
+
+
+def test_cli_c_stage_c3_writes_registry_report(tmp_path):
+    output = tmp_path / "c3_registry.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c3",
+            "--config",
+            "configs/c_stage_c3_public_dataset_registry.yaml",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    text = output.read_text(encoding="utf-8")
+    assert "C3 Public Dataset Registry Report" in text
+    assert "fu13_internal" in text
+    assert "nasa_cmapss" in text
 
 
 def test_c3_registry_rejects_missing_required_dataset_field(tmp_path):

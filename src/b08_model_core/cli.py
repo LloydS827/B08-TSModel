@@ -30,6 +30,11 @@ from b08_model_core.experiments.c22_open_model_executable_upgrade import (
     render_c22_report,
     run_c22_open_model_executable_upgrade,
 )
+from b08_model_core.experiments.c3_public_dataset_registry import (
+    load_c3_registry_config,
+    render_c3_registry_report,
+    run_c3_public_dataset_registry,
+)
 from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
@@ -148,6 +153,9 @@ def main(argv: list[str] | None = None) -> int:
     c_stage_c2 = experiment_sub.add_parser("c-stage-c2")
     c_stage_c2.add_argument("--config", required=True)
     c_stage_c2.add_argument("--output", required=True)
+    c_stage_c3 = experiment_sub.add_parser("c-stage-c3")
+    c_stage_c3.add_argument("--config", required=True)
+    c_stage_c3.add_argument("--output", required=True)
     c_stage_c21 = experiment_sub.add_parser("c-stage-c21")
     c_stage_c21.add_argument("--config", required=True)
     c_stage_c21.add_argument("--output", required=True)
@@ -306,6 +314,16 @@ def main(argv: list[str] | None = None) -> int:
         except (FileNotFoundError, ValueError, OSError, PermissionError):
             return 1
         if config.strict_model_success and _has_c2_candidate_model_failure(result.task_results):
+            return 1
+        return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c3":
+        try:
+            config = load_c3_registry_config(args.config)
+            result = run_c3_public_dataset_registry(config, config_path=args.config)
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_c3_registry_report(result), encoding="utf-8")
+        except (FileNotFoundError, ValueError, OSError, PermissionError):
             return 1
         return 0
     if args.command == "experiment" and args.experiment_command == "c-stage-c21":
