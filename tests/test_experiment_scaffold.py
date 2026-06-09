@@ -211,6 +211,17 @@ def test_c21_executable_evaluation_workflow_is_documented():
     assert "本机 opt-in" in readme
 
 
+def test_c3_public_dataset_registry_workflow_is_documented():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+
+    assert "c-stage-c3" in readme
+    assert "configs/c_stage_c3_public_dataset_registry.yaml" in readme
+    assert "reports/c_stage_c3_public_dataset_registry.md" in readme
+    assert "不下载公开数据" in readme
+    assert "C3" in details
+
+
 def test_details_c21_executable_evaluation_ledger_is_documented():
     details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
 
