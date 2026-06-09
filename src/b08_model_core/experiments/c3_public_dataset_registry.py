@@ -116,10 +116,17 @@ def load_c3_registry_config(path: str | Path) -> C3RegistryConfig:
 
     return C3RegistryConfig(
         stage=stage,
-        latest_source_calibration=dict(raw.get("latest_source_calibration") or {}),
+        latest_source_calibration=_load_latest_source_calibration(raw),
         outputs=outputs,
         datasets=datasets,
     )
+
+
+def _load_latest_source_calibration(raw: dict[str, Any]) -> dict[str, Any]:
+    value = raw.get("latest_source_calibration")
+    if not isinstance(value, dict):
+        raise C3RegistryConfigError("latest_source_calibration must be a mapping")
+    return dict(value)
 
 
 def _load_outputs(raw: dict[str, Any]) -> C3RegistryOutputs:
@@ -207,7 +214,10 @@ def _load_mapping(
     key: str | None = None,
 ) -> dict[str, Any]:
     if isinstance(raw, Path):
-        loaded = yaml.safe_load(raw.read_text(encoding="utf-8"))
+        try:
+            loaded = yaml.safe_load(raw.read_text(encoding="utf-8"))
+        except yaml.YAMLError as exc:
+            raise C3RegistryConfigError(f"invalid YAML in {raw}: {exc}") from exc
         if not isinstance(loaded, dict):
             raise C3RegistryConfigError(f"{raw} must contain a mapping")
         return loaded
