@@ -560,8 +560,8 @@ def render_c3_registry_report(result: C3RegistryRunResult) -> str:
             "",
             "## Go / No-Go For Next C3 Loop",
             "",
-            "| Dataset | Decision | Required Next Action |",
-            "| --- | --- | --- |",
+            "| Dataset | Decision | Required Next Action | Prerequisites | Risk Level |",
+            "| --- | --- | --- | --- | --- |",
         ]
     )
     for dataset in result.datasets:
@@ -573,7 +573,8 @@ def render_c3_registry_report(result: C3RegistryRunResult) -> str:
         )
         lines.append(
             f"| {dataset.dataset_id} | {decision}: {readiness.readiness} | "
-            f"{dataset.next_action} |"
+            f"{dataset.next_action} | "
+            f"{', '.join(dataset.go_no_go_prerequisites)} | {dataset.risk_level} |"
         )
 
     lines.extend(

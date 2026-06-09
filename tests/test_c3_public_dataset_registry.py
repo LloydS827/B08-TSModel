@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+import yaml
 
 from b08_model_core.experiments.c3_public_dataset_registry import (
     C3DatasetRole,
@@ -10,9 +11,37 @@ from b08_model_core.experiments.c3_public_dataset_registry import (
     run_c3_public_dataset_registry,
 )
 
+_DEFAULT_REGISTRY = Path("configs/c_stage_c3_public_dataset_registry.yaml")
+
+
+def _load_default_registry_yaml() -> dict:
+    return yaml.safe_load(_DEFAULT_REGISTRY.read_text(encoding="utf-8"))
+
+
+def _write_registry_yaml(path: Path, data: dict) -> None:
+    path.write_text(
+        yaml.safe_dump(data, allow_unicode=True, sort_keys=False),
+        encoding="utf-8",
+    )
+
+
+def _write_modified_default_registry(tmp_path, update) -> Path:
+    data = _load_default_registry_yaml()
+    update(data)
+    path = tmp_path / "broken.yaml"
+    _write_registry_yaml(path, data)
+    return path
+
+
+def _dataset_by_id(data: dict, dataset_id: str) -> dict:
+    for dataset in data["datasets"]:
+        if dataset["dataset_id"] == dataset_id:
+            return dataset
+    raise AssertionError(f"missing dataset_id={dataset_id}")
+
 
 def test_c3_default_registry_config_has_initial_dataset_set():
-    config = load_c3_registry_config("configs/c_stage_c3_public_dataset_registry.yaml")
+    config = load_c3_registry_config(_DEFAULT_REGISTRY)
 
     assert config.stage == "C3_public_dataset_registry"
     assert config.outputs.report == Path("reports/c_stage_c3_public_dataset_registry.md")
@@ -48,23 +77,9 @@ datasets:
 
 
 def test_c3_registry_rejects_non_mapping_latest_source_calibration(tmp_path):
-    text = Path("configs/c_stage_c3_public_dataset_registry.yaml").read_text(
-        encoding="utf-8"
-    )
-    broken = tmp_path / "broken.yaml"
-    broken.write_text(
-        text.replace(
-            """latest_source_calibration:
-  enabled: true
-  policy: watchlist_only
-  note: "Only records whether new 2025-2026 candidates should enter watchlist; no dataset download in C3 first loop."
-""",
-            """latest_source_calibration:
-  - enabled
-""",
-            1,
-        ),
-        encoding="utf-8",
+    broken = _write_modified_default_registry(
+        tmp_path,
+        lambda data: data.update({"latest_source_calibration": ["enabled"]}),
     )
 
     with pytest.raises(C3RegistryConfigError, match="latest_source_calibration"):
@@ -100,13 +115,11 @@ datasets:
 
 
 def test_c3_registry_rejects_invalid_enum_value(tmp_path):
-    text = Path("configs/c_stage_c3_public_dataset_registry.yaml").read_text(
-        encoding="utf-8"
-    )
-    broken = tmp_path / "broken.yaml"
-    broken.write_text(
-        text.replace("license_status: needs_review", "license_status: verifed", 1),
-        encoding="utf-8",
+    broken = _write_modified_default_registry(
+        tmp_path,
+        lambda data: _dataset_by_id(data, "nasa_cmapss").update(
+            {"license_status": "verifed"}
+        ),
     )
 
     with pytest.raises(C3RegistryConfigError, match="license_status"):
@@ -114,7 +127,7 @@ def test_c3_registry_rejects_invalid_enum_value(tmp_path):
 
 
 def test_c3_registry_does_not_allow_needs_review_training_use_as_ready():
-    config = load_c3_registry_config("configs/c_stage_c3_public_dataset_registry.yaml")
+    config = load_c3_registry_config(_DEFAULT_REGISTRY)
     result = run_c3_public_dataset_registry(config)
 
     by_id = {item.dataset_id: item for item in result.readiness}
@@ -125,17 +138,11 @@ def test_c3_registry_does_not_allow_needs_review_training_use_as_ready():
 
 
 def test_c3_registry_does_not_allow_unknown_training_use_as_ready(tmp_path):
-    text = Path("configs/c_stage_c3_public_dataset_registry.yaml").read_text(
-        encoding="utf-8"
-    )
-    broken = tmp_path / "broken.yaml"
-    broken.write_text(
-        text.replace(
-            "training_use_status: needs_review",
-            "training_use_status: unknown",
-            1,
+    broken = _write_modified_default_registry(
+        tmp_path,
+        lambda data: _dataset_by_id(data, "fu13_internal").update(
+            {"training_use_status": "unknown"}
         ),
-        encoding="utf-8",
     )
     config = load_c3_registry_config(broken)
     result = run_c3_public_dataset_registry(config)
@@ -148,18 +155,11 @@ def test_c3_registry_does_not_allow_unknown_training_use_as_ready(tmp_path):
 
 
 def test_c3_registry_rejects_verified_source_with_needs_review_source_url(tmp_path):
-    text = Path("configs/c_stage_c3_public_dataset_registry.yaml").read_text(
-        encoding="utf-8"
-    )
-    broken = tmp_path / "broken.yaml"
-    broken.write_text(
-        text.replace("source_status: needs_review", "source_status: verified", 1)
-        .replace(
-            "official_source_url: internal_no_public_url",
-            "official_source_url: needs_review",
-            1,
+    broken = _write_modified_default_registry(
+        tmp_path,
+        lambda data: _dataset_by_id(data, "nasa_cmapss").update(
+            {"source_status": "verified", "official_source_url": "needs_review"}
         ),
-        encoding="utf-8",
     )
 
     with pytest.raises(C3RegistryConfigError, match="source_status|official_source_url"):
@@ -167,17 +167,11 @@ def test_c3_registry_rejects_verified_source_with_needs_review_source_url(tmp_pa
 
 
 def test_c3_registry_flags_split_policy_review_for_rul_data(tmp_path):
-    text = Path("configs/c_stage_c3_public_dataset_registry.yaml").read_text(
-        encoding="utf-8"
-    )
-    broken = tmp_path / "broken.yaml"
-    broken.write_text(
-        text.replace(
-            "split_policy: unit_run_split_required",
-            "split_policy: time_split",
-            1,
+    broken = _write_modified_default_registry(
+        tmp_path,
+        lambda data: _dataset_by_id(data, "nasa_cmapss").update(
+            {"split_policy": "time_split"}
         ),
-        encoding="utf-8",
     )
     config = load_c3_registry_config(broken)
 
@@ -189,20 +183,11 @@ def test_c3_registry_flags_split_policy_review_for_rul_data(tmp_path):
 
 
 def test_c3_registry_flags_process_fault_leakage_review(tmp_path):
-    text = Path("configs/c_stage_c3_public_dataset_registry.yaml").read_text(
-        encoding="utf-8"
-    )
-    broken = tmp_path / "broken.yaml"
-    broken.write_text(
-        text.replace(
-            (
-                'leakage_risks: "Process fault trajectory, fault injection timing, '
-                'and operating condition leakage must be guarded."'
-            ),
-            'leakage_risks: "needs split review"',
-            1,
+    broken = _write_modified_default_registry(
+        tmp_path,
+        lambda data: _dataset_by_id(data, "tennessee_eastman_process").update(
+            {"leakage_risks": "needs split review"}
         ),
-        encoding="utf-8",
     )
     config = load_c3_registry_config(broken)
 
@@ -217,7 +202,7 @@ def test_c3_registry_flags_process_fault_leakage_review(tmp_path):
 
 
 def test_c3_registry_report_contains_required_sections():
-    config = load_c3_registry_config("configs/c_stage_c3_public_dataset_registry.yaml")
+    config = load_c3_registry_config(_DEFAULT_REGISTRY)
     result = run_c3_public_dataset_registry(config)
     text = render_c3_registry_report(result)
 
@@ -234,3 +219,10 @@ def test_c3_registry_report_contains_required_sections():
     assert "不下载公开数据原始文件" in text
     assert "不提交公开数据或派生 parquet" in text
     assert "不运行模型训练" in text
+    assert (
+        "| Dataset | Decision | Required Next Action | Prerequisites | Risk Level |"
+        in text
+    )
+    assert "official_source_confirmed, license_and_training_use_reviewed" in text
+    assert "| nasa_cmapss | No-Go / Review: needs_source_license_review |" in text
+    assert "| high |" in text
