@@ -42,14 +42,32 @@ EXPECTED_CMAPSS_FILE_ROLES = ("train", "test", "RUL")
 
 _EXPECTED_STAGE = "C3_1_cmapss_minimal_ingestion"
 _EXPECTED_DATASET_ID = "nasa_cmapss"
+_PROTECTED_RAW_DIR = Path("data/public/cmapss/raw")
+_PROTECTED_PROCESSED_DIR = Path("data/processed/cmapss")
+_EXPECTED_CHECKSUM_POLICY = "record_if_downloaded"
+_EXPECTED_SENSOR_COUNT = 21
+_EXPECTED_SETTING_COUNT = 3
+_EXPECTED_PSEUDO_TIMESTAMP_START = "2000-01-01T00:00:00Z"
+_EXPECTED_SPLIT_UNIT = "trajectory_id"
+_EXPECTED_VALIDATION_SOURCE = "train_trajectories"
+_EXPECTED_FORBIDDEN_LEAKAGE_MODES = (
+    "trajectory_id_overlap",
+    "target_columns_in_input_features",
+    "window_adjacency_across_splits",
+)
 _VALID_SOURCE_STATUSES = ("verified", "needs_review", "unavailable", "deprecated")
-_VALID_REVIEW_STATUSES = (
+_VALID_LICENSE_STATUSES = (
     "verified",
-    "allowed",
-    "research_only",
-    "not_allowed",
     "needs_review",
     "restricted",
+    "unknown",
+)
+_VALID_REDISTRIBUTION_STATUSES = ("allowed", "not_allowed", "needs_review", "unknown")
+_VALID_TRAINING_USE_STATUSES = (
+    "allowed",
+    "research_only",
+    "needs_review",
+    "not_allowed",
     "unknown",
 )
 _VALID_SAFETY_FLAG_COMBINATIONS = {
@@ -197,7 +215,8 @@ def load_c31_cmapss_config(path: str | Path) -> C31CmapssConfig:
 
     mapping_policy = _load_mapping_policy(raw)
     download_policy = _load_download_policy(raw, mapping_policy)
-    _validate_download_policy(download_policy)
+    outputs = _load_outputs(raw)
+    _validate_download_policy(download_policy, outputs)
 
     return C31CmapssConfig(
         stage=stage,
@@ -207,7 +226,7 @@ def load_c31_cmapss_config(path: str | Path) -> C31CmapssConfig:
         download_policy=download_policy,
         mapping_policy=mapping_policy,
         split_policy=_load_split_policy(raw),
-        outputs=_load_outputs(raw),
+        outputs=outputs,
     )
 
 
@@ -325,7 +344,12 @@ def _load_license_review(raw: dict[str, Any]) -> C31LicenseReview:
         ("redistribution_status", redistribution_status),
         ("training_use_status", training_use_status),
     ):
-        _validate_allowed(value, _VALID_REVIEW_STATUSES, f"license_review.{field}")
+        allowed_values = {
+            "license_status": _VALID_LICENSE_STATUSES,
+            "redistribution_status": _VALID_REDISTRIBUTION_STATUSES,
+            "training_use_status": _VALID_TRAINING_USE_STATUSES,
+        }[field]
+        _validate_allowed(value, allowed_values, f"license_review.{field}")
 
     review = C31LicenseReview(
         decision=decision,
@@ -383,30 +407,69 @@ def _load_mapping_policy(raw: dict[str, Any]) -> C31MappingPolicy:
             file_role, EXPECTED_CMAPSS_FILE_ROLES, "mapping_policy.file_roles"
         )
 
+    sensor_count = _load_required_int(policy, "sensor_count", "mapping_policy")
+    if sensor_count != _EXPECTED_SENSOR_COUNT:
+        raise C31CmapssConfigError(
+            f"mapping_policy.sensor_count must be {_EXPECTED_SENSOR_COUNT}"
+        )
+
+    setting_count = _load_required_int(policy, "setting_count", "mapping_policy")
+    if setting_count != _EXPECTED_SETTING_COUNT:
+        raise C31CmapssConfigError(
+            f"mapping_policy.setting_count must be {_EXPECTED_SETTING_COUNT}"
+        )
+
+    use_capped_rul = _load_required_bool(policy, "use_capped_rul", "mapping_policy")
+    if use_capped_rul is not False:
+        raise C31CmapssConfigError("mapping_policy.use_capped_rul must be false")
+
+    pseudo_timestamp_start = _load_required_string(
+        policy, "pseudo_timestamp_start", "mapping_policy"
+    )
+    if pseudo_timestamp_start != _EXPECTED_PSEUDO_TIMESTAMP_START:
+        raise C31CmapssConfigError(
+            "mapping_policy.pseudo_timestamp_start must be "
+            f"{_EXPECTED_PSEUDO_TIMESTAMP_START}"
+        )
+
     return C31MappingPolicy(
         subsets=subsets,
-        pseudo_timestamp_start=_load_required_string(
-            policy, "pseudo_timestamp_start", "mapping_policy"
-        ),
+        pseudo_timestamp_start=pseudo_timestamp_start,
         file_roles=file_roles,
-        sensor_count=_load_required_int(policy, "sensor_count", "mapping_policy"),
-        setting_count=_load_required_int(policy, "setting_count", "mapping_policy"),
-        use_capped_rul=_load_required_bool(
-            policy, "use_capped_rul", "mapping_policy"
-        ),
+        sensor_count=sensor_count,
+        setting_count=setting_count,
+        use_capped_rul=use_capped_rul,
     )
 
 
 def _load_split_policy(raw: dict[str, Any]) -> C31SplitPolicy:
     policy = _load_mapping(raw, "split_policy")
+    split_unit = _load_required_string(policy, "split_unit", "split_policy")
+    if split_unit != _EXPECTED_SPLIT_UNIT:
+        raise C31CmapssConfigError(
+            f"split_policy.split_unit must be {_EXPECTED_SPLIT_UNIT}"
+        )
+
+    validation_source = _load_required_string(
+        policy, "validation_source", "split_policy"
+    )
+    if validation_source != _EXPECTED_VALIDATION_SOURCE:
+        raise C31CmapssConfigError(
+            f"split_policy.validation_source must be {_EXPECTED_VALIDATION_SOURCE}"
+        )
+
+    forbidden_leakage_modes = _load_required_string_list(
+        policy, "forbidden_leakage_modes", "split_policy"
+    )
+    if forbidden_leakage_modes != _EXPECTED_FORBIDDEN_LEAKAGE_MODES:
+        raise C31CmapssConfigError(
+            "split_policy.forbidden_leakage_modes must match the C3.1 config contract"
+        )
+
     return C31SplitPolicy(
-        split_unit=_load_required_string(policy, "split_unit", "split_policy"),
-        validation_source=_load_required_string(
-            policy, "validation_source", "split_policy"
-        ),
-        forbidden_leakage_modes=_load_required_string_list(
-            policy, "forbidden_leakage_modes", "split_policy"
-        ),
+        split_unit=split_unit,
+        validation_source=validation_source,
+        forbidden_leakage_modes=forbidden_leakage_modes,
     )
 
 
@@ -418,7 +481,25 @@ def _load_outputs(raw: dict[str, Any]) -> C31Outputs:
     )
 
 
-def _validate_download_policy(policy: C31DownloadPolicy) -> None:
+def _validate_download_policy(policy: C31DownloadPolicy, outputs: C31Outputs) -> None:
+    if policy.checksum_policy != _EXPECTED_CHECKSUM_POLICY:
+        raise C31CmapssConfigError(
+            f"download_policy.checksum_policy must be {_EXPECTED_CHECKSUM_POLICY}"
+        )
+    _validate_path_within_boundary(
+        policy.raw_dir, _PROTECTED_RAW_DIR, "download_policy.raw_dir"
+    )
+    _validate_path_within_boundary(
+        policy.processed_dir,
+        _PROTECTED_PROCESSED_DIR,
+        "download_policy.processed_dir",
+    )
+    _validate_path_within_boundary(
+        outputs.processed_dir,
+        _PROTECTED_PROCESSED_DIR,
+        "outputs.processed_dir",
+    )
+
     if policy.allow_download and not policy.allow_network:
         raise C31CmapssConfigError(
             "download_policy.allow_download requires allow_network"
@@ -598,3 +679,10 @@ def _validate_allowed(value: str, allowed_values: tuple[str, ...], field: str) -
 def _validate_unique(values: tuple[str, ...], field: str) -> None:
     if len(set(values)) != len(values):
         raise C31CmapssConfigError(f"{field} must not contain duplicates")
+
+
+def _validate_path_within_boundary(path: Path, boundary: Path, field: str) -> None:
+    if path.is_absolute() or ".." in path.parts:
+        raise C31CmapssConfigError(f"{field} must be inside {boundary}")
+    if path != boundary and not path.is_relative_to(boundary):
+        raise C31CmapssConfigError(f"{field} must be inside {boundary}")

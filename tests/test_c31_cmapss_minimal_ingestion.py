@@ -90,7 +90,7 @@ def test_c31_default_runner_does_not_inspect_raw_dir_when_local_raw_disabled(
     tmp_path,
     monkeypatch,
 ):
-    sentinel_raw_dir = tmp_path / "sentinel_raw"
+    sentinel_raw_dir = Path("data/public/cmapss/raw/sentinel_raw")
     path = _modified_config(
         tmp_path,
         lambda data: data["download_policy"].update({"raw_dir": str(sentinel_raw_dir)}),
@@ -126,7 +126,7 @@ def test_c31_source_license_block_does_not_inspect_raw_dir_when_local_raw_enable
     tmp_path,
     monkeypatch,
 ):
-    sentinel_raw_dir = tmp_path / "sentinel_raw"
+    sentinel_raw_dir = Path("data/public/cmapss/raw/sentinel_raw")
 
     def update(data: dict) -> None:
         data["download_policy"].update(
@@ -206,6 +206,54 @@ def test_c31_blocks_unapproved_source_even_when_license_is_schema_approved(tmp_p
     ],
 )
 def test_c31_rejects_unsafe_download_policy_combinations(tmp_path, update, match):
+    path = _modified_config(tmp_path, update)
+
+    with pytest.raises(C31CmapssConfigError, match=match):
+        load_c31_cmapss_config(path)
+
+
+@pytest.mark.parametrize(
+    "update,match",
+    [
+        (
+            lambda data: data["download_policy"].update({"raw_dir": "data/public"}),
+            "raw_dir",
+        ),
+        (
+            lambda data: data["download_policy"].update(
+                {"processed_dir": "data/processed"}
+            ),
+            "processed_dir",
+        ),
+        (
+            lambda data: data["outputs"].update({"processed_dir": "reports/cmapss"}),
+            "outputs.processed_dir",
+        ),
+    ],
+)
+def test_c31_rejects_paths_outside_local_data_boundaries(tmp_path, update, match):
+    path = _modified_config(tmp_path, update)
+
+    with pytest.raises(C31CmapssConfigError, match=match):
+        load_c31_cmapss_config(path)
+
+
+@pytest.mark.parametrize(
+    "update,match",
+    [
+        (
+            lambda data: data["license_review"].update({"license_status": "allowed"}),
+            "license_status",
+        ),
+        (
+            lambda data: data["license_review"].update(
+                {"training_use_status": "verified"}
+            ),
+            "training_use_status",
+        ),
+    ],
+)
+def test_c31_rejects_license_fields_with_wrong_semantics(tmp_path, update, match):
     path = _modified_config(tmp_path, update)
 
     with pytest.raises(C31CmapssConfigError, match=match):
@@ -334,4 +382,52 @@ def test_c31_rejects_full_classic_expected_files_when_file_role_order_is_reorder
     )
 
     with pytest.raises(C31CmapssConfigError, match="full classic"):
+        load_c31_cmapss_config(path)
+
+
+@pytest.mark.parametrize(
+    "update,match",
+    [
+        (
+            lambda data: data["download_policy"].update({"checksum_policy": "skip"}),
+            "checksum_policy",
+        ),
+        (
+            lambda data: data["mapping_policy"].update({"sensor_count": 20}),
+            "sensor_count",
+        ),
+        (
+            lambda data: data["mapping_policy"].update({"setting_count": 4}),
+            "setting_count",
+        ),
+        (
+            lambda data: data["mapping_policy"].update({"use_capped_rul": True}),
+            "use_capped_rul",
+        ),
+        (
+            lambda data: data["split_policy"].update({"split_unit": "unit_id"}),
+            "split_unit",
+        ),
+        (
+            lambda data: data["split_policy"].update({"validation_source": "random"}),
+            "validation_source",
+        ),
+        (
+            lambda data: data["split_policy"].update(
+                {
+                    "forbidden_leakage_modes": [
+                        "target_columns_in_input_features",
+                        "trajectory_id_overlap",
+                        "window_adjacency_across_splits",
+                    ]
+                }
+            ),
+            "forbidden_leakage_modes",
+        ),
+    ],
+)
+def test_c31_rejects_config_contract_drift(tmp_path, update, match):
+    path = _modified_config(tmp_path, update)
+
+    with pytest.raises(C31CmapssConfigError, match=match):
         load_c31_cmapss_config(path)
