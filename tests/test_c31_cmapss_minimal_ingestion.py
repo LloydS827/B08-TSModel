@@ -554,6 +554,166 @@ def test_c31_maps_synthetic_subset_to_canonical_observations(tmp_path, monkeypat
     )
 
 
+def test_c31_partial_subset_validated_is_not_c32_ready(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    assert result.readiness_detail == "partial_subset_validated"
+    assert result.status == C31TopLevelStatus.READY_FOR_LOCAL_MAPPING
+    assert result.c32_go_no_go == "No-Go: partial subset only"
+
+
+def test_c31_full_schema_validation_pending_training_use_review(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_full")
+    for subset in ("FD001", "FD002", "FD003", "FD004"):
+        _write_synthetic_subset(raw_dir, subset=subset)
+
+    def update(data: dict) -> None:
+        data["source"]["source_status"] = "verified"
+        data["license_review"].update(
+            {
+                "decision": "approved_for_schema_validation",
+                "license_status": "verified",
+                "redistribution_status": "not_allowed",
+                "training_use_status": "needs_review",
+            }
+        )
+        data["download_policy"].update(
+            {"allow_local_raw_data": True, "raw_dir": str(raw_dir)}
+        )
+
+    config = load_c31_cmapss_config(_modified_config(tmp_path, update))
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    assert result.readiness_detail == "full_classic_cmapss_validated"
+    assert (
+        result.status
+        == C31TopLevelStatus.SCHEMA_VALIDATED_PENDING_TRAINING_USE_REVIEW
+    )
+    assert result.c32_go_no_go == "No-Go: pending training-use review"
+
+
+def test_c31_full_schema_validation_ready_for_c32_when_research_training_approved(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_full")
+    for subset in ("FD001", "FD002", "FD003", "FD004"):
+        _write_synthetic_subset(raw_dir, subset=subset)
+
+    def update(data: dict) -> None:
+        data["source"]["source_status"] = "verified"
+        data["license_review"].update(
+            {
+                "decision": "approved_for_research_training",
+                "license_status": "verified",
+                "redistribution_status": "not_allowed",
+                "training_use_status": "research_only",
+            }
+        )
+        data["download_policy"].update(
+            {"allow_local_raw_data": True, "raw_dir": str(raw_dir)}
+        )
+
+    config = load_c31_cmapss_config(_modified_config(tmp_path, update))
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    assert result.readiness_detail == "full_classic_cmapss_validated"
+    assert result.status == C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    assert (
+        result.c32_go_no_go
+        == "Go: schema validated and research training/evaluation use approved"
+    )
+
+
+def test_c31_split_guard_blocks_overlapping_trajectory_ids(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        split_assignments={
+            "train": {"cmapss_FD001_train_unit_1"},
+            "validation": {"cmapss_FD001_train_unit_1"},
+            "test": {"cmapss_FD001_test_unit_1"},
+        },
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.mapping_summary is not None
+    assert result.rul_targets != ()
+    assert result.leakage_summary.trajectory_overlap_count == 1
+
+
+def test_c31_input_feature_guard_blocks_rul_target_leakage(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        input_feature_columns=("sensor_01", "rul"),
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.target_columns_in_input == ("rul",)
+
+
+def test_c31_window_adjacency_guard_blocks_cross_split_adjacent_cycles(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        split_assignments={
+            "train": {"cmapss_FD001_train_unit_1"},
+            "validation": {"cmapss_FD001_train_unit_2"},
+            "test": {"cmapss_FD001_test_unit_1"},
+        },
+        window_assignments=[
+            {
+                "trajectory_id": "cmapss_FD001_train_unit_1",
+                "start_cycle": 1,
+                "end_cycle": 2,
+                "split": "train",
+            },
+            {
+                "trajectory_id": "cmapss_FD001_train_unit_1",
+                "start_cycle": 2,
+                "end_cycle": 3,
+                "split": "validation",
+            },
+        ],
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.window_adjacency_leakage_count == 1
+
+
 def test_c31_rul_targets_use_uncapped_train_and_test_formulas(tmp_path, monkeypatch):
     config = load_c31_cmapss_config(
         _approved_local_mapping_config(tmp_path, monkeypatch)

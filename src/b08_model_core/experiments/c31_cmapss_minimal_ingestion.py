@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable, Mapping
 
 import pandas as pd
 import yaml
@@ -59,6 +59,17 @@ _EXPECTED_FORBIDDEN_LEAKAGE_MODES = (
     "trajectory_id_overlap",
     "target_columns_in_input_features",
     "window_adjacency_across_splits",
+)
+_READINESS_FULL_CLASSIC_VALIDATED = "full_classic_cmapss_validated"
+_READINESS_PARTIAL_SUBSET_VALIDATED = "partial_subset_validated"
+_C32_NO_GO_NOT_SCHEMA_VALIDATED = "No-Go: not schema validated"
+_C32_NO_GO_PARTIAL_SUBSET = "No-Go: partial subset only"
+_C32_NO_GO_PENDING_TRAINING_USE_REVIEW = "No-Go: pending training-use review"
+_C32_GO_SCHEMA_VALIDATED_AND_APPROVED = (
+    "Go: schema validated and research training/evaluation use approved"
+)
+_FORBIDDEN_TARGET_INPUT_COLUMNS = frozenset(
+    ("rul", "RUL", "target_rul", "remaining_useful_life")
 )
 _VALID_SOURCE_STATUSES = ("verified", "needs_review", "unavailable", "deprecated")
 _VALID_LICENSE_STATUSES = (
@@ -209,6 +220,21 @@ class C31RulTarget:
 
 
 @dataclass(frozen=True)
+class C31LeakageSummary:
+    trajectory_overlap_count: int = 0
+    target_columns_in_input: tuple[str, ...] = ()
+    window_adjacency_leakage_count: int = 0
+
+    @property
+    def has_leakage(self) -> bool:
+        return (
+            self.trajectory_overlap_count > 0
+            or bool(self.target_columns_in_input)
+            or self.window_adjacency_leakage_count > 0
+        )
+
+
+@dataclass(frozen=True)
 class C31CmapssRunResult:
     stage: str
     dataset_id: str
@@ -219,6 +245,9 @@ class C31CmapssRunResult:
     raw_files_missing: tuple[str, ...]
     mapping_summary: C31MappedObservationSummary | None = None
     rul_targets: tuple[C31RulTarget, ...] = ()
+    readiness_detail: str = ""
+    c32_go_no_go: str = _C32_NO_GO_NOT_SCHEMA_VALIDATED
+    leakage_summary: C31LeakageSummary = C31LeakageSummary()
 
 
 @dataclass(frozen=True)
@@ -275,6 +304,9 @@ def run_c31_cmapss_minimal_ingestion(
     config: C31CmapssConfig,
     *,
     config_path: str | Path | None = None,
+    split_assignments: Mapping[str, Iterable[str]] | None = None,
+    input_feature_columns: Iterable[str] = (),
+    window_assignments: Iterable[Mapping[str, object]] = (),
 ) -> C31CmapssRunResult:
     blocked_reasons: list[C31BlockedReason] = []
     if config.source.source_status != "verified":
@@ -338,21 +370,159 @@ def run_c31_cmapss_minimal_ingestion(
     if not mapping_summary.required_schema_valid:
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_MAPPING_SCHEMA)
 
+    effective_split_assignments = (
+        split_assignments
+        if split_assignments is not None
+        else _default_split_assignments(mapping_summary.trajectory_ids)
+    )
+    leakage_summary = _check_leakage(
+        effective_split_assignments,
+        input_feature_columns,
+        window_assignments,
+    )
+    if leakage_summary.has_leakage:
+        blocked_reasons.append(C31BlockedReason.BLOCKED_BY_LEAKAGE_GUARD)
+
+    readiness_detail = ""
+    c32_go_no_go = _C32_NO_GO_NOT_SCHEMA_VALIDATED
+    status = C31TopLevelStatus.BLOCKED
+    if not blocked_reasons:
+        status, readiness_detail, c32_go_no_go = _validated_status(config)
+
     return C31CmapssRunResult(
         stage=config.stage,
         dataset_id=config.dataset_id,
         config_path=config_path,
-        status=(
-            C31TopLevelStatus.BLOCKED
-            if blocked_reasons
-            else C31TopLevelStatus.READY_FOR_LOCAL_MAPPING
-        ),
+        status=status,
         blocked_reasons=tuple(blocked_reasons),
         raw_files_present=present,
         raw_files_missing=missing,
         mapping_summary=mapping_summary,
         rul_targets=rul_targets,
+        readiness_detail=readiness_detail,
+        c32_go_no_go=c32_go_no_go,
+        leakage_summary=leakage_summary,
     )
+
+
+def _validated_status(
+    config: C31CmapssConfig,
+) -> tuple[C31TopLevelStatus, str, str]:
+    if tuple(config.download_policy.expected_files) != expected_cmapss_files():
+        return (
+            C31TopLevelStatus.READY_FOR_LOCAL_MAPPING,
+            _READINESS_PARTIAL_SUBSET_VALIDATED,
+            _C32_NO_GO_PARTIAL_SUBSET,
+        )
+    if (
+        config.license_review.decision
+        == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
+    ):
+        return (
+            C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32,
+            _READINESS_FULL_CLASSIC_VALIDATED,
+            _C32_GO_SCHEMA_VALIDATED_AND_APPROVED,
+        )
+    return (
+        C31TopLevelStatus.SCHEMA_VALIDATED_PENDING_TRAINING_USE_REVIEW,
+        _READINESS_FULL_CLASSIC_VALIDATED,
+        _C32_NO_GO_PENDING_TRAINING_USE_REVIEW,
+    )
+
+
+def _default_split_assignments(
+    trajectory_ids: Iterable[str],
+) -> dict[str, tuple[str, ...]]:
+    train: list[str] = []
+    test: list[str] = []
+    for trajectory_id in trajectory_ids:
+        if "_test_" in trajectory_id:
+            test.append(trajectory_id)
+        else:
+            train.append(trajectory_id)
+    return {
+        "train": tuple(sorted(train)),
+        "test": tuple(sorted(test)),
+    }
+
+
+def _check_leakage(
+    split_assignments: Mapping[str, Iterable[str]],
+    input_feature_columns: Iterable[str],
+    window_assignments: Iterable[Mapping[str, object]],
+) -> C31LeakageSummary:
+    split_sets = {
+        split: set(trajectory_ids)
+        for split, trajectory_ids in split_assignments.items()
+    }
+    trajectory_overlap_count = _trajectory_overlap_count(split_sets)
+    target_columns_in_input = tuple(
+        column
+        for column in input_feature_columns
+        if column in _FORBIDDEN_TARGET_INPUT_COLUMNS
+    )
+    window_adjacency_leakage_count = _window_adjacency_leakage_count(
+        window_assignments
+    )
+    return C31LeakageSummary(
+        trajectory_overlap_count=trajectory_overlap_count,
+        target_columns_in_input=target_columns_in_input,
+        window_adjacency_leakage_count=window_adjacency_leakage_count,
+    )
+
+
+def _trajectory_overlap_count(split_sets: Mapping[str, set[str]]) -> int:
+    seen: set[str] = set()
+    overlapping: set[str] = set()
+    for trajectory_ids in split_sets.values():
+        overlapping.update(seen.intersection(trajectory_ids))
+        seen.update(trajectory_ids)
+    return len(overlapping)
+
+
+def _window_adjacency_leakage_count(
+    window_assignments: Iterable[Mapping[str, object]],
+) -> int:
+    by_trajectory: dict[str, list[tuple[str, int, int]]] = {}
+    for window in window_assignments:
+        trajectory_id = window.get("trajectory_id")
+        split = window.get("split")
+        start_cycle = window.get("start_cycle")
+        end_cycle = window.get("end_cycle")
+        if (
+            not isinstance(trajectory_id, str)
+            or not isinstance(split, str)
+            or not isinstance(start_cycle, int)
+            or not isinstance(end_cycle, int)
+        ):
+            continue
+        by_trajectory.setdefault(trajectory_id, []).append(
+            (split, start_cycle, end_cycle)
+        )
+
+    leakage_count = 0
+    for windows in by_trajectory.values():
+        for index, left in enumerate(windows):
+            for right in windows[index + 1 :]:
+                if left[0] == right[0]:
+                    continue
+                if _cycle_ranges_overlap_or_touch(
+                    left[1],
+                    left[2],
+                    right[1],
+                    right[2],
+                ):
+                    leakage_count += 1
+    return leakage_count
+
+
+def _cycle_ranges_overlap_or_touch(
+    left_start: int,
+    left_end: int,
+    right_start: int,
+    right_end: int,
+) -> bool:
+    return max(left_start, right_start) <= min(left_end, right_end)
 
 
 def _parse_cmapss_data_file(
