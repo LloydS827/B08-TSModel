@@ -850,6 +850,26 @@ def test_c31_report_marks_local_raw_mapping_complete_when_c32_ready(
     assert "Current default C3.2 gate" not in text
 
 
+def test_c31_report_does_not_mark_local_raw_mapping_complete_when_leakage_blocked(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(_research_approved_full_config(tmp_path, monkeypatch))
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        split_assignments={"train": ()},
+    )
+    text = render_c31_cmapss_report(result)
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert "Local raw mapping review: completed for configured raw files." not in text
+    assert "Local raw mapping review: blocked by schema, RUL, or leakage checks." in text
+
+
 def test_c31_full_schema_validation_blocks_incomplete_explicit_split(
     tmp_path,
     monkeypatch,

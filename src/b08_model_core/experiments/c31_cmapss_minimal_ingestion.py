@@ -607,9 +607,14 @@ def render_c31_cmapss_report(result: C31CmapssRunResult) -> str:
             and license_review.decision
             == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
             and mapping_summary is not None
+            and result.status == C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
         ):
             local_raw_decision = (
                 "Local raw mapping review: completed for configured raw files."
+            )
+        elif mapping_summary is not None and blocked_reasons:
+            local_raw_decision = (
+                "Local raw mapping review: blocked by schema, RUL, or leakage checks."
             )
         elif local_raw_policy_blocked:
             local_raw_decision = (
