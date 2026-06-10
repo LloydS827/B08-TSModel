@@ -572,6 +572,35 @@ def test_c31_rul_targets_use_uncapped_train_and_test_formulas(tmp_path, monkeypa
     assert result.mapping_summary.uses_capped_rul is False
 
 
+def test_c31_rul_targets_align_test_units_by_file_order(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    test_path = raw_dir / "test_FD001.txt"
+    lines = test_path.read_text(encoding="utf-8").splitlines()
+    unit_2_line = lines[0].replace("1 1", "2 1", 1)
+    test_path.write_text(
+        "\n".join([*lines, unit_2_line]) + "\n",
+        encoding="utf-8",
+    )
+    (raw_dir / "RUL_FD001.txt").write_text("10\n20\n", encoding="utf-8")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+    by_key = {
+        (target.trajectory_id, target.cycle_index): target.rul
+        for target in result.rul_targets
+    }
+
+    assert by_key[("cmapss_FD001_test_unit_1", 1)] == 11
+    assert by_key[("cmapss_FD001_test_unit_1", 2)] == 10
+    assert by_key[("cmapss_FD001_test_unit_2", 1)] == 20
+
+
 def test_c31_blocks_when_approved_local_raw_files_are_missing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
@@ -669,6 +698,78 @@ def test_c31_blocks_test_units_when_unit_block_is_not_contiguous(
         encoding="utf-8",
     )
     (raw_dir / "RUL_FD001.txt").write_text("10\n20\n", encoding="utf-8")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+def test_c31_blocks_test_units_when_unit_ids_skip_values(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    test_path = raw_dir / "test_FD001.txt"
+    lines = test_path.read_text(encoding="utf-8").splitlines()
+    unit_3_line = lines[0].replace("1 1", "3 1", 1)
+    test_path.write_text(
+        "\n".join([*lines, unit_3_line]) + "\n",
+        encoding="utf-8",
+    )
+    (raw_dir / "RUL_FD001.txt").write_text("10\n30\n", encoding="utf-8")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+@pytest.mark.parametrize("filename", ["train_FD001.txt", "test_FD001.txt"])
+def test_c31_blocks_invalid_utf8_raw_data_files(tmp_path, monkeypatch, filename):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    (raw_dir / filename).write_bytes(b"\xff\xfe\xfa")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+def test_c31_blocks_invalid_utf8_rul_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    (raw_dir / "RUL_FD001.txt").write_bytes(b"\xff\xfe\xfa")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+def test_c31_blocks_rul_row_count_mismatch(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    (raw_dir / "RUL_FD001.txt").write_text("5\n6\n", encoding="utf-8")
     path = _modified_config(
         tmp_path,
         lambda data: _configure_approved_fd001_mapping(data, raw_dir),

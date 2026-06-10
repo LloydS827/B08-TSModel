@@ -364,7 +364,7 @@ def _parse_cmapss_data_file(
     seen_cycles: set[tuple[int, int]] = set()
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise _C31RawSchemaMismatch(str(exc)) from exc
 
     for line_number, line in enumerate(lines, start=1):
@@ -425,7 +425,7 @@ def _parse_rul_file(path: Path) -> tuple[int, ...]:
     values: list[int] = []
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise _C31RawSchemaMismatch(str(exc)) from exc
 
     for line_number, line in enumerate(lines, start=1):
@@ -628,6 +628,8 @@ def _test_units_in_file_order(
         current_unit = row.unit_id
     if tuple(units) != tuple(sorted(units)):
         raise _C31RawSchemaMismatch("test units must appear in ascending order")
+    if tuple(units) != tuple(range(1, len(units) + 1)):
+        raise _C31RawSchemaMismatch("test units must be contiguous from unit 1")
     return tuple(units)
 
 
