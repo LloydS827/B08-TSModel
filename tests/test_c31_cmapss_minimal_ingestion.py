@@ -3,12 +3,14 @@ from pathlib import Path
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.experiments.c31_cmapss_minimal_ingestion import (
     C31CmapssConfigError,
     C31LicenseDecision,
     C31TopLevelStatus,
     expected_cmapss_files,
     load_c31_cmapss_config,
+    render_c31_cmapss_report,
     run_c31_cmapss_minimal_ingestion,
 )
 
@@ -85,6 +87,56 @@ def test_c31_default_runner_blocks_without_reading_raw_data():
     assert "blocked_by_license_review" in [reason.value for reason in result.blocked_reasons]
     assert result.raw_files_present == ()
     assert result.raw_files_missing == tuple(config.download_policy.expected_files)
+
+
+def test_c31_report_contains_required_sections_for_default_config():
+    config = load_c31_cmapss_config(_DEFAULT_CONFIG)
+    result = run_c31_cmapss_minimal_ingestion(config, config_path=_DEFAULT_CONFIG)
+
+    text = render_c31_cmapss_report(result)
+
+    required_sections = (
+        "# C3.1 NASA C-MAPSS Minimal Ingestion Report",
+        "## C3.1 Summary",
+        "## Source And License Preflight",
+        "## Source Calibration Notes",
+        "## Download Boundary And Local Paths",
+        "## Expected C-MAPSS Files",
+        "## Raw File Presence / Download Status",
+        "## Schema Mapping Dry-Run",
+        "## Canonical Observation Compatibility",
+        "## RUL / Degradation Target Metadata",
+        "## Split Policy And Leakage Guard",
+        "## Supported Tasks And Metrics",
+        "## Invalid Claims",
+        "## C3.2 Go / No-Go",
+    )
+    for section in required_sections:
+        assert section in text
+    assert "不下载公开数据，不提交公开数据或派生 parquet，不运行模型训练。" in text
+    assert "blocked" in text
+    assert "blocked_by_license_review" in text
+
+
+def test_cli_c_stage_c31_writes_default_preflight_report(tmp_path):
+    output = tmp_path / "c31.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c31",
+            "--config",
+            "configs/c_stage_c31_cmapss_minimal_ingestion.yaml",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    text = output.read_text(encoding="utf-8")
+    assert "C3.1 NASA C-MAPSS Minimal Ingestion Report" in text
+    assert "blocked" in text
+    assert "blocked_by_license_review" in text
 
 
 def test_c31_default_runner_reports_input_feature_leakage_while_preflight_blocked():

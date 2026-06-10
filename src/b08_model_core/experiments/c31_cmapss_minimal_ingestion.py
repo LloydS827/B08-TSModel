@@ -469,6 +469,161 @@ def _validated_status(
     )
 
 
+def render_c31_cmapss_report(result: C31CmapssRunResult) -> str:
+    blocked_reasons = tuple(reason.value for reason in result.blocked_reasons)
+    expected_files = tuple(
+        dict.fromkeys((*result.raw_files_present, *result.raw_files_missing))
+    )
+    mapping_summary = result.mapping_summary
+    leakage = result.leakage_summary
+    mapping_status = "not_run"
+    if mapping_summary is not None:
+        mapping_status = (
+            "schema_valid"
+            if mapping_summary.required_schema_valid
+            else "schema_invalid"
+        )
+
+    lines = [
+        "# C3.1 NASA C-MAPSS Minimal Ingestion Report",
+        "",
+        "不下载公开数据，不提交公开数据或派生 parquet，不运行模型训练。",
+        "",
+        "## C3.1 Summary",
+        "",
+        f"- Stage: {result.stage}",
+        f"- Dataset: {result.dataset_id}",
+        f"- Config: {_c31_report_cell(result.config_path or 'in_memory')}",
+        f"- Status: {result.status.value}",
+        f"- Blocked reasons: {_c31_join(blocked_reasons)}",
+        f"- Readiness detail: {result.readiness_detail or 'not_ready'}",
+        "",
+        "## Source And License Preflight",
+        "",
+        "| Check | Status | Evidence |",
+        "| --- | --- | --- |",
+        (
+            f"| source_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value)} "
+            f"| blocked_by_source_review present: {C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value in blocked_reasons} |"
+        ),
+        (
+            f"| license_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value)} "
+            f"| blocked_by_license_review present: {C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value in blocked_reasons} |"
+        ),
+        "| training_or_evaluation | not_run | report is preflight only |",
+        "",
+        "## Source Calibration Notes",
+        "",
+        "- Official source and license calibration are represented by the config preflight result.",
+        "- Calibration does not imply download approval, redistribution approval, training approval, or benchmark validity.",
+        "",
+        "## Download Boundary And Local Paths",
+        "",
+        f"- Protected raw boundary: {_PROTECTED_RAW_DIR}",
+        f"- Protected processed boundary: {_PROTECTED_PROCESSED_DIR}",
+        "- Network/download/write policy: controlled by config; this report command only writes the requested report.",
+        f"- Raw files present: {len(result.raw_files_present)}",
+        f"- Raw files missing: {len(result.raw_files_missing)}",
+        "",
+        "## Expected C-MAPSS Files",
+        "",
+    ]
+    lines.extend(f"- {file_name}" for file_name in expected_files)
+    if not expected_files:
+        lines.append("- none")
+
+    lines.extend(
+        [
+            "",
+            "## Raw File Presence / Download Status",
+            "",
+            "| File | Status |",
+            "| --- | --- |",
+        ]
+    )
+    for file_name in expected_files:
+        status = "present" if file_name in result.raw_files_present else "missing"
+        lines.append(f"| {_c31_report_cell(file_name)} | {status} |")
+    if not expected_files:
+        lines.append("| none | not_checked |")
+
+    lines.extend(
+        [
+            "",
+            "## Schema Mapping Dry-Run",
+            "",
+            f"- Mapping status: {mapping_status}",
+            f"- Observation rows: {mapping_summary.observation_rows if mapping_summary else 0}",
+            f"- Trajectory count: {mapping_summary.trajectory_count if mapping_summary else 0}",
+            (
+                "- Pseudo timestamp rule: "
+                f"{mapping_summary.pseudo_timestamp_rule if mapping_summary else _PSEUDO_TIMESTAMP_RULE}"
+            ),
+            "",
+            "## Canonical Observation Compatibility",
+            "",
+            (
+                "- Required observation schema valid: "
+                f"{mapping_summary.required_schema_valid if mapping_summary else False}"
+            ),
+            (
+                "- Trajectory ids sampled: "
+                f"{_c31_join((mapping_summary.trajectory_ids[:5] if mapping_summary else ()), empty='none')}"
+            ),
+            "",
+            "## RUL / Degradation Target Metadata",
+            "",
+            f"- RUL target rows: {len(result.rul_targets)}",
+            f"- Uses capped RUL: {mapping_summary.uses_capped_rul if mapping_summary else False}",
+            "- Train RUL semantics: max cycle per train unit minus current cycle.",
+            "- Test RUL semantics: final RUL file value plus observed test max cycle minus current cycle.",
+            "",
+            "## Split Policy And Leakage Guard",
+            "",
+            "| Guard | Count / Values |",
+            "| --- | --- |",
+            f"| trajectory_overlap_count | {leakage.trajectory_overlap_count} |",
+            f"| duplicate_split_trajectory_count | {leakage.duplicate_split_trajectory_count} |",
+            f"| missing_split_trajectory_count | {leakage.missing_split_trajectory_count} |",
+            f"| unknown_split_trajectory_count | {leakage.unknown_split_trajectory_count} |",
+            f"| target_columns_in_input | {_c31_join(leakage.target_columns_in_input)} |",
+            f"| window_adjacency_leakage_count | {leakage.window_adjacency_leakage_count} |",
+            f"| malformed_window_count | {leakage.malformed_window_count} |",
+            "",
+            "## Supported Tasks And Metrics",
+            "",
+            "- Supported in C3.1: source/license preflight, local raw presence audit, schema mapping dry-run, RUL target metadata, split leakage guard.",
+            "- Not supported in C3.1: public data download, processed parquet submission, model training, benchmark evaluation, metric claims.",
+            "",
+            "## Invalid Claims",
+            "",
+            "- Do not claim that public C-MAPSS raw files were downloaded by this command.",
+            "- Do not claim that public data or derived parquet files were committed by this command.",
+            "- Do not claim model training, model scoring, or benchmark metrics from this report.",
+            "",
+            "## C3.2 Go / No-Go",
+            "",
+            f"- Decision: {result.c32_go_no_go}",
+            f"- Status: {result.status.value}",
+            f"- Blocking reasons: {_c31_join(blocked_reasons)}",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _c31_join(values: Iterable[object], *, empty: str = "none") -> str:
+    rendered = [str(value) for value in values]
+    return ", ".join(rendered) if rendered else empty
+
+
+def _c31_block_status(blocked_reasons: tuple[str, ...], reason: str) -> str:
+    return "blocked" if reason in blocked_reasons else "clear"
+
+
+def _c31_report_cell(value: object) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
 def _default_split_assignments(
     trajectory_ids: Iterable[str],
 ) -> dict[str, tuple[str, ...]]:
