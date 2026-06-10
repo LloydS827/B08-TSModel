@@ -602,15 +602,25 @@ def render_c31_cmapss_report(result: C31CmapssRunResult) -> str:
             and C31BlockedReason.BLOCKED_BY_DOWNLOAD_POLICY.value in blocked_reasons
             and mapping_summary is None
         )
-        local_raw_decision = (
-            "Local raw opt-in: eligible for a separate explicit opt-in review, "
-            "but disabled in the default configuration."
-            if local_raw_policy_blocked
-            else (
+        if (
+            license_review is not None
+            and license_review.decision
+            == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
+            and mapping_summary is not None
+        ):
+            local_raw_decision = (
+                "Local raw mapping review: completed for configured raw files."
+            )
+        elif local_raw_policy_blocked:
+            local_raw_decision = (
+                "Local raw opt-in: eligible for a separate explicit opt-in review, "
+                "but disabled in the default configuration."
+            )
+        else:
+            local_raw_decision = (
                 "Local raw opt-in: blocked until license, redistribution, and "
                 "training-use review are resolved."
             )
-        )
         lines.extend(
             [
                 "",

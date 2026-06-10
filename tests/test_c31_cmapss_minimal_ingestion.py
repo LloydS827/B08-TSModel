@@ -835,6 +835,21 @@ def test_c31_full_schema_validation_ready_for_c32_when_research_training_approve
     )
 
 
+def test_c31_report_marks_local_raw_mapping_complete_when_c32_ready(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(_research_approved_full_config(tmp_path, monkeypatch))
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+    text = render_c31_cmapss_report(result)
+
+    assert result.status == C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    assert "Local raw mapping review: completed for configured raw files." in text
+    assert "Local raw opt-in: blocked until license" not in text
+    assert "Current default C3.2 gate" not in text
+
+
 def test_c31_full_schema_validation_blocks_incomplete_explicit_split(
     tmp_path,
     monkeypatch,
