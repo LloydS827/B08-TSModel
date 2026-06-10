@@ -789,6 +789,39 @@ def test_c31_full_schema_validation_blocks_generator_malformed_window(
     assert result.leakage_summary.malformed_window_count == 1
 
 
+def test_c31_full_schema_validation_accepts_generator_split_assignments(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(
+        _research_approved_full_config(tmp_path, monkeypatch)
+    )
+
+    def train_trajectories():
+        for subset in ("FD001", "FD002", "FD003", "FD004"):
+            yield f"cmapss_{subset}_train_unit_1"
+            yield f"cmapss_{subset}_train_unit_2"
+
+    def test_trajectories():
+        for subset in ("FD001", "FD002", "FD003", "FD004"):
+            yield f"cmapss_{subset}_test_unit_1"
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        split_assignments={
+            "train": train_trajectories(),
+            "test": test_trajectories(),
+        },
+    )
+
+    assert result.status == C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    assert "blocked_by_leakage_guard" not in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.missing_split_trajectory_count == 0
+    assert result.leakage_summary.unknown_split_trajectory_count == 0
+
+
 def test_c31_split_guard_blocks_overlapping_trajectory_ids(tmp_path, monkeypatch):
     config = load_c31_cmapss_config(
         _approved_local_mapping_config(tmp_path, monkeypatch)
@@ -855,6 +888,39 @@ def test_c31_window_adjacency_guard_blocks_cross_split_adjacent_cycles(
                 "trajectory_id": "cmapss_FD001_train_unit_1",
                 "start_cycle": 2,
                 "end_cycle": 3,
+                "split": "validation",
+            },
+        ],
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.window_adjacency_leakage_count == 1
+
+
+def test_c31_window_adjacency_guard_blocks_strictly_adjacent_cycles(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        window_assignments=[
+            {
+                "trajectory_id": "cmapss_FD001_train_unit_1",
+                "start_cycle": 1,
+                "end_cycle": 2,
+                "split": "train",
+            },
+            {
+                "trajectory_id": "cmapss_FD001_train_unit_1",
+                "start_cycle": 3,
+                "end_cycle": 4,
                 "split": "validation",
             },
         ],

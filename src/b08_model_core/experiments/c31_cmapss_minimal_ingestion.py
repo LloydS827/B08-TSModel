@@ -316,6 +316,11 @@ def run_c31_cmapss_minimal_ingestion(
     input_feature_columns: Iterable[str] = (),
     window_assignments: Iterable[Mapping[str, object]] = (),
 ) -> C31CmapssRunResult:
+    if split_assignments is not None:
+        split_assignments = {
+            split: tuple(trajectory_ids)
+            for split, trajectory_ids in split_assignments.items()
+        }
     input_feature_columns = tuple(input_feature_columns)
     window_assignments = tuple(window_assignments)
     blocked_reasons: list[C31BlockedReason] = []
@@ -607,7 +612,7 @@ def _cycle_ranges_overlap_or_touch(
     right_start: int,
     right_end: int,
 ) -> bool:
-    return max(left_start, right_start) <= min(left_end, right_end)
+    return max(left_start, right_start) <= min(left_end, right_end) + 1
 
 
 def _parse_cmapss_data_file(
