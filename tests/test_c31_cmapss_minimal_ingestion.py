@@ -47,6 +47,34 @@ def test_c31_default_config_is_offline_and_lists_classic_cmapss_files():
     assert config.outputs.report == Path("reports/c_stage_c31_cmapss_minimal_ingestion.md")
 
 
+def test_c31_rejects_duplicate_yaml_mapping_keys(tmp_path):
+    text = _DEFAULT_CONFIG.read_text(encoding="utf-8").replace(
+        "  allow_network: false\n  allow_download: false\n",
+        "  allow_network: false\n  allow_network: false\n  allow_download: false\n",
+    )
+    path = tmp_path / "duplicate_key.yaml"
+    path.write_text(text, encoding="utf-8")
+
+    with pytest.raises(C31CmapssConfigError, match="duplicate|YAML|allow_network"):
+        load_c31_cmapss_config(path)
+
+
+def test_c31_wraps_malformed_yaml_errors(tmp_path):
+    path = tmp_path / "malformed.yaml"
+    path.write_text(
+        """
+stage: C3_1_cmapss_minimal_ingestion
+dataset_id: nasa_cmapss
+download_policy:
+  expected_files: [train_FD001.txt
+""",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(C31CmapssConfigError, match="YAML"):
+        load_c31_cmapss_config(path)
+
+
 def test_c31_default_runner_blocks_without_reading_raw_data():
     config = load_c31_cmapss_config(_DEFAULT_CONFIG)
 
