@@ -234,6 +234,8 @@ allow_local_raw_data: false
 allow_write_processed: false
 ```
 
+2026-06-10 source/license review 见 [C3.1 C-MAPSS Source And License Review](docs/reviews/2026-06-10-c31-cmapss-source-license-review.md)。当前结论是 NASA PCoE #6 source 和 download target 已完成校准，但 license / redistribution / research training-evaluation use 仍未明确；local raw opt-in 和 C3.2 继续 blocked。
+
 默认路径不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练。只有显式 opt-in 且 source/license/training-use 边界被记录后，才允许读取 ignored 本机数据目录或生成 ignored 派生产物。
 
 ## 项目边界

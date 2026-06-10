@@ -1,10 +1,10 @@
 stage: C3_1_cmapss_minimal_ingestion
 dataset_id: nasa_cmapss
 source:
-  primary_source_name: NASA PCoE #6 Turbofan Engine Degradation Simulation Data Set
+  primary_source_name: "NASA PCoE #6 Turbofan Engine Degradation Simulation Data Set"
   primary_source_url: https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/
   download_target_url: https://phm-datasets.s3.amazonaws.com/NASA/6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip
-  source_status: needs_review
+  source_status: verified
   citation: "Saxena, A., Goebel, K., Simon, D., and Eklund, N. Damage propagation modeling for aircraft engine run-to-failure simulation. 2008."
   calibration_sources:
     - name: NASA Open Data Portal C-MAPSS Aircraft Engine Simulator Data

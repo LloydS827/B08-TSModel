@@ -251,6 +251,8 @@ class C31CmapssRunResult:
     blocked_reasons: tuple[C31BlockedReason, ...]
     raw_files_present: tuple[str, ...]
     raw_files_missing: tuple[str, ...]
+    source: C31Source | None = None
+    license_review: C31LicenseReview | None = None
     mapping_summary: C31MappedObservationSummary | None = None
     rul_targets: tuple[C31RulTarget, ...] = ()
     readiness_detail: str = ""
@@ -347,6 +349,8 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=(),
             raw_files_missing=tuple(config.download_policy.expected_files),
+            source=config.source,
+            license_review=config.license_review,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -361,6 +365,8 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=(),
             raw_files_missing=tuple(config.download_policy.expected_files),
+            source=config.source,
+            license_review=config.license_review,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -376,6 +382,8 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=present,
             raw_files_missing=missing,
+            source=config.source,
+            license_review=config.license_review,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -392,6 +400,8 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=present,
             raw_files_missing=missing,
+            source=config.source,
+            license_review=config.license_review,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -425,6 +435,8 @@ def run_c31_cmapss_minimal_ingestion(
         blocked_reasons=tuple(blocked_reasons),
         raw_files_present=present,
         raw_files_missing=missing,
+        source=config.source,
+        license_review=config.license_review,
         mapping_summary=mapping_summary,
         rul_targets=rul_targets,
         readiness_detail=readiness_detail,
@@ -500,34 +512,78 @@ def render_c31_cmapss_report(result: C31CmapssRunResult) -> str:
         "",
         "## Source And License Preflight",
         "",
-        "| Check | Status | Evidence |",
-        "| --- | --- | --- |",
-        (
-            f"| source_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value)} "
-            f"| blocked_by_source_review present: {C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value in blocked_reasons} |"
-        ),
-        (
-            f"| license_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value)} "
-            f"| blocked_by_license_review present: {C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value in blocked_reasons} |"
-        ),
-        "| training_or_evaluation | not_run | report is preflight only |",
-        "",
-        "## Source Calibration Notes",
-        "",
-        "- Official source and license calibration are represented by the config preflight result.",
-        "- Calibration does not imply download approval, redistribution approval, training approval, or benchmark validity.",
-        "",
-        "## Download Boundary And Local Paths",
-        "",
-        f"- Protected raw boundary: {_PROTECTED_RAW_DIR}",
-        f"- Protected processed boundary: {_PROTECTED_PROCESSED_DIR}",
-        "- Network/download/write policy: controlled by config; this report command only writes the requested report.",
-        f"- Raw files present: {len(result.raw_files_present)}",
-        f"- Raw files missing: {len(result.raw_files_missing)}",
-        "",
-        "## Expected C-MAPSS Files",
-        "",
     ]
+    source = result.source
+    license_review = result.license_review
+    if source is not None or license_review is not None:
+        lines.extend(
+            [
+                "| Field | Value |",
+                "| --- | --- |",
+            ]
+        )
+        if source is not None:
+            lines.extend(
+                [
+                    f"| primary_source | {_c31_report_cell(source.primary_source_name)} |",
+                    f"| primary_source_url | {_c31_report_cell(source.primary_source_url)} |",
+                    f"| download_target_url | {_c31_report_cell(source.download_target_url)} |",
+                    f"| source_status | {_c31_report_cell(source.source_status)} |",
+                    f"| citation | {_c31_report_cell(source.citation)} |",
+                ]
+            )
+        if license_review is not None:
+            lines.extend(
+                [
+                    f"| citation_required | {str(license_review.citation_required).lower()} |",
+                    f"| license_decision | {_c31_report_cell(license_review.decision.value)} |",
+                    f"| license_status | {_c31_report_cell(license_review.license_status)} |",
+                    f"| redistribution_status | {_c31_report_cell(license_review.redistribution_status)} |",
+                    f"| training_use_status | {_c31_report_cell(license_review.training_use_status)} |",
+                ]
+            )
+        lines.extend(
+            [
+                "",
+                "Local raw opt-in: blocked until license, redistribution, and training-use review are resolved.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "| Check | Status | Evidence |",
+            "| --- | --- | --- |",
+            (
+                f"| source_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value)} "
+                f"| blocked_by_source_review present: {C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value in blocked_reasons} |"
+            ),
+            (
+                f"| license_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value)} "
+                f"| blocked_by_license_review present: {C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value in blocked_reasons} |"
+            ),
+            "| training_or_evaluation | not_run | report is preflight only |",
+            "",
+        ]
+    )
+    lines.extend(
+        [
+            "## Source Calibration Notes",
+            "",
+            "- Official source and license calibration are represented by the config preflight result.",
+            "- Calibration does not imply download approval, redistribution approval, training approval, or benchmark validity.",
+            "",
+            "## Download Boundary And Local Paths",
+            "",
+            f"- Protected raw boundary: {_PROTECTED_RAW_DIR}",
+            f"- Protected processed boundary: {_PROTECTED_PROCESSED_DIR}",
+            "- Network/download/write policy: controlled by config; this report command only writes the requested report.",
+            f"- Raw files present: {len(result.raw_files_present)}",
+            f"- Raw files missing: {len(result.raw_files_missing)}",
+            "",
+            "## Expected C-MAPSS Files",
+            "",
+        ]
+    )
     lines.extend(f"- {file_name}" for file_name in expected_files)
     if not expected_files:
         lines.append("- none")
