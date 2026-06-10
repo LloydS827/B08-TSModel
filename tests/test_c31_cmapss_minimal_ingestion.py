@@ -508,6 +508,7 @@ def test_c31_maps_synthetic_subset_to_canonical_observations(tmp_path, monkeypat
 
     result = run_c31_cmapss_minimal_ingestion(config)
 
+    assert result.status == C31TopLevelStatus.READY_FOR_LOCAL_MAPPING
     assert result.mapping_summary is not None
     assert result.mapping_summary.observation_rows == 5 * 24
     assert result.mapping_summary.trajectory_count == 3

@@ -337,38 +337,21 @@ def run_c31_cmapss_minimal_ingestion(
     if not mapping_summary.required_schema_valid:
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_MAPPING_SCHEMA)
 
-    status = _status_after_mapping(config, blocked_reasons)
-
     return C31CmapssRunResult(
         stage=config.stage,
         dataset_id=config.dataset_id,
         config_path=config_path,
-        status=status,
+        status=(
+            C31TopLevelStatus.BLOCKED
+            if blocked_reasons
+            else C31TopLevelStatus.READY_FOR_LOCAL_MAPPING
+        ),
         blocked_reasons=tuple(blocked_reasons),
         raw_files_present=present,
         raw_files_missing=missing,
         mapping_summary=mapping_summary,
         rul_targets=rul_targets,
     )
-
-
-def _status_after_mapping(
-    config: C31CmapssConfig,
-    blocked_reasons: list[C31BlockedReason],
-) -> C31TopLevelStatus:
-    if blocked_reasons:
-        return C31TopLevelStatus.BLOCKED
-    if (
-        config.license_review.decision
-        == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
-    ):
-        return C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
-    if (
-        config.license_review.decision
-        == C31LicenseDecision.APPROVED_FOR_SCHEMA_VALIDATION
-    ):
-        return C31TopLevelStatus.SCHEMA_VALIDATED_PENDING_TRAINING_USE_REVIEW
-    return C31TopLevelStatus.READY_FOR_LOCAL_MAPPING
 
 
 def _parse_cmapss_data_file(
