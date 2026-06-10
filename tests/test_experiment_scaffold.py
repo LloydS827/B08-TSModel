@@ -246,6 +246,7 @@ def test_c31_cmapss_minimal_ingestion_workflow_is_documented():
     assert "Zenodo" in c31_section
     assert "CC BY 4.0" in c31_section
     assert "local raw mapping review" in c31_section
+    assert "C3.2" in c31_section
     assert "local raw opt-in" in c31_section
     assert "blocked" in c31_section
     assert "C3.1" in details
