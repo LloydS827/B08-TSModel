@@ -234,9 +234,9 @@ allow_local_raw_data: false
 allow_write_processed: false
 ```
 
-2026-06-10 source/license review 见 [C3.1 C-MAPSS Source And License Review](docs/reviews/2026-06-10-c31-cmapss-source-license-review.md)。当前结论是 NASA PCoE #6 source 和 download target 已完成校准，但 license / redistribution / research training-evaluation use 仍未明确；local raw opt-in 和 C3.2 继续 blocked。
+2026-06-10 source/license review 见 [C3.1 C-MAPSS Source And License Review](docs/reviews/2026-06-10-c31-cmapss-source-license-review.md)；license evidence update 见 [C3.1 C-MAPSS License Evidence Update](docs/reviews/2026-06-10-c31-cmapss-license-evidence-update.md)。当前结论是 NASA PCoE #6 source 和 download target 已完成校准，Zenodo CC BY 4.0 记录已提供可复核授权依据，足以设计下一步 explicit local raw mapping review；默认路径仍不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练。C3.2 仍 blocked，直到完整 schema validation、RUL metadata 和 split/leakage guard 均通过。
 
-默认路径不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练。只有显式 opt-in 且 source/license/training-use 边界被记录后，才允许读取 ignored 本机数据目录或生成 ignored 派生产物。
+默认路径不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练。local raw opt-in 只有在 explicit local raw mapping review 方案被记录后才允许开启；仍只允许读取 ignored 本机数据目录或生成 ignored 派生产物。
 
 ## 项目边界
 

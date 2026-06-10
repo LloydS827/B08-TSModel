@@ -45,10 +45,18 @@ def test_c31_default_config_is_offline_and_lists_classic_cmapss_files():
     assert config.download_policy.allow_local_raw_data is False
     assert config.download_policy.allow_write_processed is False
     assert config.source.source_status == "verified"
-    assert config.license_review.decision == C31LicenseDecision.NEEDS_REVIEW
-    assert config.license_review.license_status == "needs_review"
-    assert config.license_review.redistribution_status == "needs_review"
-    assert config.license_review.training_use_status == "needs_review"
+    assert (
+        config.license_review.decision
+        == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
+    )
+    assert config.license_review.license_status == "verified"
+    assert config.license_review.redistribution_status == "allowed"
+    assert config.license_review.training_use_status == "research_only"
+    assert config.license_evidence.record_url == "https://zenodo.org/records/15346912"
+    assert config.license_evidence.doi == "10.5281/zenodo.15346912"
+    assert config.license_evidence.license_id == "cc-by-4.0"
+    assert config.license_evidence.file_key == "CMAPSSData.zip"
+    assert config.license_evidence.file_size_bytes == 12425978
     assert len(config.download_policy.expected_files) == 12
     assert config.download_policy.expected_files == expected_cmapss_files()
     assert config.outputs.report == Path("reports/c_stage_c31_cmapss_minimal_ingestion.md")
@@ -88,7 +96,10 @@ def test_c31_default_runner_blocks_without_reading_raw_data():
     result = run_c31_cmapss_minimal_ingestion(config, config_path=_DEFAULT_CONFIG)
 
     assert result.status == C31TopLevelStatus.BLOCKED
-    assert "blocked_by_license_review" in [reason.value for reason in result.blocked_reasons]
+    reasons = [reason.value for reason in result.blocked_reasons]
+    assert "blocked_by_license_review" not in reasons
+    assert reasons == ["blocked_by_download_policy"]
+    assert result.c32_go_no_go == "No-Go: local raw mapping review not executed"
     assert result.raw_files_present == ()
     assert result.raw_files_missing == tuple(config.download_policy.expected_files)
 
@@ -119,7 +130,7 @@ def test_c31_report_contains_required_sections_for_default_config():
         assert section in text
     assert "不下载公开数据，不提交公开数据或派生 parquet，不运行模型训练。" in text
     assert "blocked" in text
-    assert "blocked_by_license_review" in text
+    assert "blocked_by_download_policy" in text
 
 
 def test_c31_report_renders_source_license_decision_details():
@@ -138,13 +149,39 @@ def test_c31_report_renders_source_license_decision_details():
         "6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip"
     ) in text
     assert "Saxena, A., Goebel, K., Simon, D., and Eklund, N." in text
-    assert "| license_decision | needs_review |" in text
-    assert "| redistribution_status | needs_review |" in text
-    assert "| training_use_status | needs_review |" in text
+    assert "| license_decision | approved_for_research_training |" in text
+    assert "| redistribution_status | allowed |" in text
+    assert "| training_use_status | research_only |" in text
     assert (
-        "Local raw opt-in: blocked until license, redistribution, and "
-        "training-use review are resolved."
+        "Local raw opt-in: eligible for a separate explicit opt-in review, "
+        "but disabled in the default configuration."
     ) in text
+
+
+def test_c31_report_renders_license_evidence_and_next_gate():
+    config = load_c31_cmapss_config(_DEFAULT_CONFIG)
+    result = run_c31_cmapss_minimal_ingestion(config, config_path=_DEFAULT_CONFIG)
+
+    text = render_c31_cmapss_report(result)
+
+    assert "https://zenodo.org/records/15346912" in text
+    assert "10.5281/zenodo.15346912" in text
+    assert "Creative Commons Attribution 4.0 International" in text
+    assert "cc-by-4.0" in text
+    assert "CMAPSSData.zip" in text
+    assert "12425978" in text
+    assert "| license_decision | approved_for_research_training |" in text
+    assert "| redistribution_status | allowed |" in text
+    assert "| training_use_status | research_only |" in text
+    assert (
+        "Local raw opt-in: eligible for a separate explicit opt-in review, "
+        "but disabled in the default configuration."
+    ) in text
+    assert (
+        "Current default C3.2 gate: No-Go until local raw mapping review validates "
+        "full schema, RUL metadata, and leakage guard."
+    ) in text
+    assert "blocked_by_license_review" not in text
 
 
 def test_cli_c_stage_c31_writes_default_preflight_report(tmp_path):
@@ -165,7 +202,7 @@ def test_cli_c_stage_c31_writes_default_preflight_report(tmp_path):
     text = output.read_text(encoding="utf-8")
     assert "C3.1 NASA C-MAPSS Minimal Ingestion Report" in text
     assert "blocked" in text
-    assert "blocked_by_license_review" in text
+    assert "blocked_by_download_policy" in text
 
 
 def test_c31_default_runner_reports_input_feature_leakage_while_preflight_blocked():
@@ -178,7 +215,7 @@ def test_c31_default_runner_reports_input_feature_leakage_while_preflight_blocke
     )
 
     assert result.status == C31TopLevelStatus.BLOCKED
-    assert "blocked_by_license_review" in [
+    assert "blocked_by_download_policy" in [
         reason.value for reason in result.blocked_reasons
     ]
     assert "blocked_by_leakage_guard" in [
@@ -249,6 +286,14 @@ def test_c31_source_license_block_does_not_inspect_raw_dir_when_local_raw_enable
     sentinel_raw_dir = Path("data/public/cmapss/raw/sentinel_raw")
 
     def update(data: dict) -> None:
+        data["license_review"].update(
+            {
+                "decision": "needs_review",
+                "license_status": "needs_review",
+                "redistribution_status": "needs_review",
+                "training_use_status": "needs_review",
+            }
+        )
         data["download_policy"].update(
             {
                 "allow_local_raw_data": True,
@@ -379,6 +424,16 @@ def test_c31_rejects_license_fields_with_wrong_semantics(tmp_path, update, match
     path = _modified_config(tmp_path, update)
 
     with pytest.raises(C31CmapssConfigError, match=match):
+        load_c31_cmapss_config(path)
+
+
+def test_c31_rejects_non_positive_license_evidence_file_size(tmp_path):
+    path = _modified_config(
+        tmp_path,
+        lambda data: data["license_evidence"].update({"file_size_bytes": 0}),
+    )
+
+    with pytest.raises(C31CmapssConfigError, match="file_size_bytes"):
         load_c31_cmapss_config(path)
 
 
@@ -778,6 +833,41 @@ def test_c31_full_schema_validation_ready_for_c32_when_research_training_approve
         result.c32_go_no_go
         == "Go: schema validated and research training/evaluation use approved"
     )
+
+
+def test_c31_report_marks_local_raw_mapping_complete_when_c32_ready(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(_research_approved_full_config(tmp_path, monkeypatch))
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+    text = render_c31_cmapss_report(result)
+
+    assert result.status == C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    assert "Local raw mapping review: completed for configured raw files." in text
+    assert "Local raw opt-in: blocked until license" not in text
+    assert "Current default C3.2 gate" not in text
+
+
+def test_c31_report_does_not_mark_local_raw_mapping_complete_when_leakage_blocked(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(_research_approved_full_config(tmp_path, monkeypatch))
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        split_assignments={"train": ()},
+    )
+    text = render_c31_cmapss_report(result)
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert "Local raw mapping review: completed for configured raw files." not in text
+    assert "Local raw mapping review: blocked by schema, RUL, or leakage checks." in text
 
 
 def test_c31_full_schema_validation_blocks_incomplete_explicit_split(
