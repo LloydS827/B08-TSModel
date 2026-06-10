@@ -563,6 +563,29 @@ def _approved_local_mapping_config(tmp_path: Path, monkeypatch) -> Path:
     )
 
 
+def _research_approved_full_config(tmp_path: Path, monkeypatch) -> Path:
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_full")
+    for subset in ("FD001", "FD002", "FD003", "FD004"):
+        _write_synthetic_subset(raw_dir, subset=subset)
+
+    def update(data: dict) -> None:
+        data["source"]["source_status"] = "verified"
+        data["license_review"].update(
+            {
+                "decision": "approved_for_research_training",
+                "license_status": "verified",
+                "redistribution_status": "not_allowed",
+                "training_use_status": "research_only",
+            }
+        )
+        data["download_policy"].update(
+            {"allow_local_raw_data": True, "raw_dir": str(raw_dir)}
+        )
+
+    return _modified_config(tmp_path, update)
+
+
 def _assert_blocked_by_raw_schema_mismatch(result) -> None:
     assert result.status == C31TopLevelStatus.BLOCKED
     assert "blocked_by_raw_schema_mismatch" in [
@@ -710,6 +733,60 @@ def test_c31_full_schema_validation_blocks_incomplete_explicit_split(
         reason.value for reason in result.blocked_reasons
     ]
     assert result.leakage_summary.missing_split_trajectory_count == 12
+
+
+def test_c31_full_schema_validation_blocks_generator_input_feature_leakage(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(
+        _research_approved_full_config(tmp_path, monkeypatch)
+    )
+
+    def input_features():
+        yield "sensor_01"
+        yield "rul"
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        input_feature_columns=input_features(),
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert result.status != C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.target_columns_in_input == ("rul",)
+
+
+def test_c31_full_schema_validation_blocks_generator_malformed_window(
+    tmp_path,
+    monkeypatch,
+):
+    config = load_c31_cmapss_config(
+        _research_approved_full_config(tmp_path, monkeypatch)
+    )
+
+    def windows():
+        yield {
+            "trajectory_id": "cmapss_FD001_train_unit_1",
+            "start_cycle": 3,
+            "end_cycle": 2,
+            "split": "train",
+        }
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        window_assignments=windows(),
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert result.status != C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.malformed_window_count == 1
 
 
 def test_c31_split_guard_blocks_overlapping_trajectory_ids(tmp_path, monkeypatch):

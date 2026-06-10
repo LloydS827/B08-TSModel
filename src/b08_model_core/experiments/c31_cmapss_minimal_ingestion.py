@@ -316,6 +316,8 @@ def run_c31_cmapss_minimal_ingestion(
     input_feature_columns: Iterable[str] = (),
     window_assignments: Iterable[Mapping[str, object]] = (),
 ) -> C31CmapssRunResult:
+    input_feature_columns = tuple(input_feature_columns)
+    window_assignments = tuple(window_assignments)
     blocked_reasons: list[C31BlockedReason] = []
     pre_mapping_leakage_summary = _check_leakage(
         split_assignments or {},
