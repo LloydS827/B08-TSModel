@@ -594,7 +594,7 @@ def _test_rul_targets(
     test_rows: tuple[_C31CmapssRawRow, ...],
     final_test_ruls: tuple[int, ...],
 ) -> tuple[C31RulTarget, ...]:
-    test_units = tuple(sorted({row.unit_id for row in test_rows}))
+    test_units = _test_units_in_file_order(test_rows)
     if len(final_test_ruls) != len(test_units):
         raise _C31RawSchemaMismatch("RUL file row count must match test units")
 
@@ -612,6 +612,23 @@ def _test_rul_targets(
         )
         for row in test_rows
     )
+
+
+def _test_units_in_file_order(
+    test_rows: tuple[_C31CmapssRawRow, ...],
+) -> tuple[int, ...]:
+    units: list[int] = []
+    current_unit: int | None = None
+    for row in test_rows:
+        if row.unit_id == current_unit:
+            continue
+        if row.unit_id in units:
+            raise _C31RawSchemaMismatch("test unit rows must be contiguous blocks")
+        units.append(row.unit_id)
+        current_unit = row.unit_id
+    if tuple(units) != tuple(sorted(units)):
+        raise _C31RawSchemaMismatch("test units must appear in ascending order")
+    return tuple(units)
 
 
 def _last_cycle_by_unit(rows: tuple[_C31CmapssRawRow, ...]) -> dict[int, int]:

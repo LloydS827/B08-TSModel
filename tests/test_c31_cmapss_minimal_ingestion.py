@@ -631,6 +631,55 @@ def test_c31_blocks_duplicate_unit_cycle_rows(tmp_path, monkeypatch, filename):
     _assert_blocked_by_raw_schema_mismatch(result)
 
 
+def test_c31_blocks_test_units_when_first_seen_order_is_not_ascending(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    test_path = raw_dir / "test_FD001.txt"
+    lines = test_path.read_text(encoding="utf-8").splitlines()
+    lines[0] = lines[0].replace("1 1", "2 1", 1)
+    test_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (raw_dir / "RUL_FD001.txt").write_text("20\n10\n", encoding="utf-8")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+def test_c31_blocks_test_units_when_unit_block_is_not_contiguous(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    test_path = raw_dir / "test_FD001.txt"
+    lines = test_path.read_text(encoding="utf-8").splitlines()
+    unit_2_line = lines[0].replace("1 1", "2 1", 1)
+    test_path.write_text(
+        "\n".join([lines[0], unit_2_line, lines[1]]) + "\n",
+        encoding="utf-8",
+    )
+    (raw_dir / "RUL_FD001.txt").write_text("10\n20\n", encoding="utf-8")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
 def test_c31_blocks_extreme_cycle_timestamp_overflow(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
