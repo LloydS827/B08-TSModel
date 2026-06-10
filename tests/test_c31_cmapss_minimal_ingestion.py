@@ -501,6 +501,15 @@ def _approved_local_mapping_config(tmp_path: Path, monkeypatch) -> Path:
     )
 
 
+def _assert_blocked_by_raw_schema_mismatch(result) -> None:
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_raw_schema_mismatch" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.mapping_summary is None
+    assert result.rul_targets == ()
+
+
 def test_c31_maps_synthetic_subset_to_canonical_observations(tmp_path, monkeypatch):
     config = load_c31_cmapss_config(
         _approved_local_mapping_config(tmp_path, monkeypatch)
@@ -576,9 +585,73 @@ def test_c31_blocks_malformed_raw_shape(tmp_path, monkeypatch):
 
     result = run_c31_cmapss_minimal_ingestion(config)
 
-    assert result.status == C31TopLevelStatus.BLOCKED
-    assert "blocked_by_raw_schema_mismatch" in [
-        reason.value for reason in result.blocked_reasons
-    ]
-    assert result.mapping_summary is None
-    assert result.rul_targets == ()
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+def test_c31_blocks_extreme_cycle_timestamp_overflow(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    train_path = raw_dir / "train_FD001.txt"
+    train_path.write_text(
+        train_path.read_text(encoding="utf-8").replace(
+            "1 1 0.1",
+            "1 999999999999999999999999999999 0.1",
+            1,
+        ),
+        encoding="utf-8",
+    )
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+@pytest.mark.parametrize(
+    "raw_prefix",
+    [
+        "0 1",
+        "1 0",
+        "-1 1",
+        "1 -1",
+    ],
+)
+def test_c31_blocks_non_positive_unit_or_cycle(tmp_path, monkeypatch, raw_prefix):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    train_path = raw_dir / "train_FD001.txt"
+    train_path.write_text(
+        train_path.read_text(encoding="utf-8").replace("1 1", raw_prefix, 1),
+        encoding="utf-8",
+    )
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
+def test_c31_blocks_negative_rul(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    (raw_dir / "RUL_FD001.txt").write_text("-1\n", encoding="utf-8")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)

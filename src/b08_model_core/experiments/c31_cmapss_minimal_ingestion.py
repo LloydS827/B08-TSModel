@@ -382,6 +382,14 @@ def _parse_cmapss_data_file(
             raise _C31RawSchemaMismatch(
                 f"{path}:{line_number} contains non-numeric raw values"
             ) from exc
+        if unit_id <= 0:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} unit_id must be positive"
+            )
+        if cycle_index <= 0:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} cycle_index must be positive"
+            )
         if len(settings) != _EXPECTED_SETTING_COUNT:
             raise _C31RawSchemaMismatch(f"{path}:{line_number} has bad settings")
         if len(sensors) != _EXPECTED_SENSOR_COUNT:
@@ -417,11 +425,16 @@ def _parse_rul_file(path: Path) -> tuple[int, ...]:
                 f"{path}:{line_number} expected one RUL column"
             )
         try:
-            values.append(int(columns[0]))
+            value = int(columns[0])
         except ValueError as exc:
             raise _C31RawSchemaMismatch(
                 f"{path}:{line_number} contains non-integer RUL"
             ) from exc
+        if value < 0:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} RUL must be non-negative"
+            )
+        values.append(value)
     if not values:
         raise _C31RawSchemaMismatch(f"{path} has no RUL rows")
     return tuple(values)
@@ -479,10 +492,7 @@ def _observation_rows_for_raw_rows(
             raw_row.file_role,
             raw_row.unit_id,
         )
-        timestamp = pd.Timestamp(_EXPECTED_PSEUDO_TIMESTAMP_START) + pd.to_timedelta(
-            raw_row.cycle_index,
-            unit="s",
-        )
+        timestamp = _pseudo_timestamp_for_cycle(raw_row.cycle_index)
         degradation_label = (
             "run_to_failure_known"
             if raw_row.file_role == "train"
@@ -513,6 +523,18 @@ def _observation_rows_for_raw_rows(
                 )
             )
     return tuple(rows)
+
+
+def _pseudo_timestamp_for_cycle(cycle_index: int) -> pd.Timestamp:
+    try:
+        return pd.Timestamp(_EXPECTED_PSEUDO_TIMESTAMP_START) + pd.to_timedelta(
+            cycle_index,
+            unit="s",
+        )
+    except Exception as exc:
+        raise _C31RawSchemaMismatch(
+            "cycle_index cannot be converted to timestamp"
+        ) from exc
 
 
 def _observation_row(
