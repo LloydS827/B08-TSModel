@@ -241,8 +241,13 @@ def test_c31_cmapss_minimal_ingestion_workflow_is_documented():
     assert "allow_write_processed: false" in c31_section
     assert "不下载公开数据" in c31_section
     assert "不运行模型训练" in c31_section
+    assert "docs/reviews/2026-06-10-c31-cmapss-source-license-review.md" in c31_section
+    assert "local raw opt-in" in c31_section
+    assert "blocked" in c31_section
     assert "C3.1" in details
     assert "NASA C-MAPSS" in details
+    assert "source/license review" in details
+    assert "C3.2" in details
     assert details.count("\n## ") == 3
     assert "## 1. 当前阶段" in details
     assert "## 2. 每日更新" in details

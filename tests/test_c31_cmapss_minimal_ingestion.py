@@ -44,7 +44,11 @@ def test_c31_default_config_is_offline_and_lists_classic_cmapss_files():
     assert config.download_policy.allow_download is False
     assert config.download_policy.allow_local_raw_data is False
     assert config.download_policy.allow_write_processed is False
+    assert config.source.source_status == "verified"
     assert config.license_review.decision == C31LicenseDecision.NEEDS_REVIEW
+    assert config.license_review.license_status == "needs_review"
+    assert config.license_review.redistribution_status == "needs_review"
+    assert config.license_review.training_use_status == "needs_review"
     assert len(config.download_policy.expected_files) == 12
     assert config.download_policy.expected_files == expected_cmapss_files()
     assert config.outputs.report == Path("reports/c_stage_c31_cmapss_minimal_ingestion.md")
@@ -116,6 +120,31 @@ def test_c31_report_contains_required_sections_for_default_config():
     assert "不下载公开数据，不提交公开数据或派生 parquet，不运行模型训练。" in text
     assert "blocked" in text
     assert "blocked_by_license_review" in text
+
+
+def test_c31_report_renders_source_license_decision_details():
+    config = load_c31_cmapss_config(_DEFAULT_CONFIG)
+    result = run_c31_cmapss_minimal_ingestion(config, config_path=_DEFAULT_CONFIG)
+
+    text = render_c31_cmapss_report(result)
+
+    assert "NASA PCoE #6 Turbofan Engine Degradation Simulation Data Set" in text
+    assert (
+        "https://www.nasa.gov/intelligent-systems-division/"
+        "discovery-and-systems-health/pcoe/pcoe-data-set-repository/"
+    ) in text
+    assert (
+        "https://phm-datasets.s3.amazonaws.com/NASA/"
+        "6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip"
+    ) in text
+    assert "Saxena, A., Goebel, K., Simon, D., and Eklund, N." in text
+    assert "| license_decision | needs_review |" in text
+    assert "| redistribution_status | needs_review |" in text
+    assert "| training_use_status | needs_review |" in text
+    assert (
+        "Local raw opt-in: blocked until license, redistribution, and "
+        "training-use review are resolved."
+    ) in text
 
 
 def test_cli_c_stage_c31_writes_default_preflight_report(tmp_path):
@@ -253,22 +282,24 @@ def test_c31_source_license_block_does_not_inspect_raw_dir_when_local_raw_enable
     result = run_c31_cmapss_minimal_ingestion(config, config_path=path)
 
     assert result.status == C31TopLevelStatus.BLOCKED
-    assert "blocked_by_source_review" in [reason.value for reason in result.blocked_reasons]
-    assert "blocked_by_license_review" in [reason.value for reason in result.blocked_reasons]
+    assert [reason.value for reason in result.blocked_reasons] == [
+        "blocked_by_license_review"
+    ]
 
 
 def test_c31_blocks_unapproved_source_even_when_license_is_schema_approved(tmp_path):
-    path = _modified_config(
-        tmp_path,
-        lambda data: data["license_review"].update(
+    def update(data: dict) -> None:
+        data["source"]["source_status"] = "needs_review"
+        data["license_review"].update(
             {
                 "decision": "approved_for_schema_validation",
                 "license_status": "verified",
                 "redistribution_status": "not_allowed",
                 "training_use_status": "needs_review",
             }
-        ),
-    )
+        )
+
+    path = _modified_config(tmp_path, update)
     config = load_c31_cmapss_config(path)
 
     result = run_c31_cmapss_minimal_ingestion(config, config_path=path)
