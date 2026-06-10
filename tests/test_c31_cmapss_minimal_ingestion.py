@@ -330,6 +330,30 @@ def test_c31_rejects_duplicate_mapping_file_roles(tmp_path):
         load_c31_cmapss_config(path)
 
 
+@pytest.mark.parametrize(
+    "file_roles,expected_files",
+    [
+        (["train", "RUL"], ["train_FD001.txt", "RUL_FD001.txt"]),
+        (["train", "test"], ["train_FD001.txt", "test_FD001.txt"]),
+    ],
+)
+def test_c31_rejects_incomplete_mapping_file_roles(
+    tmp_path,
+    file_roles,
+    expected_files,
+):
+    def update(data: dict) -> None:
+        data["mapping_policy"].update(
+            {"subsets": ["FD001"], "file_roles": file_roles}
+        )
+        data["download_policy"]["expected_files"] = expected_files
+
+    path = _modified_config(tmp_path, update)
+
+    with pytest.raises(C31CmapssConfigError, match="file_roles"):
+        load_c31_cmapss_config(path)
+
+
 def test_c31_rejects_full_classic_expected_files_when_subset_order_is_reordered(tmp_path):
     def update(data: dict) -> None:
         data["mapping_policy"].update(
@@ -382,7 +406,7 @@ def test_c31_rejects_full_classic_expected_files_when_file_role_order_is_reorder
         update,
     )
 
-    with pytest.raises(C31CmapssConfigError, match="full classic"):
+    with pytest.raises(C31CmapssConfigError, match="file_roles"):
         load_c31_cmapss_config(path)
 
 

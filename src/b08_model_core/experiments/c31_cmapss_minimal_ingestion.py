@@ -748,6 +748,10 @@ def _load_mapping_policy(raw: dict[str, Any]) -> C31MappingPolicy:
         _validate_allowed(
             file_role, EXPECTED_CMAPSS_FILE_ROLES, "mapping_policy.file_roles"
         )
+    if file_roles != EXPECTED_CMAPSS_FILE_ROLES:
+        raise C31CmapssConfigError(
+            "mapping_policy.file_roles must be exactly train, test, RUL"
+        )
 
     sensor_count = _load_required_int(policy, "sensor_count", "mapping_policy")
     if sensor_count != _EXPECTED_SENSOR_COUNT:
