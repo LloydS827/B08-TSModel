@@ -5,7 +5,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 import yaml
+
+from b08_model_core.tasks.schema import validate_observation_frame
 
 
 class C31CmapssConfigError(ValueError):
@@ -48,6 +51,7 @@ _EXPECTED_CHECKSUM_POLICY = "record_if_downloaded"
 _EXPECTED_SENSOR_COUNT = 21
 _EXPECTED_SETTING_COUNT = 3
 _EXPECTED_PSEUDO_TIMESTAMP_START = "2000-01-01T00:00:00Z"
+_PSEUDO_TIMESTAMP_RULE = "2000-01-01T00:00:00Z + cycle_index seconds"
 _EXPECTED_SPLIT_UNIT = "trajectory_id"
 _EXPECTED_VALIDATION_SOURCE = "train_trajectories"
 _EXPECTED_FORBIDDEN_LEAKAGE_MODES = (
@@ -184,6 +188,26 @@ class C31CmapssConfig:
 
 
 @dataclass(frozen=True)
+class C31MappedObservationSummary:
+    observation_rows: int
+    trajectory_count: int
+    trajectory_ids: tuple[str, ...]
+    required_schema_valid: bool
+    pseudo_timestamp_rule: str
+    uses_capped_rul: bool
+
+
+@dataclass(frozen=True)
+class C31RulTarget:
+    subset: str
+    file_role: str
+    trajectory_id: str
+    unit_id: int
+    cycle_index: int
+    rul: int
+
+
+@dataclass(frozen=True)
 class C31CmapssRunResult:
     stage: str
     dataset_id: str
@@ -192,6 +216,22 @@ class C31CmapssRunResult:
     blocked_reasons: tuple[C31BlockedReason, ...]
     raw_files_present: tuple[str, ...]
     raw_files_missing: tuple[str, ...]
+    mapping_summary: C31MappedObservationSummary | None = None
+    rul_targets: tuple[C31RulTarget, ...] = ()
+
+
+@dataclass(frozen=True)
+class _C31CmapssRawRow:
+    subset: str
+    file_role: str
+    unit_id: int
+    cycle_index: int
+    settings: tuple[float, float, float]
+    sensors: tuple[float, ...]
+
+
+class _C31RawSchemaMismatch(ValueError):
+    pass
 
 
 def expected_cmapss_files() -> tuple[str, ...]:
@@ -270,20 +310,305 @@ def run_c31_cmapss_minimal_ingestion(
     present, missing = _inspect_expected_raw_files(config.download_policy)
     if missing:
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_MISSING_RAW_FILES)
+        return C31CmapssRunResult(
+            stage=config.stage,
+            dataset_id=config.dataset_id,
+            config_path=config_path,
+            status=C31TopLevelStatus.BLOCKED,
+            blocked_reasons=tuple(blocked_reasons),
+            raw_files_present=present,
+            raw_files_missing=missing,
+        )
+
+    try:
+        mapping_summary, rul_targets = _map_cmapss_rows_to_observations(config)
+    except _C31RawSchemaMismatch:
+        blocked_reasons.append(C31BlockedReason.BLOCKED_BY_RAW_SCHEMA_MISMATCH)
+        return C31CmapssRunResult(
+            stage=config.stage,
+            dataset_id=config.dataset_id,
+            config_path=config_path,
+            status=C31TopLevelStatus.BLOCKED,
+            blocked_reasons=tuple(blocked_reasons),
+            raw_files_present=present,
+            raw_files_missing=missing,
+        )
+
+    if not mapping_summary.required_schema_valid:
+        blocked_reasons.append(C31BlockedReason.BLOCKED_BY_MAPPING_SCHEMA)
+
+    status = _status_after_mapping(config, blocked_reasons)
 
     return C31CmapssRunResult(
         stage=config.stage,
         dataset_id=config.dataset_id,
         config_path=config_path,
-        status=(
-            C31TopLevelStatus.BLOCKED
-            if blocked_reasons
-            else C31TopLevelStatus.READY_FOR_LOCAL_MAPPING
-        ),
+        status=status,
         blocked_reasons=tuple(blocked_reasons),
         raw_files_present=present,
         raw_files_missing=missing,
+        mapping_summary=mapping_summary,
+        rul_targets=rul_targets,
     )
+
+
+def _status_after_mapping(
+    config: C31CmapssConfig,
+    blocked_reasons: list[C31BlockedReason],
+) -> C31TopLevelStatus:
+    if blocked_reasons:
+        return C31TopLevelStatus.BLOCKED
+    if (
+        config.license_review.decision
+        == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
+    ):
+        return C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    if (
+        config.license_review.decision
+        == C31LicenseDecision.APPROVED_FOR_SCHEMA_VALIDATION
+    ):
+        return C31TopLevelStatus.SCHEMA_VALIDATED_PENDING_TRAINING_USE_REVIEW
+    return C31TopLevelStatus.READY_FOR_LOCAL_MAPPING
+
+
+def _parse_cmapss_data_file(
+    path: Path,
+    subset: str,
+    file_role: str,
+) -> tuple[_C31CmapssRawRow, ...]:
+    rows: list[_C31CmapssRawRow] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise _C31RawSchemaMismatch(str(exc)) from exc
+
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        columns = line.split()
+        if len(columns) != 2 + _EXPECTED_SETTING_COUNT + _EXPECTED_SENSOR_COUNT:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} expected 26 columns, got {len(columns)}"
+            )
+        try:
+            unit_id = int(columns[0])
+            cycle_index = int(columns[1])
+            settings = tuple(float(value) for value in columns[2:5])
+            sensors = tuple(float(value) for value in columns[5:])
+        except ValueError as exc:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} contains non-numeric raw values"
+            ) from exc
+        if len(settings) != _EXPECTED_SETTING_COUNT:
+            raise _C31RawSchemaMismatch(f"{path}:{line_number} has bad settings")
+        if len(sensors) != _EXPECTED_SENSOR_COUNT:
+            raise _C31RawSchemaMismatch(f"{path}:{line_number} has bad sensors")
+        rows.append(
+            _C31CmapssRawRow(
+                subset=subset,
+                file_role=file_role,
+                unit_id=unit_id,
+                cycle_index=cycle_index,
+                settings=settings,
+                sensors=sensors,
+            )
+        )
+    if not rows:
+        raise _C31RawSchemaMismatch(f"{path} has no raw rows")
+    return tuple(rows)
+
+
+def _parse_rul_file(path: Path) -> tuple[int, ...]:
+    values: list[int] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise _C31RawSchemaMismatch(str(exc)) from exc
+
+    for line_number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        columns = line.split()
+        if len(columns) != 1:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} expected one RUL column"
+            )
+        try:
+            values.append(int(columns[0]))
+        except ValueError as exc:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} contains non-integer RUL"
+            ) from exc
+    if not values:
+        raise _C31RawSchemaMismatch(f"{path} has no RUL rows")
+    return tuple(values)
+
+
+def _map_cmapss_rows_to_observations(
+    config: C31CmapssConfig,
+) -> tuple[C31MappedObservationSummary, tuple[C31RulTarget, ...]]:
+    observation_rows: list[dict[str, Any]] = []
+    rul_targets: list[C31RulTarget] = []
+
+    for subset in config.mapping_policy.subsets:
+        train_rows = _parse_cmapss_data_file(
+            config.download_policy.raw_dir / f"train_{subset}.txt",
+            subset,
+            "train",
+        )
+        test_rows = _parse_cmapss_data_file(
+            config.download_policy.raw_dir / f"test_{subset}.txt",
+            subset,
+            "test",
+        )
+        final_test_ruls = _parse_rul_file(
+            config.download_policy.raw_dir / f"RUL_{subset}.txt"
+        )
+
+        observation_rows.extend(_observation_rows_for_raw_rows(train_rows))
+        observation_rows.extend(_observation_rows_for_raw_rows(test_rows))
+        rul_targets.extend(_train_rul_targets(train_rows))
+        rul_targets.extend(_test_rul_targets(test_rows, final_test_ruls))
+
+    observations = pd.DataFrame(observation_rows)
+    schema_result = validate_observation_frame(observations)
+    trajectory_ids = tuple(sorted(observations["device_id"].unique()))
+    return (
+        C31MappedObservationSummary(
+            observation_rows=len(observations),
+            trajectory_count=len(trajectory_ids),
+            trajectory_ids=trajectory_ids,
+            required_schema_valid=schema_result.valid,
+            pseudo_timestamp_rule=_PSEUDO_TIMESTAMP_RULE,
+            uses_capped_rul=config.mapping_policy.use_capped_rul,
+        ),
+        tuple(rul_targets),
+    )
+
+
+def _observation_rows_for_raw_rows(
+    raw_rows: tuple[_C31CmapssRawRow, ...],
+) -> tuple[dict[str, Any], ...]:
+    rows: list[dict[str, Any]] = []
+    for raw_row in raw_rows:
+        trajectory_id = _trajectory_id(
+            raw_row.subset,
+            raw_row.file_role,
+            raw_row.unit_id,
+        )
+        timestamp = pd.Timestamp(_EXPECTED_PSEUDO_TIMESTAMP_START) + pd.to_timedelta(
+            raw_row.cycle_index,
+            unit="s",
+        )
+        degradation_label = (
+            "run_to_failure_known"
+            if raw_row.file_role == "train"
+            else "partial_trajectory_with_rul_target"
+        )
+        for setting_index, value in enumerate(raw_row.settings, start=1):
+            rows.append(
+                _observation_row(
+                    raw_row,
+                    trajectory_id,
+                    timestamp,
+                    f"setting_{setting_index}",
+                    value,
+                    "operational_condition",
+                    degradation_label,
+                )
+            )
+        for sensor_index, value in enumerate(raw_row.sensors, start=1):
+            rows.append(
+                _observation_row(
+                    raw_row,
+                    trajectory_id,
+                    timestamp,
+                    f"sensor_{sensor_index:02d}",
+                    value,
+                    "turbofan_sensor",
+                    degradation_label,
+                )
+            )
+    return tuple(rows)
+
+
+def _observation_row(
+    raw_row: _C31CmapssRawRow,
+    trajectory_id: str,
+    timestamp: pd.Timestamp,
+    sensor_id: str,
+    value: float,
+    domain: str,
+    degradation_label: str,
+) -> dict[str, Any]:
+    return {
+        "timestamp": timestamp,
+        "device_id": trajectory_id,
+        "batch_id": trajectory_id,
+        "stage": raw_row.subset,
+        "sensor_id": sensor_id,
+        "value": value,
+        "unit": "normalized",
+        "domain": domain,
+        "quality_flag": "good",
+        "degradation_label": degradation_label,
+        "failure_proxy": False,
+    }
+
+
+def _train_rul_targets(
+    train_rows: tuple[_C31CmapssRawRow, ...],
+) -> tuple[C31RulTarget, ...]:
+    last_cycle_by_unit = _last_cycle_by_unit(train_rows)
+    return tuple(
+        C31RulTarget(
+            subset=row.subset,
+            file_role=row.file_role,
+            trajectory_id=_trajectory_id(row.subset, row.file_role, row.unit_id),
+            unit_id=row.unit_id,
+            cycle_index=row.cycle_index,
+            rul=last_cycle_by_unit[row.unit_id] - row.cycle_index,
+        )
+        for row in train_rows
+    )
+
+
+def _test_rul_targets(
+    test_rows: tuple[_C31CmapssRawRow, ...],
+    final_test_ruls: tuple[int, ...],
+) -> tuple[C31RulTarget, ...]:
+    test_units = tuple(sorted({row.unit_id for row in test_rows}))
+    if len(final_test_ruls) != len(test_units):
+        raise _C31RawSchemaMismatch("RUL file row count must match test units")
+
+    last_cycle_by_unit = _last_cycle_by_unit(test_rows)
+    final_rul_by_unit = dict(zip(test_units, final_test_ruls, strict=True))
+    return tuple(
+        C31RulTarget(
+            subset=row.subset,
+            file_role=row.file_role,
+            trajectory_id=_trajectory_id(row.subset, row.file_role, row.unit_id),
+            unit_id=row.unit_id,
+            cycle_index=row.cycle_index,
+            rul=final_rul_by_unit[row.unit_id]
+            + (last_cycle_by_unit[row.unit_id] - row.cycle_index),
+        )
+        for row in test_rows
+    )
+
+
+def _last_cycle_by_unit(rows: tuple[_C31CmapssRawRow, ...]) -> dict[int, int]:
+    last_cycle_by_unit: dict[int, int] = {}
+    for row in rows:
+        last_cycle_by_unit[row.unit_id] = max(
+            row.cycle_index,
+            last_cycle_by_unit.get(row.unit_id, row.cycle_index),
+        )
+    return last_cycle_by_unit
+
+
+def _trajectory_id(subset: str, file_role: str, unit_id: int) -> str:
+    return f"cmapss_{subset}_{file_role}_unit_{unit_id}"
 
 
 def _load_source(raw: dict[str, Any]) -> C31Source:

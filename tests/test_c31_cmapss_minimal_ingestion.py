@@ -12,7 +12,8 @@ from b08_model_core.experiments.c31_cmapss_minimal_ingestion import (
     run_c31_cmapss_minimal_ingestion,
 )
 
-_DEFAULT_CONFIG = Path("configs/c_stage_c31_cmapss_minimal_ingestion.yaml")
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_CONFIG = _REPO_ROOT / "configs/c_stage_c31_cmapss_minimal_ingestion.yaml"
 
 
 def _load_default_yaml() -> dict:
@@ -431,3 +432,152 @@ def test_c31_rejects_config_contract_drift(tmp_path, update, match):
 
     with pytest.raises(C31CmapssConfigError, match=match):
         load_c31_cmapss_config(path)
+
+
+def _write_synthetic_subset(
+    raw_dir: Path,
+    subset: str = "FD001",
+    malformed: bool = False,
+) -> None:
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    if malformed:
+        (raw_dir / f"train_{subset}.txt").write_text("1 1 0.1\n", encoding="utf-8")
+        (raw_dir / f"test_{subset}.txt").write_text("1 1 0.7\n", encoding="utf-8")
+        (raw_dir / f"RUL_{subset}.txt").write_text("5\n", encoding="utf-8")
+        return
+
+    sensor_values_1 = " ".join(str(100 + index) for index in range(1, 22))
+    sensor_values_2 = " ".join(str(200 + index) for index in range(1, 22))
+    train_rows = [
+        f"1 1 0.1 0.2 0.3 {sensor_values_1}",
+        f"1 2 0.1 0.2 0.3 {sensor_values_2}",
+        f"2 1 0.4 0.5 0.6 {sensor_values_1}",
+    ]
+    test_rows = [
+        f"1 1 0.7 0.8 0.9 {sensor_values_1}",
+        f"1 2 0.7 0.8 0.9 {sensor_values_2}",
+    ]
+    (raw_dir / f"train_{subset}.txt").write_text(
+        "\n".join(train_rows) + "\n", encoding="utf-8"
+    )
+    (raw_dir / f"test_{subset}.txt").write_text(
+        "\n".join(test_rows) + "\n", encoding="utf-8"
+    )
+    (raw_dir / f"RUL_{subset}.txt").write_text("5\n", encoding="utf-8")
+
+
+def _configure_approved_fd001_mapping(data: dict, raw_dir: Path) -> None:
+    data["source"]["source_status"] = "verified"
+    data["license_review"].update(
+        {
+            "decision": "approved_for_schema_validation",
+            "license_status": "verified",
+            "redistribution_status": "not_allowed",
+            "training_use_status": "needs_review",
+        }
+    )
+    data["download_policy"].update(
+        {
+            "allow_local_raw_data": True,
+            "raw_dir": str(raw_dir),
+            "expected_files": [
+                "train_FD001.txt",
+                "test_FD001.txt",
+                "RUL_FD001.txt",
+            ],
+        }
+    )
+    data["mapping_policy"]["subsets"] = ["FD001"]
+
+
+def _approved_local_mapping_config(tmp_path: Path, monkeypatch) -> Path:
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+
+    return _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+
+
+def test_c31_maps_synthetic_subset_to_canonical_observations(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    assert result.mapping_summary is not None
+    assert result.mapping_summary.observation_rows == 5 * 24
+    assert result.mapping_summary.trajectory_count == 3
+    assert result.mapping_summary.required_schema_valid is True
+    assert "cmapss_FD001_train_unit_1" in result.mapping_summary.trajectory_ids
+    assert "cmapss_FD001_test_unit_1" in result.mapping_summary.trajectory_ids
+    assert (
+        result.mapping_summary.pseudo_timestamp_rule
+        == "2000-01-01T00:00:00Z + cycle_index seconds"
+    )
+
+
+def test_c31_rul_targets_use_uncapped_train_and_test_formulas(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+    by_key = {
+        (target.trajectory_id, target.cycle_index): target.rul
+        for target in result.rul_targets
+    }
+
+    assert by_key[("cmapss_FD001_train_unit_1", 1)] == 1
+    assert by_key[("cmapss_FD001_train_unit_1", 2)] == 0
+    assert by_key[("cmapss_FD001_test_unit_1", 1)] == 6
+    assert by_key[("cmapss_FD001_test_unit_1", 2)] == 5
+    assert result.mapping_summary.uses_capped_rul is False
+
+
+def test_c31_blocks_when_approved_local_raw_files_are_missing(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_missing_raw_files" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.raw_files_missing == (
+        "train_FD001.txt",
+        "test_FD001.txt",
+        "RUL_FD001.txt",
+    )
+    assert result.mapping_summary is None
+    assert result.rul_targets == ()
+
+
+def test_c31_blocks_malformed_raw_shape(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir, malformed=True)
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_raw_schema_mismatch" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.mapping_summary is None
+    assert result.rul_targets == ()
