@@ -361,6 +361,7 @@ def _parse_cmapss_data_file(
     file_role: str,
 ) -> tuple[_C31CmapssRawRow, ...]:
     rows: list[_C31CmapssRawRow] = []
+    seen_cycles: set[tuple[int, int]] = set()
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
@@ -399,6 +400,12 @@ def _parse_cmapss_data_file(
             raise _C31RawSchemaMismatch(
                 f"{path}:{line_number} contains non-finite raw values"
             )
+        cycle_key = (unit_id, cycle_index)
+        if cycle_key in seen_cycles:
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} duplicates unit_id/cycle_index"
+            )
+        seen_cycles.add(cycle_key)
         rows.append(
             _C31CmapssRawRow(
                 subset=subset,

@@ -588,6 +588,25 @@ def test_c31_blocks_malformed_raw_shape(tmp_path, monkeypatch):
     _assert_blocked_by_raw_schema_mismatch(result)
 
 
+@pytest.mark.parametrize("filename", ["train_FD001.txt", "test_FD001.txt"])
+def test_c31_blocks_duplicate_unit_cycle_rows(tmp_path, monkeypatch, filename):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    data_path = raw_dir / filename
+    lines = data_path.read_text(encoding="utf-8").splitlines()
+    data_path.write_text("\n".join([*lines, lines[0]]) + "\n", encoding="utf-8")
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
+
+
 def test_c31_blocks_extreme_cycle_timestamp_overflow(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
