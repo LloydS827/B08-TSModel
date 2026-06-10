@@ -309,6 +309,11 @@ def run_c31_cmapss_minimal_ingestion(
     window_assignments: Iterable[Mapping[str, object]] = (),
 ) -> C31CmapssRunResult:
     blocked_reasons: list[C31BlockedReason] = []
+    pre_mapping_leakage_summary = _check_leakage(
+        split_assignments or {},
+        input_feature_columns,
+        window_assignments,
+    )
     if config.source.source_status != "verified":
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW)
     if config.license_review.decision in (
@@ -318,6 +323,7 @@ def run_c31_cmapss_minimal_ingestion(
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW)
 
     if blocked_reasons:
+        _append_leakage_blocked_reason(blocked_reasons, pre_mapping_leakage_summary)
         return C31CmapssRunResult(
             stage=config.stage,
             dataset_id=config.dataset_id,
@@ -326,10 +332,12 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=(),
             raw_files_missing=tuple(config.download_policy.expected_files),
+            leakage_summary=pre_mapping_leakage_summary,
         )
 
     if not config.download_policy.allow_local_raw_data:
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_DOWNLOAD_POLICY)
+        _append_leakage_blocked_reason(blocked_reasons, pre_mapping_leakage_summary)
         return C31CmapssRunResult(
             stage=config.stage,
             dataset_id=config.dataset_id,
@@ -338,11 +346,13 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=(),
             raw_files_missing=tuple(config.download_policy.expected_files),
+            leakage_summary=pre_mapping_leakage_summary,
         )
 
     present, missing = _inspect_expected_raw_files(config.download_policy)
     if missing:
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_MISSING_RAW_FILES)
+        _append_leakage_blocked_reason(blocked_reasons, pre_mapping_leakage_summary)
         return C31CmapssRunResult(
             stage=config.stage,
             dataset_id=config.dataset_id,
@@ -351,12 +361,14 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=present,
             raw_files_missing=missing,
+            leakage_summary=pre_mapping_leakage_summary,
         )
 
     try:
         mapping_summary, rul_targets = _map_cmapss_rows_to_observations(config)
     except _C31RawSchemaMismatch:
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_RAW_SCHEMA_MISMATCH)
+        _append_leakage_blocked_reason(blocked_reasons, pre_mapping_leakage_summary)
         return C31CmapssRunResult(
             stage=config.stage,
             dataset_id=config.dataset_id,
@@ -365,6 +377,7 @@ def run_c31_cmapss_minimal_ingestion(
             blocked_reasons=tuple(blocked_reasons),
             raw_files_present=present,
             raw_files_missing=missing,
+            leakage_summary=pre_mapping_leakage_summary,
         )
 
     if not mapping_summary.required_schema_valid:
@@ -380,8 +393,7 @@ def run_c31_cmapss_minimal_ingestion(
         input_feature_columns,
         window_assignments,
     )
-    if leakage_summary.has_leakage:
-        blocked_reasons.append(C31BlockedReason.BLOCKED_BY_LEAKAGE_GUARD)
+    _append_leakage_blocked_reason(blocked_reasons, leakage_summary)
 
     readiness_detail = ""
     c32_go_no_go = _C32_NO_GO_NOT_SCHEMA_VALIDATED
@@ -403,6 +415,17 @@ def run_c31_cmapss_minimal_ingestion(
         c32_go_no_go=c32_go_no_go,
         leakage_summary=leakage_summary,
     )
+
+
+def _append_leakage_blocked_reason(
+    blocked_reasons: list[C31BlockedReason],
+    leakage_summary: C31LeakageSummary,
+) -> None:
+    if (
+        leakage_summary.has_leakage
+        and C31BlockedReason.BLOCKED_BY_LEAKAGE_GUARD not in blocked_reasons
+    ):
+        blocked_reasons.append(C31BlockedReason.BLOCKED_BY_LEAKAGE_GUARD)
 
 
 def _validated_status(

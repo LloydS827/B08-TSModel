@@ -87,6 +87,44 @@ def test_c31_default_runner_blocks_without_reading_raw_data():
     assert result.raw_files_missing == tuple(config.download_policy.expected_files)
 
 
+def test_c31_default_runner_reports_input_feature_leakage_while_preflight_blocked():
+    config = load_c31_cmapss_config(_DEFAULT_CONFIG)
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        config_path=_DEFAULT_CONFIG,
+        input_feature_columns=("sensor_01", "rul"),
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_license_review" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.target_columns_in_input == ("rul",)
+
+
+def test_c31_default_runner_reports_explicit_split_overlap_while_preflight_blocked():
+    config = load_c31_cmapss_config(_DEFAULT_CONFIG)
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        config_path=_DEFAULT_CONFIG,
+        split_assignments={
+            "train": {"cmapss_FD001_train_unit_1"},
+            "validation": {"cmapss_FD001_train_unit_1"},
+        },
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.trajectory_overlap_count == 1
+
+
 def test_c31_default_runner_does_not_inspect_raw_dir_when_local_raw_disabled(
     tmp_path,
     monkeypatch,
