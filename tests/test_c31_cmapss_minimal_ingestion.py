@@ -427,6 +427,16 @@ def test_c31_rejects_license_fields_with_wrong_semantics(tmp_path, update, match
         load_c31_cmapss_config(path)
 
 
+def test_c31_rejects_non_positive_license_evidence_file_size(tmp_path):
+    path = _modified_config(
+        tmp_path,
+        lambda data: data["license_evidence"].update({"file_size_bytes": 0}),
+    )
+
+    with pytest.raises(C31CmapssConfigError, match="file_size_bytes"):
+        load_c31_cmapss_config(path)
+
+
 def test_c31_rejects_research_training_approval_with_needs_review_statuses(tmp_path):
     path = _modified_config(
         tmp_path,

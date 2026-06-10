@@ -65,6 +65,9 @@ _READINESS_PARTIAL_SUBSET_VALIDATED = "partial_subset_validated"
 _C32_NO_GO_NOT_SCHEMA_VALIDATED = "No-Go: not schema validated"
 _C32_NO_GO_PARTIAL_SUBSET = "No-Go: partial subset only"
 _C32_NO_GO_PENDING_TRAINING_USE_REVIEW = "No-Go: pending training-use review"
+_C32_NO_GO_LOCAL_RAW_MAPPING_NOT_EXECUTED = (
+    "No-Go: local raw mapping review not executed"
+)
 _C32_GO_SCHEMA_VALIDATED_AND_APPROVED = (
     "Go: schema validated and research training/evaluation use approved"
 )
@@ -153,6 +156,23 @@ class C31LicenseReview:
 
 
 @dataclass(frozen=True)
+class C31LicenseEvidence:
+    review_date: str
+    record_title: str
+    record_url: str
+    api_url: str
+    doi: str
+    creator: str
+    license_id: str
+    license_name: str
+    license_url: str
+    file_key: str
+    file_size_bytes: int
+    file_checksum: str
+    evidence_note: str
+
+
+@dataclass(frozen=True)
 class C31DownloadPolicy:
     allow_network: bool
     allow_download: bool
@@ -193,6 +213,7 @@ class C31CmapssConfig:
     dataset_id: str
     source: C31Source
     license_review: C31LicenseReview
+    license_evidence: C31LicenseEvidence
     download_policy: C31DownloadPolicy
     mapping_policy: C31MappingPolicy
     split_policy: C31SplitPolicy
@@ -253,6 +274,7 @@ class C31CmapssRunResult:
     raw_files_missing: tuple[str, ...]
     source: C31Source | None = None
     license_review: C31LicenseReview | None = None
+    license_evidence: C31LicenseEvidence | None = None
     mapping_summary: C31MappedObservationSummary | None = None
     rul_targets: tuple[C31RulTarget, ...] = ()
     readiness_detail: str = ""
@@ -303,6 +325,7 @@ def load_c31_cmapss_config(path: str | Path) -> C31CmapssConfig:
         dataset_id=dataset_id,
         source=_load_source(raw),
         license_review=_load_license_review(raw),
+        license_evidence=_load_license_evidence(raw),
         download_policy=download_policy,
         mapping_policy=mapping_policy,
         split_policy=_load_split_policy(raw),
@@ -351,6 +374,7 @@ def run_c31_cmapss_minimal_ingestion(
             raw_files_missing=tuple(config.download_policy.expected_files),
             source=config.source,
             license_review=config.license_review,
+            license_evidence=config.license_evidence,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -367,6 +391,8 @@ def run_c31_cmapss_minimal_ingestion(
             raw_files_missing=tuple(config.download_policy.expected_files),
             source=config.source,
             license_review=config.license_review,
+            license_evidence=config.license_evidence,
+            c32_go_no_go=_C32_NO_GO_LOCAL_RAW_MAPPING_NOT_EXECUTED,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -384,6 +410,7 @@ def run_c31_cmapss_minimal_ingestion(
             raw_files_missing=missing,
             source=config.source,
             license_review=config.license_review,
+            license_evidence=config.license_evidence,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -402,6 +429,7 @@ def run_c31_cmapss_minimal_ingestion(
             raw_files_missing=missing,
             source=config.source,
             license_review=config.license_review,
+            license_evidence=config.license_evidence,
             leakage_summary=pre_mapping_leakage_summary,
         )
 
@@ -437,6 +465,7 @@ def run_c31_cmapss_minimal_ingestion(
         raw_files_missing=missing,
         source=config.source,
         license_review=config.license_review,
+        license_evidence=config.license_evidence,
         mapping_summary=mapping_summary,
         rul_targets=rul_targets,
         readiness_detail=readiness_detail,
@@ -515,6 +544,7 @@ def render_c31_cmapss_report(result: C31CmapssRunResult) -> str:
     ]
     source = result.source
     license_review = result.license_review
+    license_evidence = result.license_evidence
     if source is not None or license_review is not None:
         lines.extend(
             [
@@ -539,27 +569,76 @@ def render_c31_cmapss_report(result: C31CmapssRunResult) -> str:
                     f"| license_decision | {_c31_report_cell(license_review.decision.value)} |",
                     f"| license_status | {_c31_report_cell(license_review.license_status)} |",
                     f"| redistribution_status | {_c31_report_cell(license_review.redistribution_status)} |",
-                    f"| training_use_status | {_c31_report_cell(license_review.training_use_status)} |",
+                f"| training_use_status | {_c31_report_cell(license_review.training_use_status)} |",
                 ]
             )
+        if license_evidence is not None:
+            lines.extend(
+                [
+                    "",
+                    "### License Evidence",
+                    "",
+                    "| Field | Value |",
+                    "| --- | --- |",
+                    f"| review_date | {_c31_report_cell(license_evidence.review_date)} |",
+                    f"| record_title | {_c31_report_cell(license_evidence.record_title)} |",
+                    f"| record_url | {_c31_report_cell(license_evidence.record_url)} |",
+                    f"| api_url | {_c31_report_cell(license_evidence.api_url)} |",
+                    f"| doi | {_c31_report_cell(license_evidence.doi)} |",
+                    f"| creator | {_c31_report_cell(license_evidence.creator)} |",
+                    f"| license_id | {_c31_report_cell(license_evidence.license_id)} |",
+                    f"| license_name | {_c31_report_cell(license_evidence.license_name)} |",
+                    f"| license_url | {_c31_report_cell(license_evidence.license_url)} |",
+                    f"| file_key | {_c31_report_cell(license_evidence.file_key)} |",
+                    f"| file_size_bytes | {license_evidence.file_size_bytes} |",
+                    f"| file_checksum | {_c31_report_cell(license_evidence.file_checksum)} |",
+                    f"| evidence_note | {_c31_report_cell(license_evidence.evidence_note)} |",
+                ]
+            )
+        local_raw_policy_blocked = (
+            license_review is not None
+            and license_review.decision
+            == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
+            and C31BlockedReason.BLOCKED_BY_DOWNLOAD_POLICY.value in blocked_reasons
+            and mapping_summary is None
+        )
+        local_raw_decision = (
+            "Local raw opt-in: eligible for a separate explicit opt-in review, "
+            "but disabled in the default configuration."
+            if local_raw_policy_blocked
+            else (
+                "Local raw opt-in: blocked until license, redistribution, and "
+                "training-use review are resolved."
+            )
+        )
         lines.extend(
             [
                 "",
-                "Local raw opt-in: blocked until license, redistribution, and training-use review are resolved.",
+                local_raw_decision,
                 "",
             ]
         )
+    source_evidence = (
+        C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value
+        if C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value in blocked_reasons
+        else "source review clear"
+    )
+    license_evidence_text = (
+        C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value
+        if C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value in blocked_reasons
+        else "license review clear"
+    )
     lines.extend(
         [
             "| Check | Status | Evidence |",
             "| --- | --- | --- |",
             (
                 f"| source_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value)} "
-                f"| blocked_by_source_review present: {C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value in blocked_reasons} |"
+                f"| {source_evidence} |"
             ),
             (
                 f"| license_review | {_c31_block_status(blocked_reasons, C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value)} "
-                f"| blocked_by_license_review present: {C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value in blocked_reasons} |"
+                f"| {license_evidence_text} |"
             ),
             "| training_or_evaluation | not_run | report is preflight only |",
             "",
@@ -664,6 +743,15 @@ def render_c31_cmapss_report(result: C31CmapssRunResult) -> str:
             f"- Blocking reasons: {_c31_join(blocked_reasons)}",
         ]
     )
+    if (
+        result.c32_go_no_go == _C32_NO_GO_LOCAL_RAW_MAPPING_NOT_EXECUTED
+        and C31BlockedReason.BLOCKED_BY_DOWNLOAD_POLICY.value in blocked_reasons
+        and mapping_summary is None
+    ):
+        lines.append(
+            "- Current default C3.2 gate: No-Go until local raw mapping review "
+            "validates full schema, RUL metadata, and leakage guard."
+        )
     return "\n".join(lines) + "\n"
 
 
@@ -1194,6 +1282,42 @@ def _load_license_review(raw: dict[str, Any]) -> C31LicenseReview:
     )
     _validate_license_decision_consistency(review)
     return review
+
+
+def _load_license_evidence(raw: dict[str, Any]) -> C31LicenseEvidence:
+    evidence = _load_mapping(raw, "license_evidence")
+    file_size_bytes = _load_required_int(
+        evidence, "file_size_bytes", "license_evidence"
+    )
+    if file_size_bytes <= 0:
+        raise C31CmapssConfigError(
+            "license_evidence.file_size_bytes must be a positive integer"
+        )
+    return C31LicenseEvidence(
+        review_date=_load_required_string(evidence, "review_date", "license_evidence"),
+        record_title=_load_required_string(
+            evidence, "record_title", "license_evidence"
+        ),
+        record_url=_load_required_string(evidence, "record_url", "license_evidence"),
+        api_url=_load_required_string(evidence, "api_url", "license_evidence"),
+        doi=_load_required_string(evidence, "doi", "license_evidence"),
+        creator=_load_required_string(evidence, "creator", "license_evidence"),
+        license_id=_load_required_string(evidence, "license_id", "license_evidence"),
+        license_name=_load_required_string(
+            evidence, "license_name", "license_evidence"
+        ),
+        license_url=_load_required_string(
+            evidence, "license_url", "license_evidence"
+        ),
+        file_key=_load_required_string(evidence, "file_key", "license_evidence"),
+        file_size_bytes=file_size_bytes,
+        file_checksum=_load_required_string(
+            evidence, "file_checksum", "license_evidence"
+        ),
+        evidence_note=_load_required_string(
+            evidence, "evidence_note", "license_evidence"
+        ),
+    )
 
 
 def _load_download_policy(

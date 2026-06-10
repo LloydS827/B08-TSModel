@@ -14,11 +14,25 @@ source:
       url: https://ntrs.nasa.gov/citations/20205001125
       handling: watchlist_only
 license_review:
-  decision: needs_review
-  license_status: needs_review
-  redistribution_status: needs_review
-  training_use_status: needs_review
+  decision: approved_for_research_training
+  license_status: verified
+  redistribution_status: allowed
+  training_use_status: research_only
   citation_required: true
+license_evidence:
+  review_date: "2026-06-10"
+  record_title: "PCoE Turbofan Engine Degradation Simulation"
+  record_url: https://zenodo.org/records/15346912
+  api_url: https://zenodo.org/api/records/15346912
+  doi: "10.5281/zenodo.15346912"
+  creator: "National Aeronautics and Space Administration"
+  license_id: cc-by-4.0
+  license_name: "Creative Commons Attribution 4.0 International"
+  license_url: https://creativecommons.org/licenses/by/4.0/
+  file_key: CMAPSSData.zip
+  file_size_bytes: 12425978
+  file_checksum: "md5:79a22f36e80606c69d0e9e4da5bb2b7a"
+  evidence_note: "Zenodo record identifies a NASA-created C-MAPSS dataset under CC BY 4.0; this resolves C3.1 research training/evaluation planning, but does not allow committing raw/zip/parquet/cache artifacts."
 download_policy:
   allow_network: false
   allow_download: false
