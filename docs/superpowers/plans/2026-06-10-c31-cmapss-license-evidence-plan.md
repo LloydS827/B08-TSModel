@@ -97,7 +97,7 @@ def test_c31_report_renders_license_evidence_and_next_gate():
     assert "| redistribution_status | allowed |" in text
     assert "| training_use_status | research_only |" in text
     assert "Local raw opt-in: eligible for a separate explicit opt-in review, but disabled in the default configuration." in text
-    assert "C3.2 remains No-Go until local raw mapping review validates full schema, RUL metadata, and leakage guard." in text
+    assert "Current default C3.2 gate: No-Go until local raw mapping review validates full schema, RUL metadata, and leakage guard." in text
     assert "blocked_by_license_review" not in text
 ```
 
@@ -269,17 +269,43 @@ Include all evidence fields.
 Replace the unconditional local raw sentence with:
 
 ```python
-if license_review and license_review.decision == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING:
+if (
+    license_review
+    and license_review.decision == C31LicenseDecision.APPROVED_FOR_RESEARCH_TRAINING
+    and C31BlockedReason.BLOCKED_BY_DOWNLOAD_POLICY.value in blocked_reasons
+    and result.mapping_summary is None
+):
     lines.append("Local raw opt-in: eligible for a separate explicit opt-in review, but disabled in the default configuration.")
 else:
     lines.append("Local raw opt-in: blocked until license, redistribution, and training-use review are resolved.")
 ```
 
-In `## C3.2 Go / No-Go`, add:
+This wording must be keyed to the actual default/no-local-raw blocked state, not only to `license_review.decision`, so future opt-in mapping reports remain accurate.
+
+In the existing `source_review` and `license_review` check rows, stop rendering blocked reason tokens when the check is clear. Use helper variables such as:
+
+```python
+source_evidence = (
+    "blocked_by_source_review"
+    if C31BlockedReason.BLOCKED_BY_SOURCE_REVIEW.value in blocked_reasons
+    else "source review clear"
+)
+license_evidence = (
+    "blocked_by_license_review"
+    if C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW.value in blocked_reasons
+    else "license review clear"
+)
+```
+
+The default resolved-license report must not contain the literal string `blocked_by_license_review`.
+
+In `## C3.2 Go / No-Go`, add the default gate sentence only when the current result is blocked by default download/local-raw policy before mapping:
 
 ```markdown
-- C3.2 remains No-Go until local raw mapping review validates full schema, RUL metadata, and leakage guard.
+- Current default C3.2 gate: No-Go until local raw mapping review validates full schema, RUL metadata, and leakage guard.
 ```
+
+Do not render this sentence unconditionally for future opt-in reports that may have `result.c32_go_no_go` set to a Go decision after full schema/RUL/split validation.
 
 - [ ] **Step 6: Run targeted tests and confirm GREEN**
 
