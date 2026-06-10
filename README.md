@@ -217,6 +217,25 @@ uv run b08-model-core experiment c-stage-c3 \
 
 C3 第一轮只验证公开数据 registry、来源/许可证/任务/schema/split 边界和报告，不下载公开数据、不提交数据文件、不运行模型训练。
 
+### C3.1. NASA C-MAPSS 最小接入与 schema validation
+
+```bash
+uv run b08-model-core experiment c-stage-c31 \
+  --config configs/c_stage_c31_cmapss_minimal_ingestion.yaml \
+  --output reports/c_stage_c31_cmapss_minimal_ingestion.md
+```
+
+C3.1 锁定 NASA PCoE #6 经典 C-MAPSS，验证 source/license preflight、最小下载边界、schema mapping dry-run、RUL target metadata、split/leakage guard 和 C3.2 Go / No-Go。默认配置保持：
+
+```yaml
+allow_network: false
+allow_download: false
+allow_local_raw_data: false
+allow_write_processed: false
+```
+
+默认路径不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练。只有显式 opt-in 且 source/license/training-use 边界被记录后，才允许读取 ignored 本机数据目录或生成 ignored 派生产物。
+
 ## 项目边界
 
 当前不能推出：

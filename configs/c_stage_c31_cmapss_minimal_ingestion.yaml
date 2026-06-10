@@ -1,0 +1,59 @@
+stage: C3_1_cmapss_minimal_ingestion
+dataset_id: nasa_cmapss
+source:
+  primary_source_name: NASA PCoE #6 Turbofan Engine Degradation Simulation Data Set
+  primary_source_url: https://www.nasa.gov/intelligent-systems-division/discovery-and-systems-health/pcoe/pcoe-data-set-repository/
+  download_target_url: https://phm-datasets.s3.amazonaws.com/NASA/6.+Turbofan+Engine+Degradation+Simulation+Data+Set.zip
+  source_status: needs_review
+  citation: "Saxena, A., Goebel, K., Simon, D., and Eklund, N. Damage propagation modeling for aircraft engine run-to-failure simulation. 2008."
+  calibration_sources:
+    - name: NASA Open Data Portal C-MAPSS Aircraft Engine Simulator Data
+      url: https://data.nasa.gov/dataset/c-mapss-aircraft-engine-simulator-data
+      handling: calibration_note_only
+    - name: NASA NTRS C-MAPSS-2
+      url: https://ntrs.nasa.gov/citations/20205001125
+      handling: watchlist_only
+license_review:
+  decision: needs_review
+  license_status: needs_review
+  redistribution_status: needs_review
+  training_use_status: needs_review
+  citation_required: true
+download_policy:
+  allow_network: false
+  allow_download: false
+  allow_local_raw_data: false
+  allow_write_processed: false
+  raw_dir: data/public/cmapss/raw
+  processed_dir: data/processed/cmapss
+  checksum_policy: record_if_downloaded
+  expected_files:
+    - train_FD001.txt
+    - test_FD001.txt
+    - RUL_FD001.txt
+    - train_FD002.txt
+    - test_FD002.txt
+    - RUL_FD002.txt
+    - train_FD003.txt
+    - test_FD003.txt
+    - RUL_FD003.txt
+    - train_FD004.txt
+    - test_FD004.txt
+    - RUL_FD004.txt
+mapping_policy:
+  subsets: [FD001, FD002, FD003, FD004]
+  pseudo_timestamp_start: "2000-01-01T00:00:00Z"
+  file_roles: [train, test, RUL]
+  sensor_count: 21
+  setting_count: 3
+  use_capped_rul: false
+split_policy:
+  split_unit: trajectory_id
+  validation_source: train_trajectories
+  forbidden_leakage_modes:
+    - trajectory_id_overlap
+    - target_columns_in_input_features
+    - window_adjacency_across_splits
+outputs:
+  report: reports/c_stage_c31_cmapss_minimal_ingestion.md
+  processed_dir: data/processed/cmapss

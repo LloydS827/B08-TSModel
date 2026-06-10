@@ -222,6 +222,52 @@ def test_c3_public_dataset_registry_workflow_is_documented():
     assert "C3" in details
 
 
+def test_c31_cmapss_minimal_ingestion_workflow_is_documented():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+    section_header = "### C3.1. NASA C-MAPSS 最小接入与 schema validation"
+    next_header = "\n## 项目边界"
+
+    assert section_header in readme
+    assert next_header in readme
+    c31_section = readme.split(section_header, 1)[1].split(next_header, 1)[0]
+
+    assert "c-stage-c31" in c31_section
+    assert "configs/c_stage_c31_cmapss_minimal_ingestion.yaml" in c31_section
+    assert "reports/c_stage_c31_cmapss_minimal_ingestion.md" in c31_section
+    assert "allow_network: false" in c31_section
+    assert "allow_download: false" in c31_section
+    assert "allow_local_raw_data: false" in c31_section
+    assert "allow_write_processed: false" in c31_section
+    assert "不下载公开数据" in c31_section
+    assert "不运行模型训练" in c31_section
+    assert "C3.1" in details
+    assert "NASA C-MAPSS" in details
+    assert details.count("\n## ") == 3
+    assert "## 1. 当前阶段" in details
+    assert "## 2. 每日更新" in details
+    assert "## 3. 下一步计划" in details
+
+
+def test_c31_cli_help_is_available():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "b08_model_core.cli",
+            "experiment",
+            "c-stage-c31",
+            "--help",
+        ],
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--config" in result.stdout
+    assert "--output" in result.stdout
+
+
 def test_details_c21_executable_evaluation_ledger_is_documented():
     details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
 
