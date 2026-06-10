@@ -222,15 +222,23 @@ class C31RulTarget:
 @dataclass(frozen=True)
 class C31LeakageSummary:
     trajectory_overlap_count: int = 0
+    duplicate_split_trajectory_count: int = 0
+    missing_split_trajectory_count: int = 0
+    unknown_split_trajectory_count: int = 0
     target_columns_in_input: tuple[str, ...] = ()
     window_adjacency_leakage_count: int = 0
+    malformed_window_count: int = 0
 
     @property
     def has_leakage(self) -> bool:
         return (
             self.trajectory_overlap_count > 0
+            or self.duplicate_split_trajectory_count > 0
+            or self.missing_split_trajectory_count > 0
+            or self.unknown_split_trajectory_count > 0
             or bool(self.target_columns_in_input)
             or self.window_adjacency_leakage_count > 0
+            or self.malformed_window_count > 0
         )
 
 
@@ -392,6 +400,7 @@ def run_c31_cmapss_minimal_ingestion(
         effective_split_assignments,
         input_feature_columns,
         window_assignments,
+        expected_trajectory_ids=mapping_summary.trajectory_ids,
     )
     _append_leakage_blocked_reason(blocked_reasons, leakage_summary)
 
@@ -473,25 +482,51 @@ def _check_leakage(
     split_assignments: Mapping[str, Iterable[str]],
     input_feature_columns: Iterable[str],
     window_assignments: Iterable[Mapping[str, object]],
+    *,
+    expected_trajectory_ids: Iterable[str] | None = None,
 ) -> C31LeakageSummary:
-    split_sets = {
-        split: set(trajectory_ids)
-        for split, trajectory_ids in split_assignments.items()
-    }
+    split_sets, assigned_counts = _normalize_split_assignments(split_assignments)
     trajectory_overlap_count = _trajectory_overlap_count(split_sets)
+    duplicate_split_trajectory_count = sum(
+        1 for count in assigned_counts.values() if count > 1
+    )
+    missing_split_trajectory_count = 0
+    unknown_split_trajectory_count = 0
+    if expected_trajectory_ids is not None:
+        expected = set(expected_trajectory_ids)
+        assigned = set(assigned_counts)
+        missing_split_trajectory_count = len(expected - assigned)
+        unknown_split_trajectory_count = len(assigned - expected)
     target_columns_in_input = tuple(
         column
         for column in input_feature_columns
         if column in _FORBIDDEN_TARGET_INPUT_COLUMNS
     )
-    window_adjacency_leakage_count = _window_adjacency_leakage_count(
+    window_adjacency_leakage_count, malformed_window_count = _window_leakage_counts(
         window_assignments
     )
     return C31LeakageSummary(
         trajectory_overlap_count=trajectory_overlap_count,
+        duplicate_split_trajectory_count=duplicate_split_trajectory_count,
+        missing_split_trajectory_count=missing_split_trajectory_count,
+        unknown_split_trajectory_count=unknown_split_trajectory_count,
         target_columns_in_input=target_columns_in_input,
         window_adjacency_leakage_count=window_adjacency_leakage_count,
+        malformed_window_count=malformed_window_count,
     )
+
+
+def _normalize_split_assignments(
+    split_assignments: Mapping[str, Iterable[str]],
+) -> tuple[dict[str, set[str]], dict[str, int]]:
+    split_sets: dict[str, set[str]] = {}
+    assigned_counts: dict[str, int] = {}
+    for split, trajectory_ids in split_assignments.items():
+        split_sets[split] = set()
+        for trajectory_id in trajectory_ids:
+            split_sets[split].add(trajectory_id)
+            assigned_counts[trajectory_id] = assigned_counts.get(trajectory_id, 0) + 1
+    return split_sets, assigned_counts
 
 
 def _trajectory_overlap_count(split_sets: Mapping[str, set[str]]) -> int:
@@ -503,22 +538,17 @@ def _trajectory_overlap_count(split_sets: Mapping[str, set[str]]) -> int:
     return len(overlapping)
 
 
-def _window_adjacency_leakage_count(
+def _window_leakage_counts(
     window_assignments: Iterable[Mapping[str, object]],
-) -> int:
+) -> tuple[int, int]:
     by_trajectory: dict[str, list[tuple[str, int, int]]] = {}
+    malformed_count = 0
     for window in window_assignments:
-        trajectory_id = window.get("trajectory_id")
-        split = window.get("split")
-        start_cycle = window.get("start_cycle")
-        end_cycle = window.get("end_cycle")
-        if (
-            not isinstance(trajectory_id, str)
-            or not isinstance(split, str)
-            or not isinstance(start_cycle, int)
-            or not isinstance(end_cycle, int)
-        ):
+        valid_window = _validated_window_assignment(window)
+        if valid_window is None:
+            malformed_count += 1
             continue
+        trajectory_id, split, start_cycle, end_cycle = valid_window
         by_trajectory.setdefault(trajectory_id, []).append(
             (split, start_cycle, end_cycle)
         )
@@ -536,7 +566,37 @@ def _window_adjacency_leakage_count(
                     right[2],
                 ):
                     leakage_count += 1
-    return leakage_count
+    return leakage_count, malformed_count
+
+
+def _validated_window_assignment(
+    window: Mapping[str, object],
+) -> tuple[str, str, int, int] | None:
+    required_keys = ("trajectory_id", "split", "start_cycle", "end_cycle")
+    try:
+        if any(key not in window for key in required_keys):
+            return None
+        trajectory_id = window["trajectory_id"]
+        split = window["split"]
+        start_cycle = window["start_cycle"]
+        end_cycle = window["end_cycle"]
+    except (KeyError, TypeError):
+        return None
+
+    if (
+        not isinstance(trajectory_id, str)
+        or not isinstance(split, str)
+        or not _is_positive_int(start_cycle)
+        or not _is_positive_int(end_cycle)
+    ):
+        return None
+    if start_cycle > end_cycle:
+        return None
+    return trajectory_id, split, start_cycle, end_cycle
+
+
+def _is_positive_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def _cycle_ranges_overlap_or_touch(

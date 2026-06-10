@@ -674,6 +674,44 @@ def test_c31_full_schema_validation_ready_for_c32_when_research_training_approve
     )
 
 
+def test_c31_full_schema_validation_blocks_incomplete_explicit_split(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_full")
+    for subset in ("FD001", "FD002", "FD003", "FD004"):
+        _write_synthetic_subset(raw_dir, subset=subset)
+
+    def update(data: dict) -> None:
+        data["source"]["source_status"] = "verified"
+        data["license_review"].update(
+            {
+                "decision": "approved_for_research_training",
+                "license_status": "verified",
+                "redistribution_status": "not_allowed",
+                "training_use_status": "research_only",
+            }
+        )
+        data["download_policy"].update(
+            {"allow_local_raw_data": True, "raw_dir": str(raw_dir)}
+        )
+
+    config = load_c31_cmapss_config(_modified_config(tmp_path, update))
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        split_assignments={"train": ()},
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert result.status != C31TopLevelStatus.SCHEMA_VALIDATED_READY_FOR_C32
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.missing_split_trajectory_count == 12
+
+
 def test_c31_split_guard_blocks_overlapping_trajectory_ids(tmp_path, monkeypatch):
     config = load_c31_cmapss_config(
         _approved_local_mapping_config(tmp_path, monkeypatch)
@@ -750,6 +788,77 @@ def test_c31_window_adjacency_guard_blocks_cross_split_adjacent_cycles(
         reason.value for reason in result.blocked_reasons
     ]
     assert result.leakage_summary.window_adjacency_leakage_count == 1
+
+
+def test_c31_window_guard_blocks_missing_required_window_fields(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        window_assignments=[
+            {
+                "trajectory_id": "cmapss_FD001_train_unit_1",
+                "start_cycle": 1,
+                "end_cycle": 2,
+            }
+        ],
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.malformed_window_count == 1
+
+
+def test_c31_window_guard_blocks_reversed_cycle_range(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        window_assignments=[
+            {
+                "trajectory_id": "cmapss_FD001_train_unit_1",
+                "start_cycle": 3,
+                "end_cycle": 2,
+                "split": "train",
+            }
+        ],
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.malformed_window_count == 1
+
+
+def test_c31_window_guard_blocks_bool_cycle_values(tmp_path, monkeypatch):
+    config = load_c31_cmapss_config(
+        _approved_local_mapping_config(tmp_path, monkeypatch)
+    )
+
+    result = run_c31_cmapss_minimal_ingestion(
+        config,
+        window_assignments=[
+            {
+                "trajectory_id": "cmapss_FD001_train_unit_1",
+                "start_cycle": True,
+                "end_cycle": 2,
+                "split": "train",
+            }
+        ],
+    )
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_leakage_guard" in [
+        reason.value for reason in result.blocked_reasons
+    ]
+    assert result.leakage_summary.malformed_window_count == 1
 
 
 def test_c31_rul_targets_use_uncapped_train_and_test_formulas(tmp_path, monkeypatch):
