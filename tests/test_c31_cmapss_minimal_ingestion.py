@@ -94,6 +94,50 @@ def test_c31_default_runner_does_not_inspect_raw_dir_when_local_raw_disabled(
     assert result.status == C31TopLevelStatus.BLOCKED
 
 
+def test_c31_source_license_block_does_not_inspect_raw_dir_when_local_raw_enabled(
+    tmp_path,
+    monkeypatch,
+):
+    sentinel_raw_dir = tmp_path / "sentinel_raw"
+
+    def update(data: dict) -> None:
+        data["download_policy"].update(
+            {
+                "allow_local_raw_data": True,
+                "raw_dir": str(sentinel_raw_dir),
+            }
+        )
+
+    path = _modified_config(tmp_path, update)
+    config = load_c31_cmapss_config(path)
+
+    def fail_if_raw_path(method_name: str):
+        def guard(path: Path, *args, **kwargs):
+            if path == sentinel_raw_dir or path.is_relative_to(sentinel_raw_dir):
+                raise AssertionError(
+                    f"unexpected raw_dir inspection via {method_name}: {path}"
+                )
+            return originals[method_name](path, *args, **kwargs)
+
+        return guard
+
+    originals = {
+        "exists": Path.exists,
+        "is_file": Path.is_file,
+        "iterdir": Path.iterdir,
+        "glob": Path.glob,
+        "stat": Path.stat,
+    }
+    for method_name in originals:
+        monkeypatch.setattr(Path, method_name, fail_if_raw_path(method_name))
+
+    result = run_c31_cmapss_minimal_ingestion(config, config_path=path)
+
+    assert result.status == C31TopLevelStatus.BLOCKED
+    assert "blocked_by_source_review" in [reason.value for reason in result.blocked_reasons]
+    assert "blocked_by_license_review" in [reason.value for reason in result.blocked_reasons]
+
+
 def test_c31_blocks_unapproved_source_even_when_license_is_schema_approved(tmp_path):
     path = _modified_config(
         tmp_path,

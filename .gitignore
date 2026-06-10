@@ -8,8 +8,10 @@ __pycache__/
 *.pyc
 *.egg-info/
 data/real/
+data/public/
 data/simulated/*.parquet
 data/processed/*.parquet
+data/processed/cmapss/
 reports/*.md
 !reports/model_core_evaluation.md
 !reports/model_route_decision.md

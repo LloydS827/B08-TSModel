@@ -195,6 +195,17 @@ def run_c31_cmapss_minimal_ingestion(
     ):
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_LICENSE_REVIEW)
 
+    if blocked_reasons:
+        return C31CmapssRunResult(
+            stage=config.stage,
+            dataset_id=config.dataset_id,
+            config_path=config_path,
+            status=C31TopLevelStatus.BLOCKED,
+            blocked_reasons=tuple(blocked_reasons),
+            raw_files_present=(),
+            raw_files_missing=tuple(config.download_policy.expected_files),
+        )
+
     if not config.download_policy.allow_local_raw_data:
         blocked_reasons.append(C31BlockedReason.BLOCKED_BY_DOWNLOAD_POLICY)
         return C31CmapssRunResult(
