@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+import math
 from pathlib import Path
 from typing import Any
 
@@ -394,6 +395,10 @@ def _parse_cmapss_data_file(
             raise _C31RawSchemaMismatch(f"{path}:{line_number} has bad settings")
         if len(sensors) != _EXPECTED_SENSOR_COUNT:
             raise _C31RawSchemaMismatch(f"{path}:{line_number} has bad sensors")
+        if not all(math.isfinite(value) for value in (*settings, *sensors)):
+            raise _C31RawSchemaMismatch(
+                f"{path}:{line_number} contains non-finite raw values"
+            )
         rows.append(
             _C31CmapssRawRow(
                 subset=subset,

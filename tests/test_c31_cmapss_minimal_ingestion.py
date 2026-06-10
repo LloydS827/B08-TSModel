@@ -655,3 +655,35 @@ def test_c31_blocks_negative_rul(tmp_path, monkeypatch):
     result = run_c31_cmapss_minimal_ingestion(config)
 
     _assert_blocked_by_raw_schema_mismatch(result)
+
+
+@pytest.mark.parametrize(
+    "old_value,new_value",
+    [
+        ("0.1", "nan"),
+        ("101", "inf"),
+    ],
+)
+def test_c31_blocks_non_finite_raw_values(
+    tmp_path,
+    monkeypatch,
+    old_value,
+    new_value,
+):
+    monkeypatch.chdir(tmp_path)
+    raw_dir = Path("data/public/cmapss/raw/synthetic_fd001")
+    _write_synthetic_subset(raw_dir)
+    train_path = raw_dir / "train_FD001.txt"
+    train_path.write_text(
+        train_path.read_text(encoding="utf-8").replace(old_value, new_value, 1),
+        encoding="utf-8",
+    )
+    path = _modified_config(
+        tmp_path,
+        lambda data: _configure_approved_fd001_mapping(data, raw_dir),
+    )
+    config = load_c31_cmapss_config(path)
+
+    result = run_c31_cmapss_minimal_ingestion(config)
+
+    _assert_blocked_by_raw_schema_mismatch(result)
