@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from b08_model_core.evaluation.benchmark import run_benchmark
 from b08_model_core.experiments.c1_evidence import (
     ModelExecutionStatus,
     load_c1_execution_config,
@@ -40,7 +39,11 @@ from b08_model_core.experiments.c31_cmapss_minimal_ingestion import (
     render_c31_cmapss_report,
     run_c31_cmapss_minimal_ingestion,
 )
-from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
+from b08_model_core.experiments.c32_open_model_cross_dataset_evaluation import (
+    load_c32_config,
+    render_c32_report,
+    run_c32_open_model_cross_dataset_evaluation,
+)
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
 from b08_model_core.real_data.forecasting import (
@@ -170,12 +173,17 @@ def main(argv: list[str] | None = None) -> int:
     c_stage_c31 = experiment_sub.add_parser("c-stage-c31")
     c_stage_c31.add_argument("--config", required=True)
     c_stage_c31.add_argument("--output", required=True)
+    c_stage_c32 = experiment_sub.add_parser("c-stage-c32")
+    c_stage_c32.add_argument("--config", required=True)
+    c_stage_c32.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
         simulate_dataset(days=args.days, seed=args.seed, output=args.output, config_path=args.config)
         return 0
     if args.command == "benchmark":
+        from b08_model_core.evaluation.benchmark import run_benchmark
+
         run_benchmark(args.dataset, args.output)
         return 0
     if args.command == "real-data" and args.real_data_command == "validate":
@@ -279,6 +287,10 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         return 0
     if args.command == "experiment" and args.experiment_command == "forecasting":
+        from b08_model_core.experiments.forecasting import (
+            run_forecasting_experiment_with_status,
+        )
+
         _, status = run_forecasting_experiment_with_status(
             args.dataset,
             args.output,
@@ -341,6 +353,18 @@ def main(argv: list[str] | None = None) -> int:
             output = Path(args.output)
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(render_c31_cmapss_report(result), encoding="utf-8")
+        except (FileNotFoundError, ValueError, OSError, PermissionError):
+            return 1
+        return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c32":
+        try:
+            config = load_c32_config(args.config)
+            result = run_c32_open_model_cross_dataset_evaluation(
+                config, config_path=args.config
+            )
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_c32_report(result), encoding="utf-8")
         except (FileNotFoundError, ValueError, OSError, PermissionError):
             return 1
         return 0
