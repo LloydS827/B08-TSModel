@@ -70,6 +70,7 @@ class C32ModelCachePolicy:
 class C32MetricContract:
     rul_metrics: tuple[str, ...]
     forecasting_metrics: tuple[str, ...]
+    representation_metrics: tuple[str, ...]
     cross_dataset_summary: str
     leaderboard_allowed: bool
 
@@ -93,6 +94,9 @@ class C32Config:
 
 
 _EXPECTED_STAGE = "C3_2_open_model_cross_dataset_evaluation"
+_EXPECTED_C31_STATUS = "schema_validated_ready_for_c32"
+_EXPECTED_C31_READINESS_DETAIL = "full_classic_cmapss_validated"
+_EXPECTED_C31_REVIEWED_RAW_FILE_COUNT = 12
 _SAFETY_FLAGS = (
     "allow_network",
     "allow_download",
@@ -116,6 +120,7 @@ def load_c32_config(path: str | Path) -> C32Config:
     model_candidates = _load_model_candidates(raw, task_contracts)
     model_cache_policy = _load_model_cache_policy(raw)
     metric_contract = _load_metric_contract(raw)
+    _validate_task_metrics(task_contracts, metric_contract)
     outputs = _load_outputs(raw)
 
     return C32Config(
@@ -154,7 +159,7 @@ def _load_safety_policy(raw: dict[str, Any]) -> C32SafetyPolicy:
 
 def _load_prerequisites(raw: dict[str, Any]) -> C32Prerequisites:
     prerequisites = _required_mapping(raw, "prerequisites")
-    return C32Prerequisites(
+    loaded = C32Prerequisites(
         c31_review_doc=Path(
             _required_string(prerequisites, "c31_review_doc", "prerequisites")
         ),
@@ -171,6 +176,23 @@ def _load_prerequisites(raw: dict[str, Any]) -> C32Prerequisites:
             prerequisites, "leakage_guard_passed", "prerequisites"
         ),
     )
+    if loaded.required_status != _EXPECTED_C31_STATUS:
+        raise C32ConfigError(
+            f"prerequisites.required_status must be {_EXPECTED_C31_STATUS}"
+        )
+    if loaded.required_readiness_detail != _EXPECTED_C31_READINESS_DETAIL:
+        raise C32ConfigError(
+            "prerequisites.required_readiness_detail must be "
+            f"{_EXPECTED_C31_READINESS_DETAIL}"
+        )
+    if loaded.reviewed_raw_file_count != _EXPECTED_C31_REVIEWED_RAW_FILE_COUNT:
+        raise C32ConfigError(
+            "prerequisites.reviewed_raw_file_count must be "
+            f"{_EXPECTED_C31_REVIEWED_RAW_FILE_COUNT}"
+        )
+    if loaded.leakage_guard_passed is not True:
+        raise C32ConfigError("prerequisites.leakage_guard_passed must be true")
+    return loaded
 
 
 def _load_dataset_views(raw: dict[str, Any]) -> tuple[C32DatasetView, ...]:
@@ -306,6 +328,9 @@ def _load_metric_contract(raw: dict[str, Any]) -> C32MetricContract:
         forecasting_metrics=_required_string_list(
             contract, "forecasting_metrics", "metric_contract"
         ),
+        representation_metrics=_required_string_list(
+            contract, "representation_metrics", "metric_contract"
+        ),
         cross_dataset_summary=_required_string(
             contract, "cross_dataset_summary", "metric_contract"
         ),
@@ -316,6 +341,21 @@ def _load_metric_contract(raw: dict[str, Any]) -> C32MetricContract:
 def _load_outputs(raw: dict[str, Any]) -> C32Outputs:
     outputs = _required_mapping(raw, "outputs")
     return C32Outputs(report=Path(_required_string(outputs, "report", "outputs")))
+
+
+def _validate_task_metrics(
+    task_contracts: tuple[C32TaskContract, ...],
+    metric_contract: C32MetricContract,
+) -> None:
+    known_metrics = set(metric_contract.rul_metrics)
+    known_metrics.update(metric_contract.forecasting_metrics)
+    known_metrics.update(metric_contract.representation_metrics)
+    for task in task_contracts:
+        for metric in task.required_metrics:
+            if metric not in known_metrics:
+                raise C32ConfigError(
+                    f"task_contracts.{task.task_id} references unknown metric: {metric}"
+                )
 
 
 def _required_mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:

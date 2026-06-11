@@ -99,6 +99,7 @@ model_cache_policy:
 metric_contract:
   rul_metrics: [rul_mae, rul_rmse, nasa_score]
   forecasting_metrics: [forecasting_mae, forecasting_rmse, residual_ranking]
+  representation_metrics: [embedding_probe_placeholder]
   cross_dataset_summary: readiness_matrix_only
   leaderboard_allowed: false
 outputs:

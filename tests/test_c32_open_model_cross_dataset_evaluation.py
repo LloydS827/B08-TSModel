@@ -112,3 +112,54 @@ def test_c32_rejects_unknown_model_task_reference(tmp_path):
 
     with pytest.raises(C32ConfigError, match="unknown task"):
         load_c32_config(broken)
+
+
+def test_c32_rejects_duplicate_model_ids(tmp_path):
+    def duplicate_model(data):
+        data["model_candidates"][1]["model_id"] = data["model_candidates"][0][
+            "model_id"
+        ]
+
+    broken = _modified_default(tmp_path, duplicate_model)
+
+    with pytest.raises(C32ConfigError, match="duplicate model_id"):
+        load_c32_config(broken)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("required_status", "blocked"),
+        ("required_readiness_detail", "not_ready"),
+        ("reviewed_raw_file_count", 11),
+        ("leakage_guard_passed", False),
+    ],
+)
+def test_c32_rejects_wrong_c31_prerequisite_contract(tmp_path, field, value):
+    def break_prerequisite(data):
+        data["prerequisites"][field] = value
+
+    broken = _modified_default(tmp_path, break_prerequisite)
+
+    with pytest.raises(C32ConfigError, match=field):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_leaderboard_allowed(tmp_path):
+    def allow_leaderboard(data):
+        data["metric_contract"]["leaderboard_allowed"] = True
+
+    broken = _modified_default(tmp_path, allow_leaderboard)
+
+    with pytest.raises(C32ConfigError, match="leaderboard_allowed"):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_task_metric_missing_from_metric_contract(tmp_path):
+    def unknown_metric(data):
+        data["task_contracts"][0]["required_metrics"] = ["missing_metric"]
+
+    broken = _modified_default(tmp_path, unknown_metric)
+
+    with pytest.raises(C32ConfigError, match="unknown metric"):
+        load_c32_config(broken)
