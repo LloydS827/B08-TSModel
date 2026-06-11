@@ -26,6 +26,8 @@ The generated report path is ignored by Git.
 
 ## Validation Result
 
+This summary is excerpted from the ignored local generated report `reports/c_stage_c31_cmapss_local_raw_mapping_review.md` after the command above completed with exit code 0.
+
 - Status: `schema_validated_ready_for_c32`
 - Blocked reasons: none
 - Readiness detail: `full_classic_cmapss_validated`
