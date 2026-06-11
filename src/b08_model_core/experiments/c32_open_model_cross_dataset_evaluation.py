@@ -160,6 +160,61 @@ _SAFETY_FLAGS = (
     "allow_training",
     "allow_write_processed",
 )
+_REQUIRED_DATASET_IDS = {
+    "cmapss_classic_rul",
+    "fu13_real_forecasting_evidence",
+    "fu13_like_simulated_forecasting",
+}
+_REQUIRED_TASK_IDS = {
+    "rul_regression",
+    "forecasting_residual",
+    "representation_diagnostics",
+}
+_REQUIRED_MODEL_IDS = {
+    "baseline",
+    "ttm",
+    "chronos",
+    "timesfm",
+    "moirai",
+    "moment",
+    "units",
+}
+_ALLOWED_DATASET_STATUSES = {
+    "eligible_but_local_raw_required",
+    "documented_evidence_only",
+    "contract_ready_no_scoring",
+}
+_ALLOWED_TASK_STATUSES = {
+    "blocked_in_default",
+    "contract_ready_no_scoring",
+    "planned_not_executed",
+}
+_ALLOWED_MODEL_STATUSES = {
+    "contract_ready_no_scoring",
+    "skipped_model_cache_disabled",
+    "planned_not_executed",
+}
+_ALLOWED_DEFAULT_ACTIONS = {
+    "skipped_local_raw_disabled",
+    "skipped_real_data_not_read_by_default",
+    "contract_only_no_metrics",
+    "skipped_planned_task",
+    "contract_only_no_model_run",
+    "skipped_no_cache_or_dependencies",
+    "not_inspected_model_cache_disabled",
+}
+_FORBIDDEN_OVERCLAIMING_TOKENS = (
+    "score",
+    "scored",
+    "scoring",
+    "rank",
+    "ranked",
+    "leaderboard",
+    "train",
+    "training",
+    "executed",
+    "available_and_ran",
+)
 
 
 def load_c32_config(path: str | Path) -> C32Config:
@@ -443,13 +498,27 @@ def _load_dataset_views(raw: dict[str, Any]) -> tuple[C32DatasetView, ...]:
         if dataset_id in seen:
             raise C32ConfigError(f"duplicate dataset_id: {dataset_id}")
         seen.add(dataset_id)
+        status = _required_string(entry_raw, "status", f"dataset_views[{index}]")
+        default_action = _required_string(
+            entry_raw, "default_action", f"dataset_views[{index}]"
+        )
+        _validate_allowed_value(
+            status,
+            _ALLOWED_DATASET_STATUSES,
+            f"dataset_views[{index}].status",
+        )
+        _validate_allowed_value(
+            default_action,
+            _ALLOWED_DEFAULT_ACTIONS,
+            f"dataset_views[{index}].default_action",
+        )
         entries.append(
             C32DatasetView(
                 dataset_id=dataset_id,
                 display_name=_required_string(
                     entry_raw, "display_name", f"dataset_views[{index}]"
                 ),
-                status=_required_string(entry_raw, "status", f"dataset_views[{index}]"),
+                status=status,
                 source=_required_string(entry_raw, "source", f"dataset_views[{index}]"),
                 local_path=_required_string_or_empty(
                     entry_raw, "local_path", f"dataset_views[{index}]"
@@ -457,14 +526,13 @@ def _load_dataset_views(raw: dict[str, Any]) -> tuple[C32DatasetView, ...]:
                 task_families=_required_string_list(
                     entry_raw, "task_families", f"dataset_views[{index}]"
                 ),
-                default_action=_required_string(
-                    entry_raw, "default_action", f"dataset_views[{index}]"
-                ),
+                default_action=default_action,
                 comparable_scope=_required_string(
                     entry_raw, "comparable_scope", f"dataset_views[{index}]"
                 ),
             )
         )
+    _validate_required_ids(seen, _REQUIRED_DATASET_IDS, "dataset_id")
     return tuple(entries)
 
 
@@ -490,19 +558,32 @@ def _load_task_contracts(
                 raise C32ConfigError(
                     f"task_contracts[{index}] references unknown dataset: {dataset_id}"
                 )
+        status = _required_string(entry_raw, "status", f"task_contracts[{index}]")
+        default_action = _required_string(
+            entry_raw, "default_action", f"task_contracts[{index}]"
+        )
+        _validate_allowed_value(
+            status,
+            _ALLOWED_TASK_STATUSES,
+            f"task_contracts[{index}].status",
+        )
+        _validate_allowed_value(
+            default_action,
+            _ALLOWED_DEFAULT_ACTIONS,
+            f"task_contracts[{index}].default_action",
+        )
         entries.append(
             C32TaskContract(
                 task_id=task_id,
-                status=_required_string(entry_raw, "status", f"task_contracts[{index}]"),
+                status=status,
                 compatible_dataset_views=compatible_dataset_views,
                 required_metrics=_required_string_list(
                     entry_raw, "required_metrics", f"task_contracts[{index}]"
                 ),
-                default_action=_required_string(
-                    entry_raw, "default_action", f"task_contracts[{index}]"
-                ),
+                default_action=default_action,
             )
         )
+    _validate_required_ids(seen, _REQUIRED_TASK_IDS, "task_id")
     return tuple(entries)
 
 
@@ -528,29 +609,46 @@ def _load_model_candidates(
                 raise C32ConfigError(
                     f"model_candidates[{index}] references unknown task: {task_id}"
                 )
+        status = _required_string(entry_raw, "status", f"model_candidates[{index}]")
+        default_action = _required_string(
+            entry_raw, "default_action", f"model_candidates[{index}]"
+        )
+        _validate_allowed_value(
+            status,
+            _ALLOWED_MODEL_STATUSES,
+            f"model_candidates[{index}].status",
+        )
+        _validate_allowed_value(
+            default_action,
+            _ALLOWED_DEFAULT_ACTIONS,
+            f"model_candidates[{index}].default_action",
+        )
         entries.append(
             C32ModelCandidate(
                 model_id=model_id,
                 role=_required_string(entry_raw, "role", f"model_candidates[{index}]"),
-                status=_required_string(
-                    entry_raw, "status", f"model_candidates[{index}]"
-                ),
+                status=status,
                 task_ids=task_ids,
-                default_action=_required_string(
-                    entry_raw, "default_action", f"model_candidates[{index}]"
-                ),
+                default_action=default_action,
             )
         )
+    _validate_required_ids(seen, _REQUIRED_MODEL_IDS, "model_id")
     return tuple(entries)
 
 
 def _load_model_cache_policy(raw: dict[str, Any]) -> C32ModelCachePolicy:
     policy = _required_mapping(raw, "model_cache_policy")
+    default_action = _required_string(
+        policy, "default_action", "model_cache_policy"
+    )
+    _validate_allowed_value(
+        default_action,
+        _ALLOWED_DEFAULT_ACTIONS,
+        "model_cache_policy.default_action",
+    )
     return C32ModelCachePolicy(
         cache_dir=Path(_required_string(policy, "cache_dir", "model_cache_policy")),
-        default_action=_required_string(
-            policy, "default_action", "model_cache_policy"
-        ),
+        default_action=default_action,
     )
 
 
@@ -594,6 +692,41 @@ def _validate_task_metrics(
                 raise C32ConfigError(
                     f"task_contracts.{task.task_id} references unknown metric: {metric}"
                 )
+
+
+def _validate_required_ids(
+    actual_ids: set[str],
+    required_ids: set[str],
+    field_name: str,
+) -> None:
+    missing = sorted(required_ids - actual_ids)
+    extra = sorted(actual_ids - required_ids)
+    if missing or extra:
+        parts = []
+        if missing:
+            parts.append(f"missing required {field_name}: {', '.join(missing)}")
+        if extra:
+            parts.append(f"unknown {field_name}: {', '.join(extra)}")
+        raise C32ConfigError("; ".join(parts))
+
+
+def _validate_allowed_value(
+    value: str,
+    allowed_values: set[str],
+    field_name: str,
+) -> None:
+    if value in allowed_values:
+        return
+    if _contains_forbidden_overclaim(value):
+        raise C32ConfigError(f"{field_name} has overclaiming value {value}")
+    else:
+        allowed = ", ".join(sorted(allowed_values))
+        raise C32ConfigError(f"{field_name} has invalid value {value}; allowed: {allowed}")
+
+
+def _contains_forbidden_overclaim(value: str) -> bool:
+    normalized = value.lower()
+    return any(token in normalized for token in _FORBIDDEN_OVERCLAIMING_TOKENS)
 
 
 def _required_mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:

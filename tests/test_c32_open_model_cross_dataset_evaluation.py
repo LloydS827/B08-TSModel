@@ -168,6 +168,74 @@ def test_c32_rejects_task_metric_missing_from_metric_contract(tmp_path):
         load_c32_config(broken)
 
 
+@pytest.mark.parametrize(
+    ("section", "id_field", "missing_id"),
+    [
+        ("dataset_views", "dataset_id", "cmapss_classic_rul"),
+        ("task_contracts", "task_id", "rul_regression"),
+        ("model_candidates", "model_id", "baseline"),
+    ],
+)
+def test_c32_rejects_missing_required_contract_ids(
+    tmp_path,
+    section,
+    id_field,
+    missing_id,
+):
+    def remove_required_id(data):
+        data[section] = [
+            item for item in data[section] if item[id_field] != missing_id
+        ]
+
+    broken = _modified_default(tmp_path, remove_required_id)
+
+    with pytest.raises(C32ConfigError, match=missing_id):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_unknown_model_candidate_id(tmp_path):
+    def fake_model(data):
+        data["model_candidates"][0]["model_id"] = "fake_model"
+
+    broken = _modified_default(tmp_path, fake_model)
+
+    with pytest.raises(C32ConfigError, match="fake_model"):
+        load_c32_config(broken)
+
+
+@pytest.mark.parametrize(
+    ("section", "field", "value"),
+    [
+        ("dataset_views", "status", "scored_and_ranked"),
+        ("task_contracts", "default_action", "model_scored"),
+        ("model_candidates", "status", "training_executed"),
+    ],
+)
+def test_c32_rejects_overclaiming_status_and_action_values(
+    tmp_path,
+    section,
+    field,
+    value,
+):
+    def overclaim(data):
+        data[section][0][field] = value
+
+    broken = _modified_default(tmp_path, overclaim)
+
+    with pytest.raises(C32ConfigError, match=value):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_overclaiming_model_cache_default_action(tmp_path):
+    def overclaim(data):
+        data["model_cache_policy"]["default_action"] = "training_executed"
+
+    broken = _modified_default(tmp_path, overclaim)
+
+    with pytest.raises(C32ConfigError, match="training_executed"):
+        load_c32_config(broken)
+
+
 def test_c32_runner_returns_contract_ready_local_execution_blocked():
     config = load_c32_config(_DEFAULT_CONFIG)
     result = run_c32_open_model_cross_dataset_evaluation(
