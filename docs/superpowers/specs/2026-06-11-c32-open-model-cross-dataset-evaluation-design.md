@@ -82,6 +82,7 @@ Create `configs/c_stage_c32_open_model_cross_dataset_evaluation.yaml` with these
 - `dataset_views`: C-MAPSS classic RUL benchmark, FU13 real evidence, and FU13-like simulated/sandbox evidence.
 - `task_contracts`: first-round task definitions.
 - `model_candidates`: baseline and open model candidates inherited from C2.x.
+- `model_cache_policy`: configured cache path recorded for future local execution, not inspected by default.
 - `metric_contract`: metric names and when each is allowed.
 - `outputs`: report path.
 

@@ -14,7 +14,7 @@
 
 - Create `configs/c_stage_c32_open_model_cross_dataset_evaluation.yaml`
   - Default-safe C3.2 config.
-  - Records C3.1 prerequisite evidence, dataset views, task contracts, model candidates, metrics, safety policy and report output.
+  - Records C3.1 prerequisite evidence, dataset views, task contracts, model candidates, model cache policy, metrics, safety policy and report output.
 - Create `src/b08_model_core/experiments/c32_open_model_cross_dataset_evaluation.py`
   - Defines config/result dataclasses, loader validation, pure contract runner, and Markdown renderer.
   - Must not read C-MAPSS raw files, FU13 real files, model cache paths, or instantiate adapters.
@@ -192,6 +192,9 @@ model_candidates:
     status: planned_not_executed
     task_ids: [representation_diagnostics]
     default_action: skipped_planned_task
+model_cache_policy:
+  cache_dir: hf_cache
+  default_action: not_inspected_model_cache_disabled
 metric_contract:
   rul_metrics: [rul_mae, rul_rmse, nasa_score]
   forecasting_metrics: [forecasting_mae, forecasting_rmse, residual_ranking]
@@ -211,6 +214,7 @@ In the C3.2 module:
 - `C32DatasetView`
 - `C32TaskContract`
 - `C32ModelCandidate`
+- `C32ModelCachePolicy`
 - `C32MetricContract`
 - `C32Outputs`
 - `C32Config`
@@ -224,6 +228,7 @@ Validation rules:
 - Dataset/task/model ids must be unique and non-empty.
 - Task contracts must reference known dataset ids.
 - Model candidates must reference known task ids.
+- Model cache policy must provide a cache path, but default execution must not inspect it.
 - Metric contract must set `leaderboard_allowed: false`.
 
 - [ ] **Step 5: Run Task 1 tests**
@@ -292,24 +297,67 @@ def test_c32_report_records_no_scoring_and_no_production_claims():
 
 - [ ] **Step 2: Write failing no-touch test**
 
-Use impossible paths to prove default runner does not inspect local data/cache paths:
+Use sentinel paths and monkeypatch filesystem probes to prove default runner does not inspect local data/cache paths:
 
 ```python
 def test_c32_default_runner_does_not_touch_raw_real_or_cache_paths(tmp_path):
     data = yaml.safe_load(_DEFAULT_CONFIG.read_text(encoding="utf-8"))
-    data["dataset_views"][0]["local_path"] = str(tmp_path / "missing_cmapss_raw")
-    data["dataset_views"][1]["local_path"] = str(tmp_path / "missing_fu13_real.parquet")
-    data["model_cache_policy"] = {"cache_dir": str(tmp_path / "missing_model_cache")}
+    sentinel_paths = {
+        str(tmp_path / "sentinel_cmapss_raw"),
+        str(tmp_path / "sentinel_fu13_real.parquet"),
+        str(tmp_path / "sentinel_model_cache"),
+    }
+    data["dataset_views"][0]["local_path"] = str(tmp_path / "sentinel_cmapss_raw")
+    data["dataset_views"][1]["local_path"] = str(tmp_path / "sentinel_fu13_real.parquet")
+    data["model_cache_policy"]["cache_dir"] = str(tmp_path / "sentinel_model_cache")
     config_path = tmp_path / "c32_no_touch.yaml"
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     config = load_c32_config(config_path)
+
+    def fail_if_sentinel_path_is_touched(method_name):
+        original = getattr(Path, method_name)
+
+        def wrapped(self, *args, **kwargs):
+            if str(self) in sentinel_paths:
+                raise AssertionError(f"C3.2 default runner touched {method_name}: {self}")
+            return original(self, *args, **kwargs)
+
+        return wrapped
+
+    monkeypatch.setattr(Path, "exists", fail_if_sentinel_path_is_touched("exists"))
+    monkeypatch.setattr(Path, "is_file", fail_if_sentinel_path_is_touched("is_file"))
+    monkeypatch.setattr(Path, "iterdir", fail_if_sentinel_path_is_touched("iterdir"))
+    monkeypatch.setattr(Path, "glob", fail_if_sentinel_path_is_touched("glob"))
+    monkeypatch.setattr(Path, "open", fail_if_sentinel_path_is_touched("open"))
+
     result = run_c32_open_model_cross_dataset_evaluation(config, config_path=config_path)
 
     assert result.status == "contract_ready_local_execution_blocked"
 ```
 
 If the implementation accidentally inspects paths, this test will fail.
+
+Add an adapter-import sentinel:
+
+```python
+def test_c32_default_runner_does_not_import_open_model_adapters(monkeypatch):
+    import builtins
+
+    original_import = builtins.__import__
+
+    def guarded_import(name, *args, **kwargs):
+        if name.startswith("b08_model_core.adapters.open_models"):
+            raise AssertionError(f"C3.2 default runner imported adapters: {name}")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    config = load_c32_config(_DEFAULT_CONFIG)
+
+    result = run_c32_open_model_cross_dataset_evaluation(config, config_path=_DEFAULT_CONFIG)
+
+    assert result.status == "contract_ready_local_execution_blocked"
+```
 
 - [ ] **Step 3: Implement runner result dataclasses**
 
@@ -596,7 +644,19 @@ Fix blocking issues, re-run relevant tests, and commit fixes.
 git push -u origin codex/c32-open-model-cross-dataset-eval
 gh pr create --base main --head codex/c32-open-model-cross-dataset-eval \
   --title "Add C3.2 cross-dataset evaluation contract scaffold" \
-  --body-file /tmp/c32_pr_body.md
+  --body "$(cat <<'PR_BODY'
+## Summary
+- Add the C3.2 default-safe cross-dataset evaluation contract config, loader, runner, report, and CLI.
+- Document C3.2 as contract-ready while local execution remains blocked by default safety policy.
+- Keep C-MAPSS raw, FU13 real data, model caches, scoring, training, and leaderboard outside the default path.
+
+## Verification
+- `uv run python -m pytest -q`
+- `uv run b08-model-core experiment c-stage-c32 --config configs/c_stage_c32_open_model_cross_dataset_evaluation.yaml --output /tmp/c32_contract_report.md`
+- C2/C2.1/C2.2/C3/C3.1/C3.2 help commands
+- `git ls-files data/public data/processed reports/c_stage_c32_open_model_cross_dataset_evaluation.md`
+PR_BODY
+)"
 ```
 
 PR body should include summary, safety boundary, and verification commands.
