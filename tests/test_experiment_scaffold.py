@@ -243,16 +243,22 @@ def test_c31_cmapss_minimal_ingestion_workflow_is_documented():
     assert "不运行模型训练" in c31_section
     assert "docs/reviews/2026-06-10-c31-cmapss-source-license-review.md" in c31_section
     assert "c31-cmapss-license-evidence-update" in c31_section
+    assert "docs/reviews/2026-06-11-c31-cmapss-local-raw-mapping-review.md" in c31_section
+    assert "configs/local/c_stage_c31_cmapss_local_raw_mapping_review.example.yaml" in c31_section
     assert "Zenodo" in c31_section
     assert "CC BY 4.0" in c31_section
     assert "local raw mapping review" in c31_section
+    assert "schema_validated_ready_for_c32" in c31_section
+    assert "full_classic_cmapss_validated" in c31_section
     assert "C3.2" in c31_section
     assert "local raw opt-in" in c31_section
-    assert "blocked" in c31_section
+    assert "可进入 C3.2" in c31_section
     assert "C3.1" in details
     assert "NASA C-MAPSS" in details
     assert "source/license review" in details
     assert "local raw mapping review" in details
+    assert "schema_validated_ready_for_c32" in details
+    assert "open model cross-dataset evaluation" in details
     assert "C3.2" in details
     assert details.count("\n## ") == 3
     assert "## 1. 当前阶段" in details
