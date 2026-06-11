@@ -16,6 +16,10 @@ from b08_model_core.experiments.c31_cmapss_minimal_ingestion import (
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_CONFIG = _REPO_ROOT / "configs/c_stage_c31_cmapss_minimal_ingestion.yaml"
+_LOCAL_RAW_CONFIG = (
+    _REPO_ROOT
+    / "configs/local/c_stage_c31_cmapss_local_raw_mapping_review.example.yaml"
+)
 
 
 def _load_default_yaml() -> dict:
@@ -60,6 +64,20 @@ def test_c31_default_config_is_offline_and_lists_classic_cmapss_files():
     assert len(config.download_policy.expected_files) == 12
     assert config.download_policy.expected_files == expected_cmapss_files()
     assert config.outputs.report == Path("reports/c_stage_c31_cmapss_minimal_ingestion.md")
+
+
+def test_c31_local_raw_mapping_example_config_is_explicit_opt_in():
+    config = load_c31_cmapss_config(_LOCAL_RAW_CONFIG)
+
+    assert config.download_policy.allow_network is False
+    assert config.download_policy.allow_download is False
+    assert config.download_policy.allow_local_raw_data is True
+    assert config.download_policy.allow_write_processed is False
+    assert config.download_policy.raw_dir == Path("data/public/cmapss/raw")
+    assert config.outputs.report == Path(
+        "reports/c_stage_c31_cmapss_local_raw_mapping_review.md"
+    )
+    assert config.download_policy.expected_files == expected_cmapss_files()
 
 
 def test_c31_rejects_duplicate_yaml_mapping_keys(tmp_path):
