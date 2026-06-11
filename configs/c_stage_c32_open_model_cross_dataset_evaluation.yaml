@@ -1,0 +1,105 @@
+stage: C3_2_open_model_cross_dataset_evaluation
+safety_policy:
+  allow_network: false
+  allow_download: false
+  allow_local_raw_data: false
+  allow_model_cache: false
+  allow_training: false
+  allow_write_processed: false
+prerequisites:
+  c31_review_doc: docs/reviews/2026-06-11-c31-cmapss-local-raw-mapping-review.md
+  required_status: schema_validated_ready_for_c32
+  required_readiness_detail: full_classic_cmapss_validated
+  reviewed_raw_file_count: 12
+  leakage_guard_passed: true
+dataset_views:
+  - dataset_id: cmapss_classic_rul
+    display_name: NASA C-MAPSS Classic RUL
+    status: eligible_but_local_raw_required
+    source: c31_local_raw_mapping_review
+    local_path: data/public/cmapss/raw
+    task_families: [rul_regression]
+    default_action: skipped_local_raw_disabled
+    comparable_scope: public_rul_degradation_only
+  - dataset_id: fu13_real_forecasting_evidence
+    display_name: FU13 Real Forecasting Evidence
+    status: documented_evidence_only
+    source: existing_fu13_pipeline
+    local_path: data/processed/fu13_real_observations.parquet
+    task_families: [forecasting_residual]
+    default_action: skipped_real_data_not_read_by_default
+    comparable_scope: internal_forecasting_evidence_only
+  - dataset_id: fu13_like_simulated_forecasting
+    display_name: FU13-like Simulated Forecasting
+    status: contract_ready_no_scoring
+    source: simulation_scaffold
+    local_path: ""
+    task_families: [forecasting_residual]
+    default_action: contract_only_no_metrics
+    comparable_scope: sandbox_contract_reference
+task_contracts:
+  - task_id: rul_regression
+    status: blocked_in_default
+    compatible_dataset_views: [cmapss_classic_rul]
+    required_metrics: [rul_mae, rul_rmse, nasa_score]
+    default_action: skipped_local_raw_disabled
+  - task_id: forecasting_residual
+    status: contract_ready_no_scoring
+    compatible_dataset_views:
+      - fu13_real_forecasting_evidence
+      - fu13_like_simulated_forecasting
+    required_metrics: [forecasting_mae, forecasting_rmse, residual_ranking]
+    default_action: contract_only_no_metrics
+  - task_id: representation_diagnostics
+    status: planned_not_executed
+    compatible_dataset_views:
+      - fu13_real_forecasting_evidence
+      - fu13_like_simulated_forecasting
+    required_metrics: [embedding_probe_placeholder]
+    default_action: skipped_planned_task
+model_candidates:
+  - model_id: baseline
+    role: required_baseline
+    status: contract_ready_no_scoring
+    task_ids: [rul_regression, forecasting_residual]
+    default_action: contract_only_no_model_run
+  - model_id: ttm
+    role: optional_open_model
+    status: skipped_model_cache_disabled
+    task_ids: [forecasting_residual]
+    default_action: skipped_no_cache_or_dependencies
+  - model_id: chronos
+    role: optional_open_model
+    status: skipped_model_cache_disabled
+    task_ids: [forecasting_residual]
+    default_action: skipped_no_cache_or_dependencies
+  - model_id: timesfm
+    role: optional_open_model
+    status: skipped_model_cache_disabled
+    task_ids: [forecasting_residual]
+    default_action: skipped_no_cache_or_dependencies
+  - model_id: moirai
+    role: optional_open_model
+    status: skipped_model_cache_disabled
+    task_ids: [forecasting_residual]
+    default_action: skipped_no_cache_or_dependencies
+  - model_id: moment
+    role: representation_candidate
+    status: planned_not_executed
+    task_ids: [representation_diagnostics]
+    default_action: skipped_planned_task
+  - model_id: units
+    role: representation_candidate
+    status: planned_not_executed
+    task_ids: [representation_diagnostics]
+    default_action: skipped_planned_task
+model_cache_policy:
+  cache_dir: hf_cache
+  default_action: not_inspected_model_cache_disabled
+metric_contract:
+  rul_metrics: [rul_mae, rul_rmse, nasa_score]
+  forecasting_metrics: [forecasting_mae, forecasting_rmse, residual_ranking]
+  cross_dataset_summary: readiness_matrix_only
+  leaderboard_allowed: false
+outputs:
+  report: reports/c_stage_c32_open_model_cross_dataset_evaluation.md

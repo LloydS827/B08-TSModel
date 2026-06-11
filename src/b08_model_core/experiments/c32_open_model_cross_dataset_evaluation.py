@@ -1,0 +1,383 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+class C32ConfigError(ValueError):
+    """Raised when the C3.2 cross-dataset evaluation config is invalid."""
+
+
+@dataclass(frozen=True)
+class C32SafetyPolicy:
+    allow_network: bool
+    allow_download: bool
+    allow_local_raw_data: bool
+    allow_model_cache: bool
+    allow_training: bool
+    allow_write_processed: bool
+
+
+@dataclass(frozen=True)
+class C32Prerequisites:
+    c31_review_doc: Path
+    required_status: str
+    required_readiness_detail: str
+    reviewed_raw_file_count: int
+    leakage_guard_passed: bool
+
+
+@dataclass(frozen=True)
+class C32DatasetView:
+    dataset_id: str
+    display_name: str
+    status: str
+    source: str
+    local_path: str
+    task_families: tuple[str, ...]
+    default_action: str
+    comparable_scope: str
+
+
+@dataclass(frozen=True)
+class C32TaskContract:
+    task_id: str
+    status: str
+    compatible_dataset_views: tuple[str, ...]
+    required_metrics: tuple[str, ...]
+    default_action: str
+
+
+@dataclass(frozen=True)
+class C32ModelCandidate:
+    model_id: str
+    role: str
+    status: str
+    task_ids: tuple[str, ...]
+    default_action: str
+
+
+@dataclass(frozen=True)
+class C32ModelCachePolicy:
+    cache_dir: Path
+    default_action: str
+
+
+@dataclass(frozen=True)
+class C32MetricContract:
+    rul_metrics: tuple[str, ...]
+    forecasting_metrics: tuple[str, ...]
+    cross_dataset_summary: str
+    leaderboard_allowed: bool
+
+
+@dataclass(frozen=True)
+class C32Outputs:
+    report: Path
+
+
+@dataclass(frozen=True)
+class C32Config:
+    stage: str
+    safety_policy: C32SafetyPolicy
+    prerequisites: C32Prerequisites
+    dataset_views: tuple[C32DatasetView, ...]
+    task_contracts: tuple[C32TaskContract, ...]
+    model_candidates: tuple[C32ModelCandidate, ...]
+    model_cache_policy: C32ModelCachePolicy
+    metric_contract: C32MetricContract
+    outputs: C32Outputs
+
+
+_EXPECTED_STAGE = "C3_2_open_model_cross_dataset_evaluation"
+_SAFETY_FLAGS = (
+    "allow_network",
+    "allow_download",
+    "allow_local_raw_data",
+    "allow_model_cache",
+    "allow_training",
+    "allow_write_processed",
+)
+
+
+def load_c32_config(path: str | Path) -> C32Config:
+    raw = _load_yaml_mapping(Path(path))
+    stage = _required_string(raw, "stage")
+    if stage != _EXPECTED_STAGE:
+        raise C32ConfigError(f"stage must be {_EXPECTED_STAGE}")
+
+    safety_policy = _load_safety_policy(raw)
+    prerequisites = _load_prerequisites(raw)
+    dataset_views = _load_dataset_views(raw)
+    task_contracts = _load_task_contracts(raw, dataset_views)
+    model_candidates = _load_model_candidates(raw, task_contracts)
+    model_cache_policy = _load_model_cache_policy(raw)
+    metric_contract = _load_metric_contract(raw)
+    outputs = _load_outputs(raw)
+
+    return C32Config(
+        stage=stage,
+        safety_policy=safety_policy,
+        prerequisites=prerequisites,
+        dataset_views=dataset_views,
+        task_contracts=task_contracts,
+        model_candidates=model_candidates,
+        model_cache_policy=model_cache_policy,
+        metric_contract=metric_contract,
+        outputs=outputs,
+    )
+
+
+def _load_yaml_mapping(path: Path) -> dict[str, Any]:
+    try:
+        loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise C32ConfigError(f"invalid YAML in {path}: {exc}") from exc
+    if not isinstance(loaded, dict):
+        raise C32ConfigError(f"{path} must contain a mapping")
+    return loaded
+
+
+def _load_safety_policy(raw: dict[str, Any]) -> C32SafetyPolicy:
+    policy = _required_mapping(raw, "safety_policy")
+    values = {
+        flag: _required_bool(policy, flag, "safety_policy") for flag in _SAFETY_FLAGS
+    }
+    for flag, value in values.items():
+        if value is not False:
+            raise C32ConfigError(f"safety_policy.{flag} must be false by default")
+    return C32SafetyPolicy(**values)
+
+
+def _load_prerequisites(raw: dict[str, Any]) -> C32Prerequisites:
+    prerequisites = _required_mapping(raw, "prerequisites")
+    return C32Prerequisites(
+        c31_review_doc=Path(
+            _required_string(prerequisites, "c31_review_doc", "prerequisites")
+        ),
+        required_status=_required_string(
+            prerequisites, "required_status", "prerequisites"
+        ),
+        required_readiness_detail=_required_string(
+            prerequisites, "required_readiness_detail", "prerequisites"
+        ),
+        reviewed_raw_file_count=_required_int(
+            prerequisites, "reviewed_raw_file_count", "prerequisites"
+        ),
+        leakage_guard_passed=_required_bool(
+            prerequisites, "leakage_guard_passed", "prerequisites"
+        ),
+    )
+
+
+def _load_dataset_views(raw: dict[str, Any]) -> tuple[C32DatasetView, ...]:
+    items = _required_list(raw, "dataset_views")
+    seen: set[str] = set()
+    entries: list[C32DatasetView] = []
+    for index, item in enumerate(items):
+        entry_raw = _list_item_mapping(item, "dataset_views", index)
+        dataset_id = _required_string(entry_raw, "dataset_id", f"dataset_views[{index}]")
+        if dataset_id in seen:
+            raise C32ConfigError(f"duplicate dataset_id: {dataset_id}")
+        seen.add(dataset_id)
+        entries.append(
+            C32DatasetView(
+                dataset_id=dataset_id,
+                display_name=_required_string(
+                    entry_raw, "display_name", f"dataset_views[{index}]"
+                ),
+                status=_required_string(entry_raw, "status", f"dataset_views[{index}]"),
+                source=_required_string(entry_raw, "source", f"dataset_views[{index}]"),
+                local_path=_required_string_or_empty(
+                    entry_raw, "local_path", f"dataset_views[{index}]"
+                ),
+                task_families=_required_string_list(
+                    entry_raw, "task_families", f"dataset_views[{index}]"
+                ),
+                default_action=_required_string(
+                    entry_raw, "default_action", f"dataset_views[{index}]"
+                ),
+                comparable_scope=_required_string(
+                    entry_raw, "comparable_scope", f"dataset_views[{index}]"
+                ),
+            )
+        )
+    return tuple(entries)
+
+
+def _load_task_contracts(
+    raw: dict[str, Any],
+    dataset_views: tuple[C32DatasetView, ...],
+) -> tuple[C32TaskContract, ...]:
+    items = _required_list(raw, "task_contracts")
+    known_dataset_ids = {entry.dataset_id for entry in dataset_views}
+    seen: set[str] = set()
+    entries: list[C32TaskContract] = []
+    for index, item in enumerate(items):
+        entry_raw = _list_item_mapping(item, "task_contracts", index)
+        task_id = _required_string(entry_raw, "task_id", f"task_contracts[{index}]")
+        if task_id in seen:
+            raise C32ConfigError(f"duplicate task_id: {task_id}")
+        seen.add(task_id)
+        compatible_dataset_views = _required_string_list(
+            entry_raw, "compatible_dataset_views", f"task_contracts[{index}]"
+        )
+        for dataset_id in compatible_dataset_views:
+            if dataset_id not in known_dataset_ids:
+                raise C32ConfigError(
+                    f"task_contracts[{index}] references unknown dataset: {dataset_id}"
+                )
+        entries.append(
+            C32TaskContract(
+                task_id=task_id,
+                status=_required_string(entry_raw, "status", f"task_contracts[{index}]"),
+                compatible_dataset_views=compatible_dataset_views,
+                required_metrics=_required_string_list(
+                    entry_raw, "required_metrics", f"task_contracts[{index}]"
+                ),
+                default_action=_required_string(
+                    entry_raw, "default_action", f"task_contracts[{index}]"
+                ),
+            )
+        )
+    return tuple(entries)
+
+
+def _load_model_candidates(
+    raw: dict[str, Any],
+    task_contracts: tuple[C32TaskContract, ...],
+) -> tuple[C32ModelCandidate, ...]:
+    items = _required_list(raw, "model_candidates")
+    known_task_ids = {entry.task_id for entry in task_contracts}
+    seen: set[str] = set()
+    entries: list[C32ModelCandidate] = []
+    for index, item in enumerate(items):
+        entry_raw = _list_item_mapping(item, "model_candidates", index)
+        model_id = _required_string(entry_raw, "model_id", f"model_candidates[{index}]")
+        if model_id in seen:
+            raise C32ConfigError(f"duplicate model_id: {model_id}")
+        seen.add(model_id)
+        task_ids = _required_string_list(
+            entry_raw, "task_ids", f"model_candidates[{index}]"
+        )
+        for task_id in task_ids:
+            if task_id not in known_task_ids:
+                raise C32ConfigError(
+                    f"model_candidates[{index}] references unknown task: {task_id}"
+                )
+        entries.append(
+            C32ModelCandidate(
+                model_id=model_id,
+                role=_required_string(entry_raw, "role", f"model_candidates[{index}]"),
+                status=_required_string(
+                    entry_raw, "status", f"model_candidates[{index}]"
+                ),
+                task_ids=task_ids,
+                default_action=_required_string(
+                    entry_raw, "default_action", f"model_candidates[{index}]"
+                ),
+            )
+        )
+    return tuple(entries)
+
+
+def _load_model_cache_policy(raw: dict[str, Any]) -> C32ModelCachePolicy:
+    policy = _required_mapping(raw, "model_cache_policy")
+    return C32ModelCachePolicy(
+        cache_dir=Path(_required_string(policy, "cache_dir", "model_cache_policy")),
+        default_action=_required_string(
+            policy, "default_action", "model_cache_policy"
+        ),
+    )
+
+
+def _load_metric_contract(raw: dict[str, Any]) -> C32MetricContract:
+    contract = _required_mapping(raw, "metric_contract")
+    leaderboard_allowed = _required_bool(
+        contract, "leaderboard_allowed", "metric_contract"
+    )
+    if leaderboard_allowed is not False:
+        raise C32ConfigError("metric_contract.leaderboard_allowed must be false")
+    return C32MetricContract(
+        rul_metrics=_required_string_list(contract, "rul_metrics", "metric_contract"),
+        forecasting_metrics=_required_string_list(
+            contract, "forecasting_metrics", "metric_contract"
+        ),
+        cross_dataset_summary=_required_string(
+            contract, "cross_dataset_summary", "metric_contract"
+        ),
+        leaderboard_allowed=leaderboard_allowed,
+    )
+
+
+def _load_outputs(raw: dict[str, Any]) -> C32Outputs:
+    outputs = _required_mapping(raw, "outputs")
+    return C32Outputs(report=Path(_required_string(outputs, "report", "outputs")))
+
+
+def _required_mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:
+    value = raw.get(key)
+    if not isinstance(value, dict):
+        raise C32ConfigError(f"{key} must be a mapping")
+    return value
+
+
+def _required_list(raw: dict[str, Any], key: str) -> list[Any]:
+    value = raw.get(key)
+    if not isinstance(value, list) or not value:
+        raise C32ConfigError(f"{key} must be a non-empty list")
+    return value
+
+
+def _list_item_mapping(value: Any, section: str, index: int) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        raise C32ConfigError(f"{section}[{index}] must be a mapping")
+    return value
+
+
+def _required_string(
+    raw: dict[str, Any],
+    key: str,
+    context: str = "config",
+) -> str:
+    value = raw.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise C32ConfigError(f"{context}.{key} must be a non-empty string")
+    return value
+
+
+def _required_string_or_empty(raw: dict[str, Any], key: str, context: str) -> str:
+    value = raw.get(key)
+    if not isinstance(value, str):
+        raise C32ConfigError(f"{context}.{key} must be a string")
+    return value
+
+
+def _required_string_list(
+    raw: dict[str, Any],
+    key: str,
+    context: str,
+) -> tuple[str, ...]:
+    value = raw.get(key)
+    if not isinstance(value, list) or not value:
+        raise C32ConfigError(f"{context}.{key} must be a non-empty list")
+    if not all(isinstance(item, str) and item.strip() for item in value):
+        raise C32ConfigError(f"{context}.{key} must contain non-empty strings")
+    return tuple(value)
+
+
+def _required_bool(raw: dict[str, Any], key: str, context: str) -> bool:
+    value = raw.get(key)
+    if not isinstance(value, bool):
+        raise C32ConfigError(f"{context}.{key} must be a boolean")
+    return value
+
+
+def _required_int(raw: dict[str, Any], key: str, context: str) -> int:
+    value = raw.get(key)
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise C32ConfigError(f"{context}.{key} must be an integer")
+    return value
