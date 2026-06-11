@@ -93,10 +93,65 @@ class C32Config:
     outputs: C32Outputs
 
 
+@dataclass(frozen=True)
+class C32DatasetResult:
+    dataset_id: str
+    display_name: str
+    status: str
+    source: str
+    local_path: str
+    task_families: tuple[str, ...]
+    default_action: str
+    comparable_scope: str
+
+
+@dataclass(frozen=True)
+class C32TaskResult:
+    task_id: str
+    status: str
+    compatible_dataset_views: tuple[str, ...]
+    required_metrics: tuple[str, ...]
+    default_action: str
+
+
+@dataclass(frozen=True)
+class C32ModelResult:
+    model_id: str
+    role: str
+    status: str
+    task_ids: tuple[str, ...]
+    default_action: str
+
+
+@dataclass(frozen=True)
+class C32RunResult:
+    config_path: Path
+    stage: str
+    status: str
+    go_no_go_decision: str
+    safety_policy: C32SafetyPolicy
+    prerequisites: C32Prerequisites
+    dataset_results: tuple[C32DatasetResult, ...]
+    task_results: tuple[C32TaskResult, ...]
+    model_results: tuple[C32ModelResult, ...]
+    model_cache_policy: C32ModelCachePolicy
+    metric_contract: C32MetricContract
+    invalid_claims: tuple[str, ...]
+
+
 _EXPECTED_STAGE = "C3_2_open_model_cross_dataset_evaluation"
 _EXPECTED_C31_STATUS = "schema_validated_ready_for_c32"
 _EXPECTED_C31_READINESS_DETAIL = "full_classic_cmapss_validated"
 _EXPECTED_C31_REVIEWED_RAW_FILE_COUNT = 12
+_CONTRACT_READY_STATUS = "contract_ready_local_execution_blocked"
+_GO_DECISION = "Go for C3.2 local execution design"
+_INVALID_CLAIMS = (
+    "no production RUL",
+    "no production alarms",
+    "no maintenance recommendations",
+    "no benchmark leaderboard",
+    "no self-developed model superiority",
+)
 _SAFETY_FLAGS = (
     "allow_network",
     "allow_download",
@@ -134,6 +189,189 @@ def load_c32_config(path: str | Path) -> C32Config:
         metric_contract=metric_contract,
         outputs=outputs,
     )
+
+
+def run_c32_open_model_cross_dataset_evaluation(
+    config: C32Config,
+    config_path: str | Path,
+) -> C32RunResult:
+    return C32RunResult(
+        config_path=Path(config_path),
+        stage=config.stage,
+        status=_CONTRACT_READY_STATUS,
+        go_no_go_decision=_GO_DECISION,
+        safety_policy=config.safety_policy,
+        prerequisites=config.prerequisites,
+        dataset_results=tuple(
+            C32DatasetResult(
+                dataset_id=item.dataset_id,
+                display_name=item.display_name,
+                status=item.status,
+                source=item.source,
+                local_path=item.local_path,
+                task_families=item.task_families,
+                default_action=item.default_action,
+                comparable_scope=item.comparable_scope,
+            )
+            for item in config.dataset_views
+        ),
+        task_results=tuple(
+            C32TaskResult(
+                task_id=item.task_id,
+                status=item.status,
+                compatible_dataset_views=item.compatible_dataset_views,
+                required_metrics=item.required_metrics,
+                default_action=item.default_action,
+            )
+            for item in config.task_contracts
+        ),
+        model_results=tuple(
+            C32ModelResult(
+                model_id=item.model_id,
+                role=item.role,
+                status=item.status,
+                task_ids=item.task_ids,
+                default_action=item.default_action,
+            )
+            for item in config.model_candidates
+        ),
+        model_cache_policy=config.model_cache_policy,
+        metric_contract=config.metric_contract,
+        invalid_claims=_INVALID_CLAIMS,
+    )
+
+
+def render_c32_report(result: C32RunResult) -> str:
+    lines = [
+        "# C3.2 Open Model Cross-Dataset Evaluation Report",
+        "",
+        "## Summary",
+        "",
+        f"- Stage: {result.stage}",
+        f"- Config: {result.config_path}",
+        f"- Status: {result.status}",
+        f"- Decision: {result.go_no_go_decision}",
+        "- No model training, scoring, or leaderboard is executed.",
+        "- C-MAPSS RUL results and FU13 forecasting results are not directly interchangeable.",
+        "- Do not claim production RUL, production alarms, maintenance recommendations, benchmark leadership, or self-developed model superiority.",
+        "",
+        "## Safety Policy",
+        "",
+    ]
+    for flag in _SAFETY_FLAGS:
+        lines.append(f"- {flag}: {getattr(result.safety_policy, flag)}")
+    lines.extend(
+        [
+            "",
+            "## C3.1 Prerequisites",
+            "",
+            f"- Review doc: {result.prerequisites.c31_review_doc}",
+            f"- Required status: {result.prerequisites.required_status}",
+            f"- Required readiness detail: {result.prerequisites.required_readiness_detail}",
+            f"- Reviewed raw file count: {result.prerequisites.reviewed_raw_file_count}",
+            f"- Leakage guard passed: {result.prerequisites.leakage_guard_passed}",
+            "",
+            "## Dataset View Matrix",
+            "",
+            "| Dataset | Display name | Status | Source | Local path | Task families | Default action | Comparable scope |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for item in result.dataset_results:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    item.dataset_id,
+                    item.display_name,
+                    item.status,
+                    item.source,
+                    item.local_path or "(none)",
+                    ", ".join(item.task_families),
+                    item.default_action,
+                    item.comparable_scope,
+                ]
+            )
+            + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Task Compatibility",
+            "",
+            "| Task | Status | Compatible dataset views | Required metrics | Default action |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for item in result.task_results:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    item.task_id,
+                    item.status,
+                    ", ".join(item.compatible_dataset_views),
+                    ", ".join(item.required_metrics),
+                    item.default_action,
+                ]
+            )
+            + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Model Candidate Status",
+            "",
+            "| Model | Role | Status | Task IDs | Default action |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+    )
+    for item in result.model_results:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    item.model_id,
+                    item.role,
+                    item.status,
+                    ", ".join(item.task_ids),
+                    item.default_action,
+                ]
+            )
+            + " |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Metric Contract",
+            "",
+            f"- RUL metrics: {', '.join(result.metric_contract.rul_metrics)}",
+            f"- Forecasting metrics: {', '.join(result.metric_contract.forecasting_metrics)}",
+            f"- Representation metrics: {', '.join(result.metric_contract.representation_metrics)}",
+            f"- Cross-dataset summary: {result.metric_contract.cross_dataset_summary}",
+            f"- Leaderboard allowed: {result.metric_contract.leaderboard_allowed}",
+            f"- Model cache policy: {result.model_cache_policy.default_action} ({result.model_cache_policy.cache_dir})",
+            "",
+            "## Go / No-Go",
+            "",
+            f"- Go: {result.go_no_go_decision}.",
+            "- No-Go: benchmark claims, production claims, model scoring, training, or leaderboard claims.",
+            "",
+            "## Invalid Claims",
+            "",
+        ]
+    )
+    lines.extend(f"- {claim}" for claim in result.invalid_claims)
+    lines.extend(
+        [
+            "",
+            "## Next Step",
+            "",
+            "- Design explicit local execution for C3.2 with separate RUL and forecasting metrics.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:

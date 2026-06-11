@@ -3,9 +3,12 @@ from pathlib import Path
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.experiments.c32_open_model_cross_dataset_evaluation import (
     C32ConfigError,
     load_c32_config,
+    render_c32_report,
+    run_c32_open_model_cross_dataset_evaluation,
 )
 
 
@@ -163,3 +166,206 @@ def test_c32_rejects_task_metric_missing_from_metric_contract(tmp_path):
 
     with pytest.raises(C32ConfigError, match="unknown metric"):
         load_c32_config(broken)
+
+
+def test_c32_runner_returns_contract_ready_local_execution_blocked():
+    config = load_c32_config(_DEFAULT_CONFIG)
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config, config_path=_DEFAULT_CONFIG
+    )
+
+    assert result.status == "contract_ready_local_execution_blocked"
+    assert result.go_no_go_decision == "Go for C3.2 local execution design"
+    assert result.invalid_claims == (
+        "no production RUL",
+        "no production alarms",
+        "no maintenance recommendations",
+        "no benchmark leaderboard",
+        "no self-developed model superiority",
+    )
+    assert [item.dataset_id for item in result.dataset_results] == [
+        item.dataset_id for item in config.dataset_views
+    ]
+    assert all(item.status for item in result.dataset_results)
+    assert all(item.default_action for item in result.model_results)
+
+
+def test_c32_report_records_no_scoring_and_no_production_claims():
+    config = load_c32_config(_DEFAULT_CONFIG)
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config, config_path=_DEFAULT_CONFIG
+    )
+    text = render_c32_report(result)
+
+    assert "C3.2 Open Model Cross-Dataset Evaluation Report" in text
+    assert "Status: contract_ready_local_execution_blocked" in text
+    assert "Decision: Go for C3.2 local execution design" in text
+    assert "Safety Policy" in text
+    assert "C3.1 Prerequisites" in text
+    assert "Dataset View Matrix" in text
+    assert "Task Compatibility" in text
+    assert "Model Candidate Status" in text
+    assert "Metric Contract" in text
+    assert "Go / No-Go" in text
+    assert "Invalid Claims" in text
+    assert "Next Step" in text
+    assert "schema_validated_ready_for_c32" in text
+    assert "full_classic_cmapss_validated" in text
+    assert "readiness_matrix_only" in text
+    assert "No model training, scoring, or leaderboard is executed" in text
+    assert "Do not claim production RUL" in text
+
+
+def _patch_forbidden_path_probes(
+    monkeypatch,
+    sentinel_paths: set[Path],
+) -> None:
+    sentinel_strings = {str(path) for path in sentinel_paths}
+
+    def is_sentinel_or_child(path) -> bool:
+        candidate = str(path)
+        return any(
+            candidate == sentinel
+            or candidate.startswith(f"{sentinel}/")
+            for sentinel in sentinel_strings
+        )
+
+    def fail_if_sentinel_path_is_touched(method_name):
+        original = getattr(Path, method_name)
+
+        def wrapped(self, *args, **kwargs):
+            if is_sentinel_or_child(self):
+                raise AssertionError(
+                    f"C3.2 default path touched {method_name}: {self}"
+                )
+            return original(self, *args, **kwargs)
+
+        return wrapped
+
+    for method_name in (
+        "exists",
+        "is_file",
+        "is_dir",
+        "stat",
+        "iterdir",
+        "glob",
+        "rglob",
+        "open",
+    ):
+        monkeypatch.setattr(
+            Path, method_name, fail_if_sentinel_path_is_touched(method_name)
+        )
+
+    import os
+
+    original_os_stat = os.stat
+    original_os_scandir = os.scandir
+
+    def guarded_os_stat(path, *args, **kwargs):
+        if is_sentinel_or_child(path):
+            raise AssertionError(f"C3.2 default path touched os.stat: {path}")
+        return original_os_stat(path, *args, **kwargs)
+
+    def guarded_os_scandir(path="."):
+        if is_sentinel_or_child(path):
+            raise AssertionError(f"C3.2 default path touched os.scandir: {path}")
+        return original_os_scandir(path)
+
+    monkeypatch.setattr(os, "stat", guarded_os_stat)
+    monkeypatch.setattr(os, "scandir", guarded_os_scandir)
+
+
+def test_c32_default_loader_runner_and_cli_do_not_touch_raw_real_or_cache_paths(
+    tmp_path,
+    monkeypatch,
+):
+    data = yaml.safe_load(_DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    sentinel_cmapss_raw = tmp_path / "sentinel_cmapss_raw"
+    sentinel_fu13_real = tmp_path / "sentinel_fu13_real.parquet"
+    sentinel_model_cache = tmp_path / "sentinel_model_cache"
+    sentinel_paths = {
+        sentinel_cmapss_raw,
+        sentinel_fu13_real,
+        sentinel_model_cache,
+    }
+    data["dataset_views"][0]["local_path"] = str(sentinel_cmapss_raw)
+    data["dataset_views"][1]["local_path"] = str(sentinel_fu13_real)
+    data["model_cache_policy"]["cache_dir"] = str(sentinel_model_cache)
+    config_path = _write_yaml(tmp_path / "c32_no_touch.yaml", data)
+
+    _patch_forbidden_path_probes(monkeypatch, sentinel_paths)
+
+    config = load_c32_config(config_path)
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config, config_path=config_path
+    )
+
+    assert result.status == "contract_ready_local_execution_blocked"
+
+    output = tmp_path / "c32_report.md"
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c32",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert output.exists()
+
+
+def test_c32_default_runner_does_not_import_open_model_adapters(monkeypatch):
+    import builtins
+    import importlib
+
+    forbidden = (
+        "b08_model_core.adapters.open_models",
+        "b08_model_core.adapters.ttm_adapter",
+    )
+    original_import = builtins.__import__
+    original_import_module = importlib.import_module
+
+    def guarded_import(name, *args, **kwargs):
+        if name.startswith(forbidden):
+            raise AssertionError(f"C3.2 default runner imported adapters: {name}")
+        return original_import(name, *args, **kwargs)
+
+    def guarded_import_module(name, *args, **kwargs):
+        if name.startswith(forbidden):
+            raise AssertionError(
+                f"C3.2 default runner imported adapter module: {name}"
+            )
+        return original_import_module(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    monkeypatch.setattr(importlib, "import_module", guarded_import_module)
+    config = load_c32_config(_DEFAULT_CONFIG)
+
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config, config_path=_DEFAULT_CONFIG
+    )
+
+    assert result.status == "contract_ready_local_execution_blocked"
+
+
+def test_cli_c_stage_c32_writes_contract_report(tmp_path):
+    output = tmp_path / "c32_report.md"
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c32",
+            "--config",
+            str(_DEFAULT_CONFIG),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    text = output.read_text(encoding="utf-8")
+    assert "C3.2 Open Model Cross-Dataset Evaluation Report" in text
+    assert "contract_ready_local_execution_blocked" in text
