@@ -190,8 +190,9 @@ If archive nests files under `CMAPSSData/`, extract then copy only expected file
 mkdir -p data/public/cmapss/raw/_extract
 unzip -o data/public/cmapss/raw/CMAPSSData.zip -d data/public/cmapss/raw/_extract
 find data/public/cmapss/raw/_extract -type f \
-  \\( -name 'train_FD*.txt' -o -name 'test_FD*.txt' -o -name 'RUL_FD*.txt' \\) \
-  -exec cp {} data/public/cmapss/raw/ \\;
+  \( -name 'train_FD*.txt' -o -name 'test_FD*.txt' -o -name 'RUL_FD*.txt' \) \
+  -exec cp {} data/public/cmapss/raw/ \;
+rm -rf data/public/cmapss/raw/_extract
 ```
 
 Do not commit extracted files.
@@ -202,7 +203,7 @@ Run:
 
 ```bash
 find data/public/cmapss/raw -maxdepth 1 -type f \
-  \\( -name 'train_FD*.txt' -o -name 'test_FD*.txt' -o -name 'RUL_FD*.txt' \\) \
+  \( -name 'train_FD*.txt' -o -name 'test_FD*.txt' -o -name 'RUL_FD*.txt' \) \
   | sort
 ```
 
@@ -455,6 +456,93 @@ Dispatch final code reviewer with:
 - note that raw/zip/local report remain ignored.
 
 Fix any blocking findings before PR.
+
+---
+
+## Task 5: PR, Merge, And Cleanup
+
+**Files:**
+- No file changes expected.
+
+- [ ] **Step 1: Push branch**
+
+Run:
+
+```bash
+git push -u origin codex/c31-local-raw-mapping-review
+```
+
+Expected: branch pushed.
+
+- [ ] **Step 2: Create PR**
+
+Write a concise PR body to `/tmp/c31_local_raw_mapping_pr_body.md`, then run:
+
+```bash
+gh pr create \
+  --base main \
+  --head codex/c31-local-raw-mapping-review \
+  --title "Run C3.1 C-MAPSS local raw mapping review" \
+  --body-file /tmp/c31_local_raw_mapping_pr_body.md
+```
+
+PR body must include:
+
+- summary of the real local raw mapping review;
+- C3.2 Go/No-Go result;
+- verification commands;
+- note that raw/zip/generated report artifacts remain ignored.
+
+- [ ] **Step 3: Check PR state**
+
+Run:
+
+```bash
+gh pr view <PR_NUMBER> --json number,state,mergeStateStatus,statusCheckRollup,url
+```
+
+Expected: mergeable or clear next action.
+
+- [ ] **Step 4: Merge PR**
+
+Run:
+
+```bash
+gh pr merge <PR_NUMBER> --squash --delete-branch \
+  --subject "Run C3.1 C-MAPSS local raw mapping review" \
+  --body "Merge C3.1 local raw mapping review after verification."
+```
+
+If `gh pr merge` reports a local checkout error after remote merge, verify PR state with:
+
+```bash
+gh pr view <PR_NUMBER> --json number,state,mergedAt,mergeCommit,url
+```
+
+- [ ] **Step 5: Clean local branch and worktree**
+
+From the main workspace root:
+
+```bash
+git worktree remove .worktrees/c31-local-raw-mapping-review
+git branch -D codex/c31-local-raw-mapping-review
+git fetch origin
+git merge --ff-only origin/main
+```
+
+Expected: main workspace fast-forwards to merged commit.
+
+- [ ] **Step 6: Final state check**
+
+Run from main workspace:
+
+```bash
+git status --short --branch
+git worktree list
+gh pr view <PR_NUMBER> --json number,state,mergedAt,mergeCommit,url
+```
+
+Expected: clean `main`, PR merged, feature worktree removed.
 
 ---
 
