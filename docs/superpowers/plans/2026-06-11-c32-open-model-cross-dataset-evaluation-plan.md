@@ -80,7 +80,57 @@ def test_c32_default_config_is_contract_first_and_offline_safe():
     assert config.prerequisites.leakage_guard_passed is True
 ```
 
-Add tests for wrong stage, unsafe default flags, duplicate ids and missing required sections.
+Add negative config tests:
+
+```python
+def _write_yaml(path: Path, data: dict) -> None:
+    path.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
+
+
+def _modified_default(tmp_path, update) -> Path:
+    data = yaml.safe_load(_DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    update(data)
+    path = tmp_path / "c32_broken.yaml"
+    _write_yaml(path, data)
+    return path
+
+
+def test_c32_rejects_wrong_stage(tmp_path):
+    broken = _modified_default(tmp_path, lambda data: data.update({"stage": "wrong"}))
+
+    with pytest.raises(C32ConfigError, match="stage"):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_unsafe_default_policy(tmp_path):
+    def make_unsafe(data):
+        data["safety_policy"]["allow_download"] = True
+
+    broken = _modified_default(tmp_path, make_unsafe)
+
+    with pytest.raises(C32ConfigError, match="allow_download"):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_duplicate_dataset_ids(tmp_path):
+    def duplicate_dataset(data):
+        data["dataset_views"][1]["dataset_id"] = data["dataset_views"][0]["dataset_id"]
+
+    broken = _modified_default(tmp_path, duplicate_dataset)
+
+    with pytest.raises(C32ConfigError, match="duplicate dataset_id"):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_unknown_task_dataset_reference(tmp_path):
+    def unknown_dataset(data):
+        data["task_contracts"][0]["compatible_dataset_views"] = ["missing_dataset"]
+
+    broken = _modified_default(tmp_path, unknown_dataset)
+
+    with pytest.raises(C32ConfigError, match="unknown dataset"):
+        load_c32_config(broken)
+```
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -297,10 +347,52 @@ def test_c32_report_records_no_scoring_and_no_production_claims():
 
 - [ ] **Step 2: Write failing no-touch test**
 
-Use sentinel paths and monkeypatch filesystem probes to prove default runner does not inspect local data/cache paths:
+Use sentinel paths and monkeypatch filesystem probes before loading the config to prove default loader, runner, and CLI path do not inspect local data/cache paths:
 
 ```python
-def test_c32_default_runner_does_not_touch_raw_real_or_cache_paths(tmp_path):
+def _patch_forbidden_path_probes(monkeypatch, sentinel_paths: set[str]) -> None:
+    def fail_if_sentinel_path_is_touched(method_name):
+        original = getattr(Path, method_name)
+
+        def wrapped(self, *args, **kwargs):
+            if str(self) in sentinel_paths:
+                raise AssertionError(f"C3.2 default path touched {method_name}: {self}")
+            return original(self, *args, **kwargs)
+
+        return wrapped
+
+    for method_name in (
+        "exists",
+        "is_file",
+        "is_dir",
+        "stat",
+        "iterdir",
+        "glob",
+        "rglob",
+        "open",
+    ):
+        monkeypatch.setattr(Path, method_name, fail_if_sentinel_path_is_touched(method_name))
+
+    import os
+
+    original_os_stat = os.stat
+    original_os_scandir = os.scandir
+
+    def guarded_os_stat(path, *args, **kwargs):
+        if str(path) in sentinel_paths:
+            raise AssertionError(f"C3.2 default path touched os.stat: {path}")
+        return original_os_stat(path, *args, **kwargs)
+
+    def guarded_os_scandir(path="."):
+        if str(path) in sentinel_paths:
+            raise AssertionError(f"C3.2 default path touched os.scandir: {path}")
+        return original_os_scandir(path)
+
+    monkeypatch.setattr(os, "stat", guarded_os_stat)
+    monkeypatch.setattr(os, "scandir", guarded_os_scandir)
+
+
+def test_c32_default_loader_runner_and_cli_do_not_touch_raw_real_or_cache_paths(tmp_path, monkeypatch):
     data = yaml.safe_load(_DEFAULT_CONFIG.read_text(encoding="utf-8"))
     sentinel_paths = {
         str(tmp_path / "sentinel_cmapss_raw"),
@@ -313,45 +405,52 @@ def test_c32_default_runner_does_not_touch_raw_real_or_cache_paths(tmp_path):
     config_path = tmp_path / "c32_no_touch.yaml"
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
+    _patch_forbidden_path_probes(monkeypatch, sentinel_paths)
+
     config = load_c32_config(config_path)
-
-    def fail_if_sentinel_path_is_touched(method_name):
-        original = getattr(Path, method_name)
-
-        def wrapped(self, *args, **kwargs):
-            if str(self) in sentinel_paths:
-                raise AssertionError(f"C3.2 default runner touched {method_name}: {self}")
-            return original(self, *args, **kwargs)
-
-        return wrapped
-
-    monkeypatch.setattr(Path, "exists", fail_if_sentinel_path_is_touched("exists"))
-    monkeypatch.setattr(Path, "is_file", fail_if_sentinel_path_is_touched("is_file"))
-    monkeypatch.setattr(Path, "iterdir", fail_if_sentinel_path_is_touched("iterdir"))
-    monkeypatch.setattr(Path, "glob", fail_if_sentinel_path_is_touched("glob"))
-    monkeypatch.setattr(Path, "open", fail_if_sentinel_path_is_touched("open"))
-
     result = run_c32_open_model_cross_dataset_evaluation(config, config_path=config_path)
 
     assert result.status == "contract_ready_local_execution_blocked"
+
+    output = tmp_path / "c32_report.md"
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c32",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
 ```
 
 If the implementation accidentally inspects paths, this test will fail.
 
-Add an adapter-import sentinel:
+Add an adapter/import sentinel:
 
 ```python
 def test_c32_default_runner_does_not_import_open_model_adapters(monkeypatch):
     import builtins
+    import importlib
 
     original_import = builtins.__import__
+    original_import_module = importlib.import_module
 
     def guarded_import(name, *args, **kwargs):
-        if name.startswith("b08_model_core.adapters.open_models"):
+        if name.startswith(("b08_model_core.adapters.open_models", "b08_model_core.adapters.ttm_adapter")):
             raise AssertionError(f"C3.2 default runner imported adapters: {name}")
         return original_import(name, *args, **kwargs)
 
+    def guarded_import_module(name, *args, **kwargs):
+        if name.startswith(("b08_model_core.adapters.open_models", "b08_model_core.adapters.ttm_adapter")):
+            raise AssertionError(f"C3.2 default runner imported adapter module: {name}")
+        return original_import_module(name, *args, **kwargs)
+
     monkeypatch.setattr(builtins, "__import__", guarded_import)
+    monkeypatch.setattr(importlib, "import_module", guarded_import_module)
     config = load_c32_config(_DEFAULT_CONFIG)
 
     result = run_c32_open_model_cross_dataset_evaluation(config, config_path=_DEFAULT_CONFIG)
@@ -642,9 +741,7 @@ Fix blocking issues, re-run relevant tests, and commit fixes.
 
 ```bash
 git push -u origin codex/c32-open-model-cross-dataset-eval
-gh pr create --base main --head codex/c32-open-model-cross-dataset-eval \
-  --title "Add C3.2 cross-dataset evaluation contract scaffold" \
-  --body "$(cat <<'PR_BODY'
+cat > /tmp/c32_pr_body.md <<'PR_BODY'
 ## Summary
 - Add the C3.2 default-safe cross-dataset evaluation contract config, loader, runner, report, and CLI.
 - Document C3.2 as contract-ready while local execution remains blocked by default safety policy.
@@ -656,7 +753,9 @@ gh pr create --base main --head codex/c32-open-model-cross-dataset-eval \
 - C2/C2.1/C2.2/C3/C3.1/C3.2 help commands
 - `git ls-files data/public data/processed reports/c_stage_c32_open_model_cross_dataset_evaluation.md`
 PR_BODY
-)"
+gh pr create --base main --head codex/c32-open-model-cross-dataset-eval \
+  --title "Add C3.2 cross-dataset evaluation contract scaffold" \
+  --body-file /tmp/c32_pr_body.md
 ```
 
 PR body should include summary, safety boundary, and verification commands.
