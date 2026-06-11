@@ -521,7 +521,19 @@ gh pr view <PR_NUMBER> --json number,state,mergedAt,mergeCommit,url
 
 - [ ] **Step 5: Clean local branch and worktree**
 
-From the main workspace root:
+Before removing the worktree, verify tracked state is clean inside the feature worktree:
+
+```bash
+git status --short --branch
+```
+
+Expected: no tracked modifications. Then remove known ignored local artifacts from inside the feature worktree:
+
+```bash
+rm -rf data/public/cmapss/raw reports/c_stage_c31_cmapss_local_raw_mapping_review.md data/processed/cmapss
+```
+
+From the main workspace root, remove the worktree and branch:
 
 ```bash
 git worktree remove .worktrees/c31-local-raw-mapping-review
@@ -531,6 +543,14 @@ git merge --ff-only origin/main
 ```
 
 Expected: main workspace fast-forwards to merged commit.
+
+If `git worktree remove` still refuses because ignored artifacts remain, run:
+
+```bash
+git worktree remove --force .worktrees/c31-local-raw-mapping-review
+```
+
+Only use `--force` after the tracked clean check above.
 
 - [ ] **Step 6: Final state check**
 
