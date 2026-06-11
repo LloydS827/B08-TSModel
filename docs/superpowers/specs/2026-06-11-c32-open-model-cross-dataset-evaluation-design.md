@@ -78,7 +78,7 @@ Create `configs/c_stage_c32_open_model_cross_dataset_evaluation.yaml` with these
 
 - `stage`: expected stage id.
 - `safety_policy`: `allow_network`, `allow_download`, `allow_local_raw_data`, `allow_model_cache`, `allow_training`, `allow_write_processed`.
-- `prerequisites`: references to C3.1 review docs and required statuses.
+- `prerequisites`: structured references to C3.1 review docs and required statuses.
 - `dataset_views`: C-MAPSS classic RUL benchmark, FU13 real evidence, and FU13-like simulated/sandbox evidence.
 - `task_contracts`: first-round task definitions.
 - `model_candidates`: baseline and open model candidates inherited from C2.x.
@@ -95,7 +95,7 @@ First-round C3.2 should include three dataset views:
 | --- | --- | --- |
 | `cmapss_classic_rul` | eligible_but_local_raw_required | Public RUL/degradation benchmark validated by C3.1, but not read by default. |
 | `fu13_real_forecasting_evidence` | documented_evidence_only | Existing real evidence asset; not read by default and not treated as RUL ground truth. |
-| `fu13_like_simulated_forecasting` | default_runnable_reference | Safe sandbox reference that can support report scaffolding without external data. |
+| `fu13_like_simulated_forecasting` | contract_ready_no_scoring | Safe sandbox reference for contract readiness only; the default C3.2 branch does not compute forecasting metrics. |
 
 The report must explicitly state that C-MAPSS RUL results and FU13 forecasting results are not directly interchangeable. The first C3.2 branch evaluates the contract, not model superiority.
 
@@ -115,7 +115,8 @@ Include these candidates:
 
 - `baseline`: required contract baseline, default-runnable as a status/report entry.
 - `ttm`: optional open model candidate, skipped by default without local cache/dependencies.
-- `chronos`, `timesfm`, `moirai`: watchlist / optional candidates inherited from C2.2, skipped by default.
+- `chronos`, `timesfm`, `moirai`: watchlist / optional forecasting candidates inherited from C2.2, skipped by default.
+- `moment`, `units`: representation/imputation candidates inherited from C2.x, recorded as planned/skipped until representation diagnostics becomes executable.
 
 Default C3.2 does not instantiate open model adapters. It records whether each candidate is allowed, skipped, or pending explicit local opt-in.
 
@@ -131,7 +132,12 @@ The report should define metrics without overclaiming:
 
 Default report status should be `contract_ready_local_execution_blocked` when:
 
-- C3.1 prerequisite status is recorded as ready.
+- C3.1 prerequisite status is recorded as ready with:
+  - review doc path
+  - `schema_validated_ready_for_c32`
+  - `full_classic_cmapss_validated`
+  - 12 reviewed raw files
+  - leakage guard passed
 - Config schema is valid.
 - Dataset/task/model/metric contracts are coherent.
 - No executable local raw/model run was requested.
@@ -150,6 +156,8 @@ C3.2 must preserve these invariants:
 - Default CLI reads no C-MAPSS raw files and no FU13 real raw files.
 - Default CLI writes no processed data.
 - Default CLI does not load model weights or caches.
+- Default CLI does not inspect model cache directories.
+- Default CLI does not instantiate open model adapters.
 - Default CLI does not train or fine-tune models.
 - Generated reports under `reports/*.md` remain ignored.
 
@@ -161,6 +169,7 @@ Add focused tests for:
 - Default config contains required C3.1 prerequisite references.
 - Dataset/task/model/metric contract renders expected readiness and skip reasons.
 - CLI `experiment c-stage-c32` writes a report and returns 0.
+- Default CLI does not inspect configured C-MAPSS raw paths, FU13 real paths, model cache paths, or instantiate open model adapters.
 - README/details document the C3.2 workflow and safety boundary.
 - Existing C2/C3/C3.1 CLI entries remain available.
 
