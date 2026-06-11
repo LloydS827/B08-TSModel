@@ -238,6 +238,29 @@ allow_write_processed: false
 
 默认路径不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练。local raw opt-in 只通过 [configs/local/c_stage_c31_cmapss_local_raw_mapping_review.example.yaml](configs/local/c_stage_c31_cmapss_local_raw_mapping_review.example.yaml) 这样的显式本机配置开启；仍只允许读取 ignored 本机数据目录或生成 ignored 派生产物，不能提交 raw、zip、parquet、cache 或生成报告。
 
+### C3.2. Open model cross-dataset evaluation
+
+```bash
+uv run b08-model-core experiment c-stage-c32 \
+  --config configs/c_stage_c32_open_model_cross_dataset_evaluation.yaml \
+  --output reports/c_stage_c32_open_model_cross_dataset_evaluation.md
+```
+
+C3.2 第一轮是 cross-dataset evaluation contract scaffold：把 C-MAPSS classic RUL、FU13 real forecasting evidence、FU13-like simulated forecasting、baseline / open model candidates、metric contract 和 Go / No-Go 写成默认安全报告。默认状态为 `contract_ready_local_execution_blocked`，表示可以进入下一步 local execution design，但本轮不运行真实评测。
+
+默认配置保持：
+
+```yaml
+allow_network: false
+allow_download: false
+allow_local_raw_data: false
+allow_model_cache: false
+allow_training: false
+allow_write_processed: false
+```
+
+默认路径不下载公开数据、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不实例化 open model adapter、不运行模型训练、不计算模型分数、不生成 leaderboard。下一步应设计 explicit local execution design：先做 C-MAPSS RUL baseline，再做 FU13-like forecasting reference，并保持 RUL 与 forecasting metrics 分开解释。
+
 ## 项目边界
 
 当前不能推出：

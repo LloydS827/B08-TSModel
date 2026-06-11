@@ -266,6 +266,41 @@ def test_c31_cmapss_minimal_ingestion_workflow_is_documented():
     assert "## 3. 下一步计划" in details
 
 
+def test_c32_cross_dataset_evaluation_workflow_is_documented():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+    section_header = "### C3.2. Open model cross-dataset evaluation"
+    next_header = "\n## 项目边界"
+
+    assert section_header in readme
+    assert next_header in readme
+    c32_section = readme.split(section_header, 1)[1].split(next_header, 1)[0]
+
+    assert "c-stage-c32" in c32_section
+    assert "configs/c_stage_c32_open_model_cross_dataset_evaluation.yaml" in c32_section
+    assert "reports/c_stage_c32_open_model_cross_dataset_evaluation.md" in c32_section
+    assert "contract_ready_local_execution_blocked" in c32_section
+    assert "allow_network: false" in c32_section
+    assert "allow_download: false" in c32_section
+    assert "allow_local_raw_data: false" in c32_section
+    assert "allow_model_cache: false" in c32_section
+    assert "allow_training: false" in c32_section
+    assert "allow_write_processed: false" in c32_section
+    assert "不下载公开数据" in c32_section
+    assert "不读取 C-MAPSS raw" in c32_section
+    assert "不读取 FU13 real" in c32_section
+    assert "不检查 model cache" in c32_section
+    assert "不实例化 open model adapter" in c32_section
+    assert "不运行模型训练" in c32_section
+    assert "不计算模型分数" in c32_section
+    assert "不生成 leaderboard" in c32_section
+    assert "local execution design" in c32_section
+    assert "C3.2" in details
+    assert "contract_ready_local_execution_blocked" in details
+    assert "local execution design" in details
+    assert "不生成 leaderboard" in details
+
+
 def test_c31_cli_help_is_available():
     result = subprocess.run(
         [
