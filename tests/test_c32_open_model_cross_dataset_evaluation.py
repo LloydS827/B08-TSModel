@@ -352,6 +352,68 @@ def test_c32_default_runner_does_not_import_open_model_adapters(monkeypatch):
     assert result.status == "contract_ready_local_execution_blocked"
 
 
+def test_c32_default_cli_import_and_run_does_not_import_model_adapters(
+    monkeypatch,
+    tmp_path,
+):
+    import builtins
+    import importlib
+    import sys
+
+    for module_name in tuple(sys.modules):
+        if module_name.startswith(
+            (
+                "b08_model_core.cli",
+                "b08_model_core.adapters",
+                "b08_model_core.experiments.forecasting",
+                "b08_model_core.evaluation.benchmark",
+            )
+        ):
+            sys.modules.pop(module_name, None)
+
+    original_import = builtins.__import__
+    original_import_module = importlib.import_module
+
+    def is_forbidden(name: str) -> bool:
+        return name.startswith(
+            (
+                "b08_model_core.adapters",
+                "b08_model_core.experiments.forecasting",
+                "b08_model_core.evaluation.benchmark",
+            )
+        )
+
+    def guarded_import(name, *args, **kwargs):
+        if is_forbidden(name):
+            raise AssertionError(f"C3.2 default CLI imported adapter path: {name}")
+        return original_import(name, *args, **kwargs)
+
+    def guarded_import_module(name, *args, **kwargs):
+        if is_forbidden(name):
+            raise AssertionError(f"C3.2 default CLI imported adapter module: {name}")
+        return original_import_module(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    monkeypatch.setattr(importlib, "import_module", guarded_import_module)
+
+    from b08_model_core.cli import main
+
+    output = tmp_path / "c32_cli_no_adapter_report.md"
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c32",
+            "--config",
+            str(_DEFAULT_CONFIG),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    assert "contract_ready_local_execution_blocked" in output.read_text(encoding="utf-8")
+
+
 def test_cli_c_stage_c32_writes_contract_report(tmp_path):
     output = tmp_path / "c32_report.md"
     exit_code = main(

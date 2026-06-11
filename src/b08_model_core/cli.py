@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pandas as pd
 
-from b08_model_core.evaluation.benchmark import run_benchmark
 from b08_model_core.experiments.c1_evidence import (
     ModelExecutionStatus,
     load_c1_execution_config,
@@ -45,7 +44,6 @@ from b08_model_core.experiments.c32_open_model_cross_dataset_evaluation import (
     render_c32_report,
     run_c32_open_model_cross_dataset_evaluation,
 )
-from b08_model_core.experiments.forecasting import run_forecasting_experiment_with_status
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
 from b08_model_core.real_data.forecasting import (
@@ -184,6 +182,8 @@ def main(argv: list[str] | None = None) -> int:
         simulate_dataset(days=args.days, seed=args.seed, output=args.output, config_path=args.config)
         return 0
     if args.command == "benchmark":
+        from b08_model_core.evaluation.benchmark import run_benchmark
+
         run_benchmark(args.dataset, args.output)
         return 0
     if args.command == "real-data" and args.real_data_command == "validate":
@@ -287,6 +287,10 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         return 0
     if args.command == "experiment" and args.experiment_command == "forecasting":
+        from b08_model_core.experiments.forecasting import (
+            run_forecasting_experiment_with_status,
+        )
+
         _, status = run_forecasting_experiment_with_status(
             args.dataset,
             args.output,
