@@ -241,6 +241,22 @@ class C31RulTarget:
 
 
 @dataclass(frozen=True)
+class CmapssRulCycleRecord:
+    subset: str
+    file_role: str
+    unit_id: int
+    cycle_index: int
+    rul: int
+
+
+@dataclass(frozen=True)
+class CmapssRulBaselineDataset:
+    subsets: tuple[str, ...]
+    train_records: tuple[CmapssRulCycleRecord, ...]
+    test_final_records: tuple[CmapssRulCycleRecord, ...]
+
+
+@dataclass(frozen=True)
 class C31LeakageSummary:
     trajectory_overlap_count: int = 0
     duplicate_split_trajectory_count: int = 0
@@ -296,6 +312,9 @@ class _C31RawSchemaMismatch(ValueError):
     pass
 
 
+C31RawSchemaMismatch = _C31RawSchemaMismatch
+
+
 def expected_cmapss_files() -> tuple[str, ...]:
     files: list[str] = []
     for subset in EXPECTED_CMAPSS_SUBSETS:
@@ -303,6 +322,46 @@ def expected_cmapss_files() -> tuple[str, ...]:
             (f"train_{subset}.txt", f"test_{subset}.txt", f"RUL_{subset}.txt")
         )
     return tuple(files)
+
+
+def load_cmapss_rul_baseline_dataset(
+    raw_dir: str | Path,
+    subsets: Iterable[str],
+) -> CmapssRulBaselineDataset:
+    raw_dir = Path(raw_dir)
+    selected_subsets = tuple(subsets)
+    train_records: list[CmapssRulCycleRecord] = []
+    test_final_records: list[CmapssRulCycleRecord] = []
+
+    for subset in selected_subsets:
+        train_rows = _parse_cmapss_data_file(
+            raw_dir / f"train_{subset}.txt",
+            subset,
+            "train",
+        )
+        test_rows = _parse_cmapss_data_file(
+            raw_dir / f"test_{subset}.txt",
+            subset,
+            "test",
+        )
+        final_test_ruls = _parse_rul_file(raw_dir / f"RUL_{subset}.txt")
+
+        train_records.extend(
+            _rul_cycle_record(target)
+            for target in _train_rul_targets(train_rows)
+        )
+        test_last_cycle_by_unit = _last_cycle_by_unit(test_rows)
+        test_final_records.extend(
+            _rul_cycle_record(target)
+            for target in _test_rul_targets(test_rows, final_test_ruls)
+            if target.cycle_index == test_last_cycle_by_unit[target.unit_id]
+        )
+
+    return CmapssRulBaselineDataset(
+        subsets=selected_subsets,
+        train_records=tuple(train_records),
+        test_final_records=tuple(test_final_records),
+    )
 
 
 def load_c31_cmapss_config(path: str | Path) -> C31CmapssConfig:
@@ -1161,6 +1220,16 @@ def _train_rul_targets(
             rul=last_cycle_by_unit[row.unit_id] - row.cycle_index,
         )
         for row in train_rows
+    )
+
+
+def _rul_cycle_record(target: C31RulTarget) -> CmapssRulCycleRecord:
+    return CmapssRulCycleRecord(
+        subset=target.subset,
+        file_role=target.file_role,
+        unit_id=target.unit_id,
+        cycle_index=target.cycle_index,
+        rul=target.rul,
     )
 
 

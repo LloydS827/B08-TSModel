@@ -301,6 +301,21 @@ def test_c32_cross_dataset_evaluation_workflow_is_documented():
     assert "不生成 leaderboard" in details
 
 
+def test_c32_explicit_local_execution_workflow_is_documented():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+
+    assert "configs/local/c_stage_c32_explicit_local_execution.example.yaml" in readme
+    assert "local_execution_baseline_reference_ready" in readme
+    assert "C-MAPSS RUL baseline evaluation" in readme
+    assert "FU13-like forecasting reference" in readme
+    assert "不生成 leaderboard" in readme
+    assert "不运行 open model adapter" in readme
+    assert "explicit local execution" in details
+    assert "C-MAPSS RUL baseline" in details
+    assert "FU13-like forecasting reference" in details
+
+
 def test_c31_cli_help_is_available():
     result = subprocess.run(
         [

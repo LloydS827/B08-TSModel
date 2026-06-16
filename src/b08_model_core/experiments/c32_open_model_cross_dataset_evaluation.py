@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import yaml
 
 
@@ -16,6 +17,7 @@ class C32SafetyPolicy:
     allow_network: bool
     allow_download: bool
     allow_local_raw_data: bool
+    allow_local_execution: bool
     allow_model_cache: bool
     allow_training: bool
     allow_write_processed: bool
@@ -81,6 +83,30 @@ class C32Outputs:
 
 
 @dataclass(frozen=True)
+class C32LocalCmapssConfig:
+    raw_dir: Path
+    subsets: tuple[str, ...]
+    progress_bucket_count: int
+
+
+@dataclass(frozen=True)
+class C32LocalFu13LikeConfig:
+    days: int
+    seed: int
+    context_length: int
+    prediction_length: int
+    max_windows: int
+    residual_top_k: int
+
+
+@dataclass(frozen=True)
+class C32LocalExecutionConfig:
+    enabled: bool
+    cmapss: C32LocalCmapssConfig
+    fu13_like: C32LocalFu13LikeConfig
+
+
+@dataclass(frozen=True)
 class C32Config:
     stage: str
     safety_policy: C32SafetyPolicy
@@ -90,6 +116,7 @@ class C32Config:
     model_candidates: tuple[C32ModelCandidate, ...]
     model_cache_policy: C32ModelCachePolicy
     metric_contract: C32MetricContract
+    local_execution: C32LocalExecutionConfig | None
     outputs: C32Outputs
 
 
@@ -124,6 +151,43 @@ class C32ModelResult:
 
 
 @dataclass(frozen=True)
+class C32RulSubsetMetrics:
+    subset: str
+    train_max_cycle_reference: float
+    predictions: tuple[float, ...]
+    truth: tuple[float, ...]
+    metrics: dict[str, float | int]
+
+
+@dataclass(frozen=True)
+class C32RulBaselineResult:
+    raw_dir: Path
+    progress_bucket_count: int
+    subset_metrics: tuple[C32RulSubsetMetrics, ...]
+    overall_metrics: dict[str, float | int]
+
+
+@dataclass(frozen=True)
+class C32ForecastingBaselineResult:
+    model_name: str
+    metrics: dict[str, float | int | None]
+    residual_ranking: tuple[dict[str, float | int | str], ...]
+
+
+@dataclass(frozen=True)
+class C32ForecastingReferenceResult:
+    days: int
+    seed: int
+    context_length: int
+    prediction_length: int
+    max_windows: int
+    train_window_count: int
+    test_window_count: int
+    baseline_metrics: dict[str, dict[str, float | int | None]]
+    baseline_results: tuple[C32ForecastingBaselineResult, ...]
+
+
+@dataclass(frozen=True)
 class C32RunResult:
     config_path: Path
     stage: str
@@ -137,6 +201,10 @@ class C32RunResult:
     model_cache_policy: C32ModelCachePolicy
     metric_contract: C32MetricContract
     invalid_claims: tuple[str, ...]
+    rul_baseline_result: C32RulBaselineResult | None = None
+    forecasting_reference_result: C32ForecastingReferenceResult | None = None
+    local_metric_summary: dict[str, object] | None = None
+    local_execution_blocked_reason: str = ""
 
 
 _EXPECTED_STAGE = "C3_2_open_model_cross_dataset_evaluation"
@@ -156,10 +224,19 @@ _SAFETY_FLAGS = (
     "allow_network",
     "allow_download",
     "allow_local_raw_data",
+    "allow_local_execution",
     "allow_model_cache",
     "allow_training",
     "allow_write_processed",
 )
+_STRICT_FALSE_SAFETY_FLAGS = (
+    "allow_network",
+    "allow_download",
+    "allow_model_cache",
+    "allow_training",
+    "allow_write_processed",
+)
+_CLASSIC_CMAPSS_SUBSETS = ("FD001", "FD002", "FD003", "FD004")
 _REQUIRED_DATASET_IDS = {
     "cmapss_classic_rul",
     "fu13_real_forecasting_evidence",
@@ -218,18 +295,28 @@ _FORBIDDEN_OVERCLAIMING_TOKENS = (
 
 
 def load_c32_config(path: str | Path) -> C32Config:
-    raw = _load_yaml_mapping(Path(path))
+    config_path = Path(path)
+    raw = _load_yaml_mapping(config_path)
     stage = _required_string(raw, "stage")
     if stage != _EXPECTED_STAGE:
         raise C32ConfigError(f"stage must be {_EXPECTED_STAGE}")
 
-    safety_policy = _load_safety_policy(raw)
+    local_execution_enabled = _local_execution_enabled(raw)
+    safety_policy = _load_safety_policy(
+        raw,
+        local_execution_enabled=local_execution_enabled,
+    )
     prerequisites = _load_prerequisites(raw)
     dataset_views = _load_dataset_views(raw)
     task_contracts = _load_task_contracts(raw, dataset_views)
     model_candidates = _load_model_candidates(raw, task_contracts)
     model_cache_policy = _load_model_cache_policy(raw)
     metric_contract = _load_metric_contract(raw)
+    local_execution = _load_local_execution(
+        raw,
+        safety_policy,
+        config_root=_project_root_for_config(config_path),
+    )
     _validate_task_metrics(task_contracts, metric_contract)
     outputs = _load_outputs(raw)
 
@@ -242,11 +329,64 @@ def load_c32_config(path: str | Path) -> C32Config:
         model_candidates=model_candidates,
         model_cache_policy=model_cache_policy,
         metric_contract=metric_contract,
+        local_execution=local_execution,
         outputs=outputs,
     )
 
 
 def run_c32_open_model_cross_dataset_evaluation(
+    config: C32Config,
+    config_path: str | Path,
+) -> C32RunResult:
+    base_result = _contract_run_result(config, config_path=config_path)
+    if config.local_execution is None or not config.local_execution.enabled:
+        return base_result
+
+    missing_raw = _missing_cmapss_raw_files(config.local_execution.cmapss)
+    if missing_raw:
+        return _replace_result(
+            base_result,
+            status="blocked_missing_cmapss_raw",
+            local_execution_blocked_reason=(
+                "missing required C-MAPSS raw files: " + ", ".join(missing_raw)
+            ),
+        )
+
+    try:
+        rul_baseline_result = _run_cmapss_rul_baseline(config.local_execution.cmapss)
+    except _c31_schema_mismatch_type() as exc:
+        return _replace_result(
+            base_result,
+            status="blocked_cmapss_raw_schema_mismatch",
+            local_execution_blocked_reason=str(exc),
+        )
+
+    forecasting_reference_result = _run_fu13_like_forecasting_reference(
+        config.local_execution.fu13_like
+    )
+    if forecasting_reference_result is None:
+        return _replace_result(
+            base_result,
+            status="blocked_insufficient_fu13_like_windows",
+            rul_baseline_result=rul_baseline_result,
+            local_execution_blocked_reason=(
+                "FU13-like simulation produced fewer than 2 model windows"
+            ),
+        )
+
+    return _replace_result(
+        base_result,
+        status="local_execution_baseline_reference_ready",
+        rul_baseline_result=rul_baseline_result,
+        forecasting_reference_result=forecasting_reference_result,
+        local_metric_summary=_local_metric_summary(
+            rul_baseline_result,
+            forecasting_reference_result,
+        ),
+    )
+
+
+def _contract_run_result(
     config: C32Config,
     config_path: str | Path,
 ) -> C32RunResult:
@@ -297,6 +437,12 @@ def run_c32_open_model_cross_dataset_evaluation(
 
 
 def render_c32_report(result: C32RunResult) -> str:
+    summary_safety_line = (
+        "- No model training, scoring, or leaderboard is executed."
+        if result.rul_baseline_result is None
+        and result.forecasting_reference_result is None
+        else "- No model training, open model execution, or leaderboard is executed."
+    )
     lines = [
         "# C3.2 Open Model Cross-Dataset Evaluation Report",
         "",
@@ -306,7 +452,7 @@ def render_c32_report(result: C32RunResult) -> str:
         f"- Config: {result.config_path}",
         f"- Status: {result.status}",
         f"- Decision: {result.go_no_go_decision}",
-        "- No model training, scoring, or leaderboard is executed.",
+        summary_safety_line,
         "- C-MAPSS RUL results and FU13 forecasting results are not directly interchangeable.",
         "- Do not claim production RUL, production alarms, maintenance recommendations, benchmark leadership, or self-developed model superiority.",
         "",
@@ -407,6 +553,42 @@ def render_c32_report(result: C32RunResult) -> str:
             f"- Leaderboard allowed: {result.metric_contract.leaderboard_allowed}",
             f"- Model cache policy: {result.model_cache_policy.default_action} ({result.model_cache_policy.cache_dir})",
             "",
+        ]
+    )
+    if result.local_execution_blocked_reason:
+        lines.extend(
+            [
+                "## Local Execution Blocked",
+                "",
+                f"- Status: {result.status}",
+                f"- Reason: {result.local_execution_blocked_reason}",
+                "- Next action: fix the explicit local inputs or local simulation window settings, then rerun.",
+                "",
+            ]
+        )
+    if result.rul_baseline_result is not None:
+        lines.extend(_render_rul_baseline_section(result.rul_baseline_result))
+    if result.forecasting_reference_result is not None:
+        lines.extend(_render_forecasting_reference_section(result.forecasting_reference_result))
+    if result.local_metric_summary is not None:
+        lines.extend(_render_local_metric_summary(result.local_metric_summary))
+    if (
+        result.rul_baseline_result is not None
+        or result.forecasting_reference_result is not None
+    ):
+        lines.extend(
+            [
+                "## Separated Metric Interpretation",
+                "",
+                "- C-MAPSS RUL baseline metrics evaluate remaining useful life regression only.",
+                "- FU13-like forecasting metrics evaluate simulated sensor forecasting residuals only.",
+                "- These metrics are not merged into a single ranking or leaderboard.",
+                "- No training or open model adapter execution is part of this local baseline reference.",
+                "",
+            ]
+        )
+    lines.extend(
+        [
             "## Go / No-Go",
             "",
             f"- Go: {result.go_no_go_decision}.",
@@ -429,6 +611,317 @@ def render_c32_report(result: C32RunResult) -> str:
     return "\n".join(lines)
 
 
+def _render_rul_baseline_section(result: C32RulBaselineResult) -> list[str]:
+    lines = [
+        "## C-MAPSS RUL Baseline Evaluation",
+        "",
+        f"- Raw dir: {result.raw_dir}",
+        f"- Progress bucket count: {result.progress_bucket_count}",
+        f"- Overall MAE: {result.overall_metrics['mae']}",
+        f"- Overall RMSE: {result.overall_metrics['rmse']}",
+        f"- Overall NASA score: {result.overall_metrics['nasa_score']}",
+        f"- Evaluated units: {result.overall_metrics['count']}",
+        f"- Subset count: {result.overall_metrics['subset_count']}",
+        "",
+        "| Subset | Train max cycle reference | Units | MAE | RMSE | NASA score |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for item in result.subset_metrics:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    item.subset,
+                    str(item.train_max_cycle_reference),
+                    str(item.metrics["count"]),
+                    str(item.metrics["mae"]),
+                    str(item.metrics["rmse"]),
+                    str(item.metrics["nasa_score"]),
+                ]
+            )
+            + " |"
+        )
+    lines.append("")
+    return lines
+
+
+def _render_forecasting_reference_section(
+    result: C32ForecastingReferenceResult,
+) -> list[str]:
+    lines = [
+        "## FU13-like Forecasting Reference",
+        "",
+        f"- Simulation days: {result.days}",
+        f"- Seed: {result.seed}",
+        f"- Context length: {result.context_length}",
+        f"- Prediction length: {result.prediction_length}",
+        f"- Max windows: {result.max_windows}",
+        f"- Train windows: {result.train_window_count}",
+        f"- Test windows: {result.test_window_count}",
+        "",
+        "| Baseline | MAE | RMSE | Interval coverage | Count |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for item in result.baseline_results:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    item.model_name,
+                    str(item.metrics["mae"]),
+                    str(item.metrics["rmse"]),
+                    str(item.metrics["interval_coverage"]),
+                    str(item.metrics["count"]),
+                ]
+            )
+            + " |"
+        )
+    for item in result.baseline_results:
+        lines.extend(
+            [
+                "",
+                f"### {item.model_name} Residual Ranking",
+                "",
+                "| Rank | Sensor | Mean absolute residual |",
+                "| ---: | --- | ---: |",
+            ]
+        )
+        for row in item.residual_ranking:
+            lines.append(
+                f"| {row['rank']} | {row['sensor_id']} | {row['mean_abs_residual']} |"
+            )
+    lines.append("")
+    return lines
+
+
+def _render_local_metric_summary(summary: dict[str, object]) -> list[str]:
+    lines = [
+        "## Local Metric Summary",
+        "",
+        f"- rul_mae: {summary['rul_mae']}",
+        f"- rul_rmse: {summary['rul_rmse']}",
+        f"- nasa_score: {summary['nasa_score']}",
+        f"- forecasting_mae: {summary['forecasting_mae']}",
+        f"- forecasting_rmse: {summary['forecasting_rmse']}",
+        "- residual_ranking: available per forecasting baseline section",
+        "",
+    ]
+    return lines
+
+
+def _local_metric_summary(
+    rul_baseline: C32RulBaselineResult,
+    forecasting_reference: C32ForecastingReferenceResult,
+) -> dict[str, object]:
+    return {
+        "rul_mae": rul_baseline.overall_metrics["mae"],
+        "rul_rmse": rul_baseline.overall_metrics["rmse"],
+        "nasa_score": rul_baseline.overall_metrics["nasa_score"],
+        "forecasting_mae": {
+            item.model_name: item.metrics["mae"]
+            for item in forecasting_reference.baseline_results
+        },
+        "forecasting_rmse": {
+            item.model_name: item.metrics["rmse"]
+            for item in forecasting_reference.baseline_results
+        },
+        "residual_ranking": {
+            item.model_name: item.residual_ranking
+            for item in forecasting_reference.baseline_results
+        },
+    }
+
+
+def _replace_result(result: C32RunResult, **changes: object) -> C32RunResult:
+    return replace(result, **changes)
+
+
+def _missing_cmapss_raw_files(config: C32LocalCmapssConfig) -> tuple[str, ...]:
+    missing: list[str] = []
+    for subset in config.subsets:
+        for file_name in (
+            f"train_{subset}.txt",
+            f"test_{subset}.txt",
+            f"RUL_{subset}.txt",
+        ):
+            if not (config.raw_dir / file_name).is_file():
+                missing.append(str(config.raw_dir / file_name))
+    return tuple(missing)
+
+
+def _c31_schema_mismatch_type() -> type[Exception]:
+    from b08_model_core.experiments.c31_cmapss_minimal_ingestion import (
+        C31RawSchemaMismatch,
+    )
+
+    return C31RawSchemaMismatch
+
+
+def _run_cmapss_rul_baseline(
+    config: C32LocalCmapssConfig,
+) -> C32RulBaselineResult:
+    from b08_model_core.evaluation.metrics import rul_regression_metrics
+    from b08_model_core.experiments.c31_cmapss_minimal_ingestion import (
+        load_cmapss_rul_baseline_dataset,
+    )
+
+    dataset = load_cmapss_rul_baseline_dataset(config.raw_dir, subsets=config.subsets)
+    subset_metrics: list[C32RulSubsetMetrics] = []
+    all_predictions: list[float] = []
+    all_truth: list[float] = []
+
+    for subset in dataset.subsets:
+        train_records = tuple(
+            record for record in dataset.train_records if record.subset == subset
+        )
+        test_records = tuple(
+            record for record in dataset.test_final_records if record.subset == subset
+        )
+        profile, train_max_cycle_reference = _rul_progress_profile(
+            train_records,
+            config.progress_bucket_count,
+        )
+        predictions = tuple(
+            float(
+                profile[
+                    _progress_bucket(
+                        min(record.cycle_index / train_max_cycle_reference, 1.0),
+                        config.progress_bucket_count,
+                    )
+                ]
+            )
+            for record in test_records
+        )
+        truth = tuple(float(record.rul) for record in test_records)
+        metrics = rul_regression_metrics(predictions, truth)
+        subset_metrics.append(
+            C32RulSubsetMetrics(
+                subset=subset,
+                train_max_cycle_reference=float(train_max_cycle_reference),
+                predictions=predictions,
+                truth=truth,
+                metrics=metrics,
+            )
+        )
+        all_predictions.extend(predictions)
+        all_truth.extend(truth)
+
+    overall_metrics = rul_regression_metrics(all_predictions, all_truth)
+    overall_metrics["subset_count"] = len(dataset.subsets)
+    return C32RulBaselineResult(
+        raw_dir=config.raw_dir,
+        progress_bucket_count=config.progress_bucket_count,
+        subset_metrics=tuple(subset_metrics),
+        overall_metrics=overall_metrics,
+    )
+
+
+def _rul_progress_profile(
+    train_records: tuple[object, ...],
+    bucket_count: int,
+) -> tuple[tuple[float, ...], float]:
+    max_cycle_by_unit: dict[int, int] = {}
+    for record in train_records:
+        unit_id = int(getattr(record, "unit_id"))
+        cycle_index = int(getattr(record, "cycle_index"))
+        max_cycle_by_unit[unit_id] = max(max_cycle_by_unit.get(unit_id, 0), cycle_index)
+    if not max_cycle_by_unit:
+        raise C32ConfigError("local_execution.cmapss train records must be non-empty")
+
+    train_max_cycle_reference = float(np.median(tuple(max_cycle_by_unit.values())))
+    bucket_values: list[list[float]] = [[] for _ in range(bucket_count)]
+    for record in train_records:
+        unit_max_cycle = max_cycle_by_unit[int(getattr(record, "unit_id"))]
+        progress = float(getattr(record, "cycle_index")) / unit_max_cycle
+        bucket_values[_progress_bucket(progress, bucket_count)].append(
+            float(getattr(record, "rul"))
+        )
+
+    non_empty = [index for index, values in enumerate(bucket_values) if values]
+    if not non_empty:
+        raise C32ConfigError("local_execution.cmapss progress profile is empty")
+
+    profile: list[float] = []
+    for index, values in enumerate(bucket_values):
+        source_values = values
+        if not source_values:
+            nearest = min(non_empty, key=lambda bucket: (abs(bucket - index), bucket))
+            source_values = bucket_values[nearest]
+        profile.append(float(np.median(source_values)))
+    return tuple(profile), train_max_cycle_reference
+
+
+def _progress_bucket(progress: float, bucket_count: int) -> int:
+    return min(int(progress * bucket_count), bucket_count - 1)
+
+
+def _run_fu13_like_forecasting_reference(
+    config: C32LocalFu13LikeConfig,
+) -> C32ForecastingReferenceResult | None:
+    from b08_model_core.baselines.robust_forecaster import RobustStageForecaster
+    from b08_model_core.baselines.seasonal_naive import StageSeasonalNaiveForecaster
+    from b08_model_core.evaluation.metrics import (
+        forecasting_metrics,
+        forecasting_residual_ranking,
+    )
+    from b08_model_core.simulation.export_dataset import simulate_dataset
+    from b08_model_core.tasks.window_builder import build_model_windows
+
+    observations = simulate_dataset(days=config.days, seed=config.seed)
+    windows = build_model_windows(
+        observations,
+        context_length=config.context_length,
+        prediction_length=config.prediction_length,
+        stride=config.prediction_length,
+        allow_cross_stage=True,
+    )[: config.max_windows]
+    if len(windows) < 2:
+        return None
+
+    split = max(1, int(len(windows) * 0.7))
+    if split == len(windows):
+        split -= 1
+    train = windows[:split]
+    test = windows[split:]
+    truth = np.stack([window.y for window in test], axis=0)
+    sensor_ids = tuple(test[0].sensor_token)
+
+    baseline_results: list[C32ForecastingBaselineResult] = []
+    for model_name, model in (
+        ("RobustStageForecaster", RobustStageForecaster()),
+        ("StageSeasonalNaiveForecaster", StageSeasonalNaiveForecaster()),
+    ):
+        predictions = model.fit(train).predict(test)
+        metrics = forecasting_metrics(predictions, test)
+        ranking = forecasting_residual_ranking(
+            predictions,
+            truth,
+            sensor_ids,
+            top_k=config.residual_top_k,
+        )
+        baseline_results.append(
+            C32ForecastingBaselineResult(
+                model_name=model_name,
+                metrics=metrics,
+                residual_ranking=ranking,
+            )
+        )
+
+    return C32ForecastingReferenceResult(
+        days=config.days,
+        seed=config.seed,
+        context_length=config.context_length,
+        prediction_length=config.prediction_length,
+        max_windows=config.max_windows,
+        train_window_count=len(train),
+        test_window_count=len(test),
+        baseline_metrics={
+            item.model_name: item.metrics for item in baseline_results
+        },
+        baseline_results=tuple(baseline_results),
+    )
+
+
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     try:
         loaded = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -439,15 +932,168 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     return loaded
 
 
-def _load_safety_policy(raw: dict[str, Any]) -> C32SafetyPolicy:
+def _project_root_for_config(path: Path) -> Path:
+    resolved = path.resolve()
+    for candidate in (resolved.parent, *resolved.parents):
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    return Path.cwd()
+
+
+def _local_execution_enabled(raw: dict[str, Any]) -> bool:
+    local_execution = raw.get("local_execution")
+    if local_execution is None:
+        return False
+    if not isinstance(local_execution, dict):
+        raise C32ConfigError("local_execution must be a mapping")
+    return _optional_bool(local_execution, "enabled", "local_execution", False)
+
+
+def _load_safety_policy(
+    raw: dict[str, Any],
+    *,
+    local_execution_enabled: bool,
+) -> C32SafetyPolicy:
     policy = _required_mapping(raw, "safety_policy")
-    values = {
-        flag: _required_bool(policy, flag, "safety_policy") for flag in _SAFETY_FLAGS
-    }
-    for flag, value in values.items():
-        if value is not False:
-            raise C32ConfigError(f"safety_policy.{flag} must be false by default")
+    values = {}
+    for flag in _SAFETY_FLAGS:
+        if flag == "allow_local_execution":
+            values[flag] = _optional_bool(policy, flag, "safety_policy", False)
+        else:
+            values[flag] = _required_bool(policy, flag, "safety_policy")
+
+    if local_execution_enabled:
+        if values["allow_local_execution"] is not True:
+            raise C32ConfigError(
+                "safety_policy.allow_local_execution must be true when "
+                "local_execution.enabled is true"
+            )
+        if values["allow_local_raw_data"] is not True:
+            raise C32ConfigError(
+                "safety_policy.allow_local_raw_data must be true when "
+                "local_execution.enabled is true"
+            )
+        for flag in _STRICT_FALSE_SAFETY_FLAGS:
+            if values[flag] is not False:
+                raise C32ConfigError(
+                    f"safety_policy.{flag} must be false when "
+                    "local_execution.enabled is true"
+                )
+    else:
+        for flag, value in values.items():
+            if value is not False:
+                raise C32ConfigError(f"safety_policy.{flag} must be false by default")
     return C32SafetyPolicy(**values)
+
+
+def _load_local_execution(
+    raw: dict[str, Any],
+    safety_policy: C32SafetyPolicy,
+    *,
+    config_root: Path,
+) -> C32LocalExecutionConfig | None:
+    local_execution = raw.get("local_execution")
+    if local_execution is None:
+        return None
+    if not isinstance(local_execution, dict):
+        raise C32ConfigError("local_execution must be a mapping")
+
+    enabled = _optional_bool(local_execution, "enabled", "local_execution", False)
+    if not enabled:
+        return None
+    cmapss = _required_mapping(local_execution, "cmapss")
+    fu13_like = _required_mapping(local_execution, "fu13_like")
+    loaded = C32LocalExecutionConfig(
+        enabled=enabled,
+        cmapss=C32LocalCmapssConfig(
+            raw_dir=_resolve_config_path(
+                _required_string(cmapss, "raw_dir", "local_execution.cmapss"),
+                config_root,
+            ),
+            subsets=_required_string_list(
+                cmapss,
+                "subsets",
+                "local_execution.cmapss",
+            ),
+            progress_bucket_count=_positive_int(
+                cmapss,
+                "progress_bucket_count",
+                "local_execution.cmapss",
+            ),
+        ),
+        fu13_like=C32LocalFu13LikeConfig(
+            days=_positive_int(fu13_like, "days", "local_execution.fu13_like"),
+            seed=_non_negative_int(fu13_like, "seed", "local_execution.fu13_like"),
+            context_length=_positive_int(
+                fu13_like,
+                "context_length",
+                "local_execution.fu13_like",
+            ),
+            prediction_length=_positive_int(
+                fu13_like,
+                "prediction_length",
+                "local_execution.fu13_like",
+            ),
+            max_windows=_positive_int(
+                fu13_like,
+                "max_windows",
+                "local_execution.fu13_like",
+            ),
+            residual_top_k=_positive_int(
+                fu13_like,
+                "residual_top_k",
+                "local_execution.fu13_like",
+            ),
+        ),
+    )
+    if not loaded.enabled:
+        return loaded
+    if not safety_policy.allow_local_execution:
+        raise C32ConfigError("safety_policy.allow_local_execution must be true")
+    if not safety_policy.allow_local_raw_data:
+        raise C32ConfigError("safety_policy.allow_local_raw_data must be true")
+
+    if len(set(loaded.cmapss.subsets)) != len(loaded.cmapss.subsets):
+        raise C32ConfigError("local_execution.cmapss.subsets must not contain duplicates")
+    invalid_subsets = sorted(set(loaded.cmapss.subsets) - set(_CLASSIC_CMAPSS_SUBSETS))
+    if invalid_subsets:
+        raise C32ConfigError(
+            "local_execution.cmapss.subsets has invalid subset(s): "
+            + ", ".join(invalid_subsets)
+        )
+    return loaded
+
+
+def _resolve_config_path(value: str, config_root: Path) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return config_root / path
+
+
+def _positive_int(raw: dict[str, Any], key: str, context: str) -> int:
+    value = _required_int(raw, key, context)
+    if value <= 0:
+        raise C32ConfigError(f"{context}.{key} must be positive")
+    return value
+
+
+def _non_negative_int(raw: dict[str, Any], key: str, context: str) -> int:
+    value = _required_int(raw, key, context)
+    if value < 0:
+        raise C32ConfigError(f"{context}.{key} must be non-negative")
+    return value
+
+
+def _optional_bool(
+    raw: dict[str, Any],
+    key: str,
+    context: str,
+    default: bool,
+) -> bool:
+    if key not in raw:
+        return default
+    return _required_bool(raw, key, context)
 
 
 def _load_prerequisites(raw: dict[str, Any]) -> C32Prerequisites:
