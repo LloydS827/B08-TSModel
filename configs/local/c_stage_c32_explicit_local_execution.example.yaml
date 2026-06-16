@@ -117,4 +117,4 @@ local_execution:
     max_windows: 60
     residual_top_k: 5
 outputs:
-  report: reports/local/c_stage_c32_explicit_local_execution.md
+  report: reports/c_stage_c32_explicit_local_execution.md

@@ -83,6 +83,16 @@ def test_c32_local_execution_example_is_explicit_opt_in():
     assert config.local_execution.fu13_like.context_length == 32
     assert config.local_execution.fu13_like.prediction_length == 8
     assert config.local_execution.fu13_like.max_windows == 60
+    assert config.local_execution.cmapss.raw_dir == (
+        _REPO_ROOT / "data/public/cmapss/raw"
+    )
+    assert config.outputs.report == Path("reports/c_stage_c32_explicit_local_execution.md")
+
+
+def test_c32_local_execution_example_report_path_is_ignored():
+    config = load_c32_config(_LOCAL_EXECUTION_CONFIG)
+
+    assert config.outputs.report.parent == Path("reports")
 
 
 def test_c32_rejects_local_execution_without_required_flags(tmp_path):
@@ -101,6 +111,29 @@ def test_c32_rejects_local_execution_with_training_enabled(tmp_path):
 
     with pytest.raises(C32ConfigError, match="allow_training"):
         load_c32_config(broken)
+
+
+def test_c32_rejects_local_execution_with_negative_seed(tmp_path):
+    data = yaml.safe_load(_LOCAL_EXECUTION_CONFIG.read_text(encoding="utf-8"))
+    data["local_execution"]["fu13_like"]["seed"] = -1
+    broken = _write_yaml(tmp_path / "broken_seed.yaml", data)
+
+    with pytest.raises(C32ConfigError, match="seed"):
+        load_c32_config(broken)
+
+
+def test_c32_treats_missing_local_execution_enabled_as_contract_only(tmp_path):
+    data = yaml.safe_load(_LOCAL_EXECUTION_CONFIG.read_text(encoding="utf-8"))
+    data["safety_policy"]["allow_local_raw_data"] = False
+    data["safety_policy"]["allow_local_execution"] = False
+    data["local_execution"].pop("enabled")
+    path = _write_yaml(tmp_path / "c32_local_disabled.yaml", data)
+
+    config = load_c32_config(path)
+
+    assert config.local_execution is None
+    assert config.safety_policy.allow_local_execution is False
+    assert config.safety_policy.allow_local_raw_data is False
 
 
 def test_c32_rejects_wrong_stage(tmp_path):

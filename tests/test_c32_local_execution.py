@@ -134,9 +134,16 @@ def test_c32_local_execution_runs_rul_and_forecasting_reference(tmp_path):
         "RobustStageForecaster",
         "StageSeasonalNaiveForecaster",
     }
+    assert result.local_metric_summary is not None
+    for metric in (
+        *config.metric_contract.rul_metrics,
+        *config.metric_contract.forecasting_metrics,
+    ):
+        assert metric in result.local_metric_summary
     text = render_c32_report(result)
     assert "C-MAPSS RUL Baseline Evaluation" in text
     assert "FU13-like Forecasting Reference" in text
+    assert "Local Metric Summary" in text
     assert "Separated Metric Interpretation" in text
     assert "Leaderboard allowed: False" in text
 

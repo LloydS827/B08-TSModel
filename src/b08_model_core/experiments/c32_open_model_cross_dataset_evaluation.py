@@ -203,6 +203,7 @@ class C32RunResult:
     invalid_claims: tuple[str, ...]
     rul_baseline_result: C32RulBaselineResult | None = None
     forecasting_reference_result: C32ForecastingReferenceResult | None = None
+    local_metric_summary: dict[str, object] | None = None
     local_execution_blocked_reason: str = ""
 
 
@@ -294,7 +295,8 @@ _FORBIDDEN_OVERCLAIMING_TOKENS = (
 
 
 def load_c32_config(path: str | Path) -> C32Config:
-    raw = _load_yaml_mapping(Path(path))
+    config_path = Path(path)
+    raw = _load_yaml_mapping(config_path)
     stage = _required_string(raw, "stage")
     if stage != _EXPECTED_STAGE:
         raise C32ConfigError(f"stage must be {_EXPECTED_STAGE}")
@@ -310,7 +312,11 @@ def load_c32_config(path: str | Path) -> C32Config:
     model_candidates = _load_model_candidates(raw, task_contracts)
     model_cache_policy = _load_model_cache_policy(raw)
     metric_contract = _load_metric_contract(raw)
-    local_execution = _load_local_execution(raw, safety_policy)
+    local_execution = _load_local_execution(
+        raw,
+        safety_policy,
+        config_root=_project_root_for_config(config_path),
+    )
     _validate_task_metrics(task_contracts, metric_contract)
     outputs = _load_outputs(raw)
 
@@ -373,6 +379,10 @@ def run_c32_open_model_cross_dataset_evaluation(
         status="local_execution_baseline_reference_ready",
         rul_baseline_result=rul_baseline_result,
         forecasting_reference_result=forecasting_reference_result,
+        local_metric_summary=_local_metric_summary(
+            rul_baseline_result,
+            forecasting_reference_result,
+        ),
     )
 
 
@@ -560,6 +570,8 @@ def render_c32_report(result: C32RunResult) -> str:
         lines.extend(_render_rul_baseline_section(result.rul_baseline_result))
     if result.forecasting_reference_result is not None:
         lines.extend(_render_forecasting_reference_section(result.forecasting_reference_result))
+    if result.local_metric_summary is not None:
+        lines.extend(_render_local_metric_summary(result.local_metric_summary))
     if (
         result.rul_baseline_result is not None
         or result.forecasting_reference_result is not None
@@ -680,6 +692,44 @@ def _render_forecasting_reference_section(
             )
     lines.append("")
     return lines
+
+
+def _render_local_metric_summary(summary: dict[str, object]) -> list[str]:
+    lines = [
+        "## Local Metric Summary",
+        "",
+        f"- rul_mae: {summary['rul_mae']}",
+        f"- rul_rmse: {summary['rul_rmse']}",
+        f"- nasa_score: {summary['nasa_score']}",
+        f"- forecasting_mae: {summary['forecasting_mae']}",
+        f"- forecasting_rmse: {summary['forecasting_rmse']}",
+        "- residual_ranking: available per forecasting baseline section",
+        "",
+    ]
+    return lines
+
+
+def _local_metric_summary(
+    rul_baseline: C32RulBaselineResult,
+    forecasting_reference: C32ForecastingReferenceResult,
+) -> dict[str, object]:
+    return {
+        "rul_mae": rul_baseline.overall_metrics["mae"],
+        "rul_rmse": rul_baseline.overall_metrics["rmse"],
+        "nasa_score": rul_baseline.overall_metrics["nasa_score"],
+        "forecasting_mae": {
+            item.model_name: item.metrics["mae"]
+            for item in forecasting_reference.baseline_results
+        },
+        "forecasting_rmse": {
+            item.model_name: item.metrics["rmse"]
+            for item in forecasting_reference.baseline_results
+        },
+        "residual_ranking": {
+            item.model_name: item.residual_ranking
+            for item in forecasting_reference.baseline_results
+        },
+    }
 
 
 def _replace_result(result: C32RunResult, **changes: object) -> C32RunResult:
@@ -882,13 +932,21 @@ def _load_yaml_mapping(path: Path) -> dict[str, Any]:
     return loaded
 
 
+def _project_root_for_config(path: Path) -> Path:
+    resolved = path.resolve()
+    for candidate in (resolved.parent, *resolved.parents):
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    return Path.cwd()
+
+
 def _local_execution_enabled(raw: dict[str, Any]) -> bool:
     local_execution = raw.get("local_execution")
     if local_execution is None:
         return False
     if not isinstance(local_execution, dict):
         raise C32ConfigError("local_execution must be a mapping")
-    return _required_bool(local_execution, "enabled", "local_execution")
+    return _optional_bool(local_execution, "enabled", "local_execution", False)
 
 
 def _load_safety_policy(
@@ -931,6 +989,8 @@ def _load_safety_policy(
 def _load_local_execution(
     raw: dict[str, Any],
     safety_policy: C32SafetyPolicy,
+    *,
+    config_root: Path,
 ) -> C32LocalExecutionConfig | None:
     local_execution = raw.get("local_execution")
     if local_execution is None:
@@ -938,7 +998,7 @@ def _load_local_execution(
     if not isinstance(local_execution, dict):
         raise C32ConfigError("local_execution must be a mapping")
 
-    enabled = _required_bool(local_execution, "enabled", "local_execution")
+    enabled = _optional_bool(local_execution, "enabled", "local_execution", False)
     if not enabled:
         return None
     cmapss = _required_mapping(local_execution, "cmapss")
@@ -946,7 +1006,10 @@ def _load_local_execution(
     loaded = C32LocalExecutionConfig(
         enabled=enabled,
         cmapss=C32LocalCmapssConfig(
-            raw_dir=Path(_required_string(cmapss, "raw_dir", "local_execution.cmapss")),
+            raw_dir=_resolve_config_path(
+                _required_string(cmapss, "raw_dir", "local_execution.cmapss"),
+                config_root,
+            ),
             subsets=_required_string_list(
                 cmapss,
                 "subsets",
@@ -960,7 +1023,7 @@ def _load_local_execution(
         ),
         fu13_like=C32LocalFu13LikeConfig(
             days=_positive_int(fu13_like, "days", "local_execution.fu13_like"),
-            seed=_required_int(fu13_like, "seed", "local_execution.fu13_like"),
+            seed=_non_negative_int(fu13_like, "seed", "local_execution.fu13_like"),
             context_length=_positive_int(
                 fu13_like,
                 "context_length",
@@ -1001,10 +1064,24 @@ def _load_local_execution(
     return loaded
 
 
+def _resolve_config_path(value: str, config_root: Path) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+    return config_root / path
+
+
 def _positive_int(raw: dict[str, Any], key: str, context: str) -> int:
     value = _required_int(raw, key, context)
     if value <= 0:
         raise C32ConfigError(f"{context}.{key} must be positive")
+    return value
+
+
+def _non_negative_int(raw: dict[str, Any], key: str, context: str) -> int:
+    value = _required_int(raw, key, context)
+    if value < 0:
+        raise C32ConfigError(f"{context}.{key} must be non-negative")
     return value
 
 
