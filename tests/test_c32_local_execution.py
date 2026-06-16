@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.evaluation.metrics import (
     forecasting_residual_ranking,
     nasa_rul_score,
@@ -267,3 +268,25 @@ def test_c32_local_execution_does_not_import_open_model_adapters(
     )
 
     assert result.status == "local_execution_baseline_reference_ready"
+
+
+def test_cli_c_stage_c32_runs_explicit_local_execution(tmp_path):
+    config_path = _c32_fd001_local_config(tmp_path)
+    output = tmp_path / "c32_local.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c32",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    text = output.read_text(encoding="utf-8")
+    assert "local_execution_baseline_reference_ready" in text
+    assert "C-MAPSS RUL Baseline Evaluation" in text
+    assert "FU13-like Forecasting Reference" in text

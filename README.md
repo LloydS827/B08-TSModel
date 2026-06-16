@@ -259,7 +259,19 @@ allow_training: false
 allow_write_processed: false
 ```
 
-默认路径不下载公开数据、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不实例化 open model adapter、不运行模型训练、不计算模型分数、不生成 leaderboard。下一步应设计 explicit local execution design：先做 C-MAPSS RUL baseline，再做 FU13-like forecasting reference，并保持 RUL 与 forecasting metrics 分开解释。
+默认路径不下载公开数据、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不实例化 open model adapter、不运行模型训练、不计算模型分数、不生成 leaderboard。
+
+显式本机执行路径使用 ignored 的本机 C-MAPSS raw 目录：
+
+```bash
+uv run b08-model-core experiment c-stage-c32 \
+  --config configs/local/c_stage_c32_explicit_local_execution.example.yaml \
+  --output reports/c_stage_c32_explicit_local_execution.md
+```
+
+该 explicit local execution 需要用户先把 C-MAPSS classic raw text 文件放在 `data/public/cmapss/raw` 下；这些 raw、zip、parquet、cache 和生成报告都不提交到 Git。成功报告状态为 `local_execution_baseline_reference_ready`，只运行 C-MAPSS RUL baseline evaluation 和 FU13-like forecasting reference。
+
+本机执行仍不下载公开数据、不写 processed data、不检查 model cache、不运行 open model adapter、不训练、不生成 leaderboard。RUL metrics 和 forecasting metrics separated：C-MAPSS RUL 使用 RUL MAE / RMSE / NASA score；FU13-like forecasting 使用 forecasting MAE / RMSE / residual ranking；二者不合成为单一排名。
 
 ## 项目边界
 
