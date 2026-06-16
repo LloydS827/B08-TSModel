@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import yaml
 
 from b08_model_core.evaluation.metrics import (
     forecasting_residual_ranking,
@@ -14,6 +15,11 @@ from b08_model_core.evaluation.metrics import (
 from b08_model_core.experiments.c31_cmapss_minimal_ingestion import (
     C31RawSchemaMismatch,
     load_cmapss_rul_baseline_dataset,
+)
+from b08_model_core.experiments.c32_open_model_cross_dataset_evaluation import (
+    load_c32_config,
+    render_c32_report,
+    run_c32_open_model_cross_dataset_evaluation,
 )
 
 
@@ -96,3 +102,161 @@ def test_load_cmapss_rul_baseline_dataset_reports_schema_mismatch(tmp_path):
 
     with pytest.raises(C31RawSchemaMismatch, match="expected 26 columns"):
         load_cmapss_rul_baseline_dataset(raw_dir, subsets=("FD001",))
+
+
+def _c32_fd001_local_config(tmp_path: Path) -> Path:
+    source = Path("configs/local/c_stage_c32_explicit_local_execution.example.yaml")
+    data = yaml.safe_load(source.read_text(encoding="utf-8"))
+    raw_dir = tmp_path / "data/public/cmapss/raw"
+    data["local_execution"]["cmapss"]["raw_dir"] = str(raw_dir)
+    data["local_execution"]["cmapss"]["subsets"] = ["FD001"]
+    path = tmp_path / "c32_fd001.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    _write_fd001_fixture(raw_dir)
+    return path
+
+
+def test_c32_local_execution_runs_rul_and_forecasting_reference(tmp_path):
+    config_path = _c32_fd001_local_config(tmp_path)
+    config = load_c32_config(config_path)
+
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config,
+        config_path=config_path,
+    )
+
+    assert result.status == "local_execution_baseline_reference_ready"
+    assert result.rul_baseline_result is not None
+    assert result.rul_baseline_result.overall_metrics["subset_count"] == 1
+    assert result.rul_baseline_result.overall_metrics["count"] == 2
+    assert result.forecasting_reference_result is not None
+    assert set(result.forecasting_reference_result.baseline_metrics) == {
+        "RobustStageForecaster",
+        "StageSeasonalNaiveForecaster",
+    }
+    text = render_c32_report(result)
+    assert "C-MAPSS RUL Baseline Evaluation" in text
+    assert "FU13-like Forecasting Reference" in text
+    assert "Separated Metric Interpretation" in text
+    assert "Leaderboard allowed: False" in text
+
+
+def test_c32_local_execution_rul_baseline_uses_deterministic_progress_profile(
+    tmp_path,
+):
+    config_path = _c32_fd001_local_config(tmp_path)
+    config = load_c32_config(config_path)
+
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config,
+        config_path=config_path,
+    )
+
+    assert result.rul_baseline_result is not None
+    subset = result.rul_baseline_result.subset_metrics[0]
+    assert subset.subset == "FD001"
+    assert subset.predictions == (1.0, 2.0)
+    assert subset.truth == (7.0, 5.0)
+    assert subset.metrics["mae"] == 4.5
+    assert subset.metrics["rmse"] == math.sqrt(22.5)
+    expected_nasa = (math.exp(6.0 / 13.0) - 1.0) + (
+        math.exp(3.0 / 13.0) - 1.0
+    )
+    assert subset.metrics["nasa_score"] == pytest.approx(expected_nasa)
+    assert result.rul_baseline_result.overall_metrics["mae"] == 4.5
+    assert result.rul_baseline_result.overall_metrics["rmse"] == math.sqrt(22.5)
+    assert result.rul_baseline_result.overall_metrics["nasa_score"] == pytest.approx(
+        expected_nasa
+    )
+
+
+def test_c32_local_execution_blocks_when_raw_missing(tmp_path):
+    config_path = _c32_fd001_local_config(tmp_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    missing_dir = tmp_path / "data/public/cmapss/missing"
+    data["local_execution"]["cmapss"]["raw_dir"] = str(missing_dir)
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    config = load_c32_config(config_path)
+
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config,
+        config_path=config_path,
+    )
+
+    assert result.status == "blocked_missing_cmapss_raw"
+    assert result.rul_baseline_result is None
+
+
+def test_c32_local_execution_blocks_on_raw_schema_mismatch(tmp_path):
+    config_path = _c32_fd001_local_config(tmp_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw_dir = Path(data["local_execution"]["cmapss"]["raw_dir"])
+    (raw_dir / "train_FD001.txt").write_text("1 1 0\n", encoding="utf-8")
+    config = load_c32_config(config_path)
+
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config,
+        config_path=config_path,
+    )
+
+    assert result.status == "blocked_cmapss_raw_schema_mismatch"
+    assert "expected 26 columns" in result.local_execution_blocked_reason
+    assert result.rul_baseline_result is None
+
+
+def test_c32_local_execution_blocks_when_fu13_like_windows_are_insufficient(
+    tmp_path,
+):
+    config_path = _c32_fd001_local_config(tmp_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["local_execution"]["fu13_like"]["days"] = 1
+    data["local_execution"]["fu13_like"]["context_length"] = 100000
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    config = load_c32_config(config_path)
+
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config,
+        config_path=config_path,
+    )
+
+    assert result.status == "blocked_insufficient_fu13_like_windows"
+    assert result.forecasting_reference_result is None
+
+
+def test_c32_local_execution_does_not_import_open_model_adapters(
+    tmp_path,
+    monkeypatch,
+):
+    import builtins
+    import importlib
+
+    forbidden = (
+        "b08_model_core.adapters.open_models",
+        "b08_model_core.adapters.ttm_adapter",
+    )
+    original_import = builtins.__import__
+    original_import_module = importlib.import_module
+
+    def guarded_import(name, *args, **kwargs):
+        if name.startswith(forbidden):
+            raise AssertionError(f"C3.2 local execution imported adapters: {name}")
+        return original_import(name, *args, **kwargs)
+
+    def guarded_import_module(name, *args, **kwargs):
+        if name.startswith(forbidden):
+            raise AssertionError(
+                f"C3.2 local execution imported adapter module: {name}"
+            )
+        return original_import_module(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    monkeypatch.setattr(importlib, "import_module", guarded_import_module)
+    config_path = _c32_fd001_local_config(tmp_path)
+    config = load_c32_config(config_path)
+
+    result = run_c32_open_model_cross_dataset_evaluation(
+        config,
+        config_path=config_path,
+    )
+
+    assert result.status == "local_execution_baseline_reference_ready"

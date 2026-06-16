@@ -16,6 +16,9 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_CONFIG = (
     _REPO_ROOT / "configs/c_stage_c32_open_model_cross_dataset_evaluation.yaml"
 )
+_LOCAL_EXECUTION_CONFIG = (
+    _REPO_ROOT / "configs/local/c_stage_c32_explicit_local_execution.example.yaml"
+)
 
 
 def _write_yaml(path: Path, data: dict) -> Path:
@@ -56,6 +59,48 @@ def test_c32_default_config_is_contract_first_and_offline_safe():
     assert config.prerequisites.leakage_guard_passed is True
     assert config.metric_contract.leaderboard_allowed is False
     assert config.model_cache_policy.cache_dir == Path("hf_cache")
+    assert config.local_execution is None
+
+
+def test_c32_local_execution_example_is_explicit_opt_in():
+    config = load_c32_config(_LOCAL_EXECUTION_CONFIG)
+
+    assert config.safety_policy.allow_local_execution is True
+    assert config.safety_policy.allow_local_raw_data is True
+    assert config.safety_policy.allow_network is False
+    assert config.safety_policy.allow_download is False
+    assert config.safety_policy.allow_model_cache is False
+    assert config.safety_policy.allow_training is False
+    assert config.safety_policy.allow_write_processed is False
+    assert config.local_execution is not None
+    assert config.local_execution.enabled is True
+    assert config.local_execution.cmapss.subsets == (
+        "FD001",
+        "FD002",
+        "FD003",
+        "FD004",
+    )
+    assert config.local_execution.fu13_like.context_length == 32
+    assert config.local_execution.fu13_like.prediction_length == 8
+    assert config.local_execution.fu13_like.max_windows == 60
+
+
+def test_c32_rejects_local_execution_without_required_flags(tmp_path):
+    data = yaml.safe_load(_LOCAL_EXECUTION_CONFIG.read_text(encoding="utf-8"))
+    data["safety_policy"]["allow_local_raw_data"] = False
+    broken = _write_yaml(tmp_path / "broken_local.yaml", data)
+
+    with pytest.raises(C32ConfigError, match="allow_local_raw_data"):
+        load_c32_config(broken)
+
+
+def test_c32_rejects_local_execution_with_training_enabled(tmp_path):
+    data = yaml.safe_load(_LOCAL_EXECUTION_CONFIG.read_text(encoding="utf-8"))
+    data["safety_policy"]["allow_training"] = True
+    broken = _write_yaml(tmp_path / "broken_training.yaml", data)
+
+    with pytest.raises(C32ConfigError, match="allow_training"):
+        load_c32_config(broken)
 
 
 def test_c32_rejects_wrong_stage(tmp_path):
