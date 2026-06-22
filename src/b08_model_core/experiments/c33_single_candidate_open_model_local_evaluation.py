@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+import time
 from typing import Any
 
 import yaml
@@ -77,6 +78,47 @@ class C33Config:
 
 
 @dataclass(frozen=True)
+class C33ForecastingBaselineResult:
+    model_name: str
+    metrics: dict[str, float | int | None]
+    residual_ranking: tuple[dict[str, float | int | str], ...]
+
+
+@dataclass(frozen=True)
+class C33ForecastingReferenceResult:
+    days: int
+    seed: int
+    context_length: int
+    prediction_length: int
+    max_windows: int
+    train_window_count: int
+    test_window_count: int
+    baseline_metrics: dict[str, dict[str, float | int | None]]
+    baseline_results: tuple[C33ForecastingBaselineResult, ...]
+
+
+@dataclass(frozen=True)
+class C33AdapterExecutionResult:
+    model_id: str
+    task_id: str
+    status: Any
+    metrics: dict[str, Any]
+    failure_stage: str
+    failure_reason: str
+    error_type: str
+    error_detail: str
+    dependency_status: str
+    weight_status: str
+    input_shape: dict[str, Any]
+    output_shape: dict[str, Any]
+    runtime_seconds: float | None
+    adapter_name: str
+    model_ref: str | None
+    cache_dir: str | Path | None
+    actual_network_used: bool | str | None
+
+
+@dataclass(frozen=True)
 class C33RunResult:
     config_path: Path
     stage: str
@@ -87,6 +129,10 @@ class C33RunResult:
     candidate: C33Candidate
     metric_contract: C33MetricContract
     invalid_claims: tuple[str, ...]
+    forecasting_reference_result: C33ForecastingReferenceResult | None = None
+    ttm_adapter_result: C33AdapterExecutionResult | None = None
+    ttm_forecasting_metrics: dict[str, float | int | None] | None = None
+    ttm_residual_ranking: tuple[dict[str, float | int | str], ...] | None = None
     local_execution_blocked_reason: str = ""
 
 
@@ -98,6 +144,16 @@ _EXPECTED_CANDIDATE = {
     "dataset_view": "fu13_like_simulated_forecasting",
 }
 _CONTRACT_READY_STATUS = "contract_ready_single_candidate_local_execution_blocked"
+_TTM_READY_STATUS = "local_execution_ttm_forecasting_ready"
+_TTM_MISSING_DEPENDENCY_STATUS = "local_execution_ttm_missing_dependency"
+_TTM_MISSING_OR_BLOCKED_WEIGHTS_STATUS = (
+    "local_execution_ttm_missing_or_blocked_weights"
+)
+_TTM_UNSUPPORTED_WINDOW_SHAPE_STATUS = (
+    "local_execution_ttm_unsupported_window_shape"
+)
+_TTM_RUNTIME_FAILED_STATUS = "local_execution_ttm_runtime_failed"
+_INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS = "blocked_insufficient_fu13_like_windows"
 _GO_DECISION = "Go for C3.3 explicit local TTM cache-first evaluation"
 _INVALID_CLAIMS = (
     "no production RUL",
@@ -172,19 +228,47 @@ def run_c33_single_candidate_open_model_local_evaluation(
             ),
         )
 
+    reference_attempt = _run_fu13_like_forecasting_reference(
+        config.local_execution.fu13_like,
+    )
+    if reference_attempt is None:
+        return C33RunResult(
+            config_path=Path(config_path),
+            stage=config.stage,
+            status=_INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS,
+            go_no_go_decision=_GO_DECISION,
+            safety_policy=config.safety_policy,
+            prerequisites=config.prerequisites,
+            candidate=config.candidate,
+            metric_contract=config.metric_contract,
+            invalid_claims=_INVALID_CLAIMS,
+            local_execution_blocked_reason="insufficient FU13-like windows",
+        )
+
+    forecasting_reference, _train_windows, test_windows = reference_attempt
+    context = _build_adapter_execution_context(config)
+    adapter = _build_ttm_adapter(adapter_factory)
+    raw_adapter_result = _run_ttm_adapter(adapter, test_windows, context)
+    ttm_adapter_result = _adapter_result_to_c33_result(raw_adapter_result, context)
+    ttm_metrics, ttm_ranking = _ttm_forecasting_evidence(
+        raw_adapter_result,
+        test_windows,
+        config.local_execution.fu13_like.residual_top_k,
+    )
     return C33RunResult(
         config_path=Path(config_path),
         stage=config.stage,
-        status=_CONTRACT_READY_STATUS,
+        status=_c33_status_for_adapter_result(ttm_adapter_result),
         go_no_go_decision=_GO_DECISION,
         safety_policy=config.safety_policy,
         prerequisites=config.prerequisites,
         candidate=config.candidate,
         metric_contract=config.metric_contract,
         invalid_claims=_INVALID_CLAIMS,
-        local_execution_blocked_reason=(
-            "C3.3 local adapter execution is reserved for Task 2"
-        ),
+        forecasting_reference_result=forecasting_reference,
+        ttm_adapter_result=ttm_adapter_result,
+        ttm_forecasting_metrics=ttm_metrics,
+        ttm_residual_ranking=ttm_ranking,
     )
 
 
@@ -242,6 +326,27 @@ def render_c33_report(result: C33RunResult) -> str:
                 "",
             ]
         )
+    if result.forecasting_reference_result is not None:
+        lines.extend(
+            _render_forecasting_reference_section(
+                result.forecasting_reference_result,
+            )
+        )
+    if result.ttm_adapter_result is not None:
+        lines.extend(_render_ttm_adapter_execution_section(result.ttm_adapter_result))
+    if result.ttm_forecasting_metrics is not None:
+        lines.extend(
+            _render_ttm_forecasting_metrics_section(
+                result.ttm_forecasting_metrics,
+                result.ttm_residual_ranking or (),
+            )
+        )
+    if (
+        result.forecasting_reference_result is not None
+        or result.ttm_adapter_result is not None
+        or result.status == _INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS
+    ):
+        lines.extend(_render_separated_metric_interpretation_section())
     lines.extend(
         [
             "## Go / No-Go",
@@ -264,6 +369,455 @@ def render_c33_report(result: C33RunResult) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _run_fu13_like_forecasting_reference(
+    config: C33LocalFu13LikeConfig,
+) -> tuple[C33ForecastingReferenceResult, list[object], list[object]] | None:
+    import numpy as np
+
+    from b08_model_core.baselines.robust_forecaster import RobustStageForecaster
+    from b08_model_core.baselines.seasonal_naive import StageSeasonalNaiveForecaster
+    from b08_model_core.evaluation.metrics import (
+        forecasting_metrics,
+        forecasting_residual_ranking,
+    )
+    from b08_model_core.simulation.export_dataset import simulate_dataset
+    from b08_model_core.tasks.window_builder import build_model_windows
+
+    observations = simulate_dataset(days=config.days, seed=config.seed)
+    windows = build_model_windows(
+        observations,
+        context_length=config.context_length,
+        prediction_length=config.prediction_length,
+        stride=config.prediction_length,
+        allow_cross_stage=True,
+    )[: config.max_windows]
+    if len(windows) < 2:
+        return None
+
+    split = max(1, int(len(windows) * 0.7))
+    if split == len(windows):
+        split -= 1
+    train = windows[:split]
+    test = windows[split:]
+    truth = np.stack([window.y for window in test], axis=0)
+    sensor_ids = tuple(test[0].sensor_token)
+
+    baseline_results: list[C33ForecastingBaselineResult] = []
+    for model_name, model in (
+        ("RobustStageForecaster", RobustStageForecaster()),
+        ("StageSeasonalNaiveForecaster", StageSeasonalNaiveForecaster()),
+    ):
+        predictions = model.fit(train).predict(test)
+        metrics = forecasting_metrics(predictions, test)
+        ranking = forecasting_residual_ranking(
+            predictions,
+            truth,
+            sensor_ids,
+            top_k=config.residual_top_k,
+        )
+        baseline_results.append(
+            C33ForecastingBaselineResult(
+                model_name=model_name,
+                metrics=metrics,
+                residual_ranking=ranking,
+            )
+        )
+
+    return (
+        C33ForecastingReferenceResult(
+            days=config.days,
+            seed=config.seed,
+            context_length=config.context_length,
+            prediction_length=config.prediction_length,
+            max_windows=config.max_windows,
+            train_window_count=len(train),
+            test_window_count=len(test),
+            baseline_metrics={
+                item.model_name: item.metrics for item in baseline_results
+            },
+            baseline_results=tuple(baseline_results),
+        ),
+        train,
+        test,
+    )
+
+
+def _build_adapter_execution_context(config: C33Config) -> Any:
+    from b08_model_core.adapters.open_models.base import AdapterExecutionContext
+
+    local_execution = config.local_execution
+    if local_execution is None:
+        raise C33ConfigError("local_execution is required for adapter execution")
+    return AdapterExecutionContext(
+        allow_network=config.safety_policy.allow_network,
+        allow_download=config.safety_policy.allow_download,
+        cache_dir=local_execution.model_cache_dir,
+        timeout_seconds_per_model=300.0,
+        metadata={"stage": config.stage, "candidate": config.candidate.model_id},
+    )
+
+
+def _build_ttm_adapter(adapter_factory: Callable[[], object] | None) -> object:
+    if adapter_factory is not None:
+        return adapter_factory()
+
+    from b08_model_core.adapters.open_models.ttm import TTMOpenModelAdapter
+
+    return TTMOpenModelAdapter()
+
+
+def _run_ttm_adapter(adapter: object, windows: list[object], context: Any) -> Any:
+    from b08_model_core.adapters.open_models.base import (
+        AdapterFailure,
+        AdapterReadiness,
+        OpenModelAdapterStatus,
+    )
+
+    started = time.monotonic()
+    try:
+        inspected = adapter.inspect_environment(context)  # type: ignore[attr-defined]
+        if isinstance(inspected, AdapterFailure):
+            return inspected
+        if (
+            isinstance(inspected, AdapterReadiness)
+            and inspected.adapter_status != OpenModelAdapterStatus.READY
+        ):
+            return _readiness_to_failure(inspected)
+
+        loaded = adapter.load(context)  # type: ignore[attr-defined]
+        if isinstance(loaded, AdapterFailure):
+            return loaded
+        return loaded.run_forecasting(windows, context)  # type: ignore[attr-defined]
+    except Exception as exc:
+        return _exception_to_adapter_failure(
+            exc,
+            context,
+            windows,
+            runtime_seconds=time.monotonic() - started,
+        )
+
+
+def _readiness_to_failure(readiness: Any) -> Any:
+    from b08_model_core.adapters.open_models.base import AdapterFailure
+    from b08_model_core.experiments.c21_executable_open_model_evaluation import (
+        C21TaskId,
+    )
+
+    limitations = ", ".join(readiness.known_limitations)
+    return AdapterFailure(
+        model_id=readiness.model_id or "ttm",
+        task_id=C21TaskId.FORECASTING,
+        status=readiness.adapter_status,
+        failure_stage="inspect",
+        failure_reason=limitations or "TTM adapter is not ready",
+        error_type="AdapterReadiness",
+        error_detail=_value(readiness.metadata),
+        dependency_status=readiness.dependency_status,
+        weight_status=readiness.weight_status,
+        adapter_name=readiness.adapter_name,
+        model_ref=readiness.model_ref,
+        cache_dir=readiness.cache_dir,
+        actual_network_used=readiness.actual_network_used,
+    )
+
+
+def _exception_to_adapter_failure(
+    exc: Exception,
+    context: Any,
+    windows: list[object],
+    *,
+    runtime_seconds: float,
+) -> Any:
+    from b08_model_core.adapters.open_models.base import (
+        AdapterFailure,
+        OpenModelAdapterStatus,
+    )
+    from b08_model_core.experiments.c21_executable_open_model_evaluation import (
+        C21TaskId,
+    )
+
+    return AdapterFailure(
+        model_id="ttm",
+        task_id=C21TaskId.FORECASTING,
+        status=OpenModelAdapterStatus.RUNTIME_FAILED,
+        failure_stage="execute",
+        failure_reason="TTM adapter execution raised an exception",
+        error_type=type(exc).__name__,
+        error_detail=str(exc),
+        dependency_status="unknown",
+        weight_status="unknown",
+        input_shape=_forecasting_input_shape(windows),
+        adapter_name="",
+        runtime_seconds=runtime_seconds,
+        cache_dir=context.cache_dir,
+        actual_network_used=_network_usage_value(None, context),
+    )
+
+
+def _adapter_result_to_c33_result(raw_result: Any, context: Any) -> C33AdapterExecutionResult:
+    from b08_model_core.adapters.open_models.base import AdapterFailure, AdapterTaskOutput
+
+    if isinstance(raw_result, AdapterTaskOutput):
+        metadata = dict(raw_result.metadata)
+        return C33AdapterExecutionResult(
+            model_id=raw_result.model_id or "ttm",
+            task_id=_task_value(raw_result.task_id),
+            status=raw_result.status,
+            metrics=dict(raw_result.metrics),
+            failure_stage="",
+            failure_reason="",
+            error_type="",
+            error_detail="",
+            dependency_status=metadata.get("dependency_status", "available"),
+            weight_status=metadata.get("weight_status", "not_checked"),
+            input_shape=dict(raw_result.input_shape),
+            output_shape=dict(raw_result.output_shape),
+            runtime_seconds=_runtime_seconds(raw_result),
+            adapter_name=raw_result.adapter_name,
+            model_ref=raw_result.model_ref,
+            cache_dir=raw_result.cache_dir or context.cache_dir,
+            actual_network_used=_network_usage_value(
+                raw_result.actual_network_used,
+                context,
+            ),
+        )
+    if isinstance(raw_result, AdapterFailure):
+        return C33AdapterExecutionResult(
+            model_id=raw_result.model_id or "ttm",
+            task_id=_task_value(raw_result.task_id),
+            status=raw_result.status,
+            metrics={},
+            failure_stage=raw_result.failure_stage,
+            failure_reason=raw_result.failure_reason,
+            error_type=raw_result.error_type,
+            error_detail=raw_result.error_detail,
+            dependency_status=raw_result.dependency_status,
+            weight_status=raw_result.weight_status,
+            input_shape=dict(raw_result.input_shape),
+            output_shape={},
+            runtime_seconds=raw_result.runtime_seconds,
+            adapter_name=raw_result.adapter_name,
+            model_ref=raw_result.model_ref,
+            cache_dir=raw_result.cache_dir or context.cache_dir,
+            actual_network_used=_network_usage_value(
+                raw_result.actual_network_used,
+                context,
+            ),
+        )
+    return _adapter_result_to_c33_result(
+        _exception_to_adapter_failure(
+            TypeError(
+                f"adapter returned unsupported result type: {type(raw_result).__name__}"
+            ),
+            context,
+            [],
+            runtime_seconds=0.0,
+        ),
+        context,
+    )
+
+
+def _ttm_forecasting_evidence(
+    raw_result: Any,
+    windows: list[object],
+    top_k: int,
+) -> tuple[
+    dict[str, float | int | None] | None,
+    tuple[dict[str, float | int | str], ...] | None,
+]:
+    import numpy as np
+
+    from b08_model_core.adapters.open_models.base import (
+        AdapterTaskOutput,
+        OpenModelAdapterStatus,
+    )
+    from b08_model_core.evaluation.metrics import (
+        forecasting_metrics,
+        forecasting_residual_ranking,
+    )
+
+    if not isinstance(raw_result, AdapterTaskOutput):
+        return None, None
+    if raw_result.status != OpenModelAdapterStatus.AVAILABLE_AND_RAN:
+        return None, None
+    metrics = forecasting_metrics(
+        {"y_hat": np.asarray(raw_result.predictions, dtype=float)},
+        windows,
+    )
+    truth = np.stack([window.y for window in windows], axis=0)
+    ranking = forecasting_residual_ranking(
+        {"y_hat": np.asarray(raw_result.predictions, dtype=float)},
+        truth,
+        tuple(windows[0].sensor_token),
+        top_k=top_k,
+    )
+    return metrics, ranking
+
+
+def _c33_status_for_adapter_result(result: C33AdapterExecutionResult) -> str:
+    from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+
+    if result.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN:
+        return _TTM_READY_STATUS
+    if result.status == OpenModelAdapterStatus.MISSING_DEPENDENCY:
+        return _TTM_MISSING_DEPENDENCY_STATUS
+    if result.status == OpenModelAdapterStatus.MISSING_OR_BLOCKED_WEIGHTS:
+        return _TTM_MISSING_OR_BLOCKED_WEIGHTS_STATUS
+    if result.status == OpenModelAdapterStatus.UNSUPPORTED_WINDOW_SHAPE:
+        return _TTM_UNSUPPORTED_WINDOW_SHAPE_STATUS
+    return _TTM_RUNTIME_FAILED_STATUS
+
+
+def _render_forecasting_reference_section(
+    result: C33ForecastingReferenceResult,
+) -> list[str]:
+    lines = [
+        "## Baseline Forecasting Reference",
+        "",
+        f"- Simulation days: {result.days}",
+        f"- Seed: {result.seed}",
+        f"- Context length: {result.context_length}",
+        f"- Prediction length: {result.prediction_length}",
+        f"- Max windows: {result.max_windows}",
+        f"- Train windows: {result.train_window_count}",
+        f"- Test windows: {result.test_window_count}",
+        "",
+        "| Baseline | MAE | RMSE | Interval coverage | Count |",
+        "| --- | ---: | ---: | ---: | ---: |",
+    ]
+    for item in result.baseline_results:
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    item.model_name,
+                    str(item.metrics["mae"]),
+                    str(item.metrics["rmse"]),
+                    str(item.metrics["interval_coverage"]),
+                    str(item.metrics["count"]),
+                ]
+            )
+            + " |"
+        )
+    for item in result.baseline_results:
+        lines.extend(
+            [
+                "",
+                f"### {item.model_name} Residual Ranking",
+                "",
+                "| Rank | Sensor | Mean absolute residual |",
+                "| ---: | --- | ---: |",
+            ]
+        )
+        for row in item.residual_ranking:
+            lines.append(
+                f"| {row['rank']} | {row['sensor_id']} | {row['mean_abs_residual']} |"
+            )
+    lines.append("")
+    return lines
+
+
+def _render_ttm_adapter_execution_section(
+    result: C33AdapterExecutionResult,
+) -> list[str]:
+    return [
+        "## TTM Adapter Execution",
+        "",
+        f"- Status: {result.status}",
+        f"- Dependency status: {result.dependency_status}",
+        f"- Weight status: {result.weight_status}",
+        f"- Runtime seconds: {result.runtime_seconds}",
+        f"- Input shape: {_value(result.input_shape)}",
+        f"- Output shape: {_value(result.output_shape)}",
+        f"- Actual network used: {result.actual_network_used}",
+        f"- Adapter: {result.adapter_name}",
+        f"- Model ref: {result.model_ref}",
+        f"- Cache dir: {result.cache_dir}",
+        f"- Failure stage: {result.failure_stage}",
+        f"- Failure reason: {result.failure_reason}",
+        f"- Error type: {result.error_type}",
+        f"- Error detail: {result.error_detail}",
+        "",
+    ]
+
+
+def _render_ttm_forecasting_metrics_section(
+    metrics: dict[str, float | int | None],
+    ranking: tuple[dict[str, float | int | str], ...],
+) -> list[str]:
+    lines = [
+        "## TTM Forecasting Metrics",
+        "",
+        f"- MAE: {metrics['mae']}",
+        f"- RMSE: {metrics['rmse']}",
+        f"- Interval coverage: {metrics['interval_coverage']}",
+        f"- Count: {metrics['count']}",
+        "",
+        "| Rank | Sensor | Mean absolute residual |",
+        "| ---: | --- | ---: |",
+    ]
+    for row in ranking:
+        lines.append(
+            f"| {row['rank']} | {row['sensor_id']} | {row['mean_abs_residual']} |"
+        )
+    lines.append("")
+    return lines
+
+
+def _render_separated_metric_interpretation_section() -> list[str]:
+    return [
+        "## Separated Metric Interpretation",
+        "",
+        "- Baseline and TTM metrics are FU13-like forecasting evidence only.",
+        "- Residual ranking explains sensor-level forecasting error; it is not a RUL metric.",
+        "- This report does not create a candidate leaderboard or production readiness claim.",
+        "",
+    ]
+
+
+def _task_value(task_id: Any) -> str:
+    return str(getattr(task_id, "value", task_id))
+
+
+def _runtime_seconds(raw_result: Any) -> float | None:
+    if raw_result.runtime_seconds is not None:
+        return raw_result.runtime_seconds
+    value = raw_result.metrics.get("runtime_seconds")
+    return float(value) if isinstance(value, int | float) else None
+
+
+def _network_usage_value(value: bool | str | None, context: Any) -> bool | str | None:
+    if value is not None:
+        return value
+    if context.allow_download:
+        return "download_allowed_not_verified"
+    if context.allow_network:
+        return "network_allowed_not_verified"
+    return False
+
+
+def _forecasting_input_shape(windows: list[object]) -> dict[str, Any]:
+    first = windows[0] if windows else None
+    return {
+        "windows": len(windows),
+        "X": _array_shape(getattr(first, "X", None)),
+        "y": _array_shape(getattr(first, "y", None)),
+    }
+
+
+def _array_shape(value: Any) -> list[int] | None:
+    if value is None:
+        return None
+    try:
+        return list(value.shape)
+    except AttributeError:
+        return None
+
+
+def _value(value: object) -> str:
+    return str(value)
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
