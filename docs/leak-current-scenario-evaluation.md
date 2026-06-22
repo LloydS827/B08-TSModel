@@ -50,9 +50,23 @@ top residual windows 的解释要非常克制。baseline related 口径下 top r
 - top residual windows：用于交给工艺专家复核上下文阶段、采样质量和现场事件。
 - trend/spike：需要结合连续窗口、原始曲线和维修记录判断，不能只看单次残差峰值。
 
+## 专家复核字段
+
+`leak_current_monitoring` 当前输出应先进入 `candidate_signal_report`，再由专家或维护人员复核。第一轮字段口径如下：
+
+| 字段 | 当前建议 | 含义 |
+| --- | --- | --- |
+| `signal_meaning` | `LeakElec residual candidate` | 解释候选信号含义，例如漏液电流读数相对同阶段 forecasting reference 出现偏离 |
+| `maintenance_confirmation_required` | `yes` | 是否需要维护人员确认；当前默认需要，因为缺少维修记录和闭环标签 |
+| `operation_advice_candidate` | `candidate_only` | 是否进入运行优化建议输入；当前只能作为候选输入，不能直接形成维修建议 |
+| `review_status` | `pending` | 专家复核状态，可取 `pending`、`confirmed`、`rejected`、`needs_more_data` |
+
+当 `review_status` 仍为 `pending` 或 `needs_more_data` 时，候选信号最多只能转为 B08 -> S01 的 system event candidate，用于提示设备状态变化候选、风险候选或运行优化建议输入，不代表生产告警，不代表维修建议，也不触发自动工单。
+
 ## 边界
 
 - 当前只是 forecasting residual candidate signal。
+- 当前只是 `candidate_signal_report` 和 S01 system event candidate 的输入口径。
 - 缺少真实故障标签、维修记录和维护闭环时不能推出故障概率、RUL 或维修建议。
 - top_window_stage_summary is context window only, not future target-stage attribution。
 
