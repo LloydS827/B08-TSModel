@@ -102,6 +102,7 @@ class C33AdapterExecutionResult:
     model_id: str
     task_id: str
     status: Any
+    adapter_status: Any
     metrics: dict[str, Any]
     failure_stage: str
     failure_reason: str
@@ -116,6 +117,7 @@ class C33AdapterExecutionResult:
     model_ref: str | None
     cache_dir: str | Path | None
     actual_network_used: bool | str | None
+    download_allowed_not_verified: bool
 
 
 @dataclass(frozen=True)
@@ -129,11 +131,15 @@ class C33RunResult:
     candidate: C33Candidate
     metric_contract: C33MetricContract
     invalid_claims: tuple[str, ...]
+    baseline_reference_result: C33ForecastingReferenceResult | None = None
+    adapter_result: C33AdapterExecutionResult | None = None
+    adapter_failure: C33AdapterExecutionResult | None = None
+    ttm_metrics: dict[str, float | int | None] | None = None
+    ttm_residual_ranking: tuple[dict[str, float | int | str], ...] | None = None
+    local_execution_blocked_reason: str = ""
     forecasting_reference_result: C33ForecastingReferenceResult | None = None
     ttm_adapter_result: C33AdapterExecutionResult | None = None
     ttm_forecasting_metrics: dict[str, float | int | None] | None = None
-    ttm_residual_ranking: tuple[dict[str, float | int | str], ...] | None = None
-    local_execution_blocked_reason: str = ""
 
 
 _EXPECTED_STAGE = "C3_3_single_candidate_open_model_local_evaluation"
@@ -248,27 +254,42 @@ def run_c33_single_candidate_open_model_local_evaluation(
     forecasting_reference, _train_windows, test_windows = reference_attempt
     context = _build_adapter_execution_context(config)
     adapter = _build_ttm_adapter(adapter_factory)
-    raw_adapter_result = _run_ttm_adapter(adapter, test_windows, context)
-    ttm_adapter_result = _adapter_result_to_c33_result(raw_adapter_result, context)
+    raw_adapter_result = _run_ttm_adapter(
+        adapter,
+        test_windows,
+        context,
+        inspect_and_load=adapter_factory is None,
+    )
+    adapter_evidence = _adapter_result_to_c33_result(raw_adapter_result, context)
     ttm_metrics, ttm_ranking = _ttm_forecasting_evidence(
         raw_adapter_result,
         test_windows,
         config.local_execution.fu13_like.residual_top_k,
     )
+    adapter_result = (
+        adapter_evidence
+        if _is_successful_adapter_result(adapter_evidence)
+        else None
+    )
+    adapter_failure = None if adapter_result is not None else adapter_evidence
     return C33RunResult(
         config_path=Path(config_path),
         stage=config.stage,
-        status=_c33_status_for_adapter_result(ttm_adapter_result),
+        status=_c33_status_for_adapter_result(adapter_evidence),
         go_no_go_decision=_GO_DECISION,
         safety_policy=config.safety_policy,
         prerequisites=config.prerequisites,
         candidate=config.candidate,
         metric_contract=config.metric_contract,
         invalid_claims=_INVALID_CLAIMS,
-        forecasting_reference_result=forecasting_reference,
-        ttm_adapter_result=ttm_adapter_result,
-        ttm_forecasting_metrics=ttm_metrics,
+        baseline_reference_result=forecasting_reference,
+        adapter_result=adapter_result,
+        adapter_failure=adapter_failure,
+        ttm_metrics=ttm_metrics,
         ttm_residual_ranking=ttm_ranking,
+        forecasting_reference_result=forecasting_reference,
+        ttm_adapter_result=adapter_evidence,
+        ttm_forecasting_metrics=ttm_metrics,
     )
 
 
@@ -326,24 +347,29 @@ def render_c33_report(result: C33RunResult) -> str:
                 "",
             ]
         )
-    if result.forecasting_reference_result is not None:
+    baseline_reference = (
+        result.baseline_reference_result or result.forecasting_reference_result
+    )
+    adapter_evidence = result.adapter_result or result.adapter_failure or result.ttm_adapter_result
+    ttm_metrics = result.ttm_metrics or result.ttm_forecasting_metrics
+    if baseline_reference is not None:
         lines.extend(
             _render_forecasting_reference_section(
-                result.forecasting_reference_result,
+                baseline_reference,
             )
         )
-    if result.ttm_adapter_result is not None:
-        lines.extend(_render_ttm_adapter_execution_section(result.ttm_adapter_result))
-    if result.ttm_forecasting_metrics is not None:
+    if adapter_evidence is not None:
+        lines.extend(_render_ttm_adapter_execution_section(adapter_evidence))
+    if ttm_metrics is not None:
         lines.extend(
             _render_ttm_forecasting_metrics_section(
-                result.ttm_forecasting_metrics,
+                ttm_metrics,
                 result.ttm_residual_ranking or (),
             )
         )
     if (
-        result.forecasting_reference_result is not None
-        or result.ttm_adapter_result is not None
+        baseline_reference is not None
+        or adapter_evidence is not None
         or result.status == _INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS
     ):
         lines.extend(_render_separated_metric_interpretation_section())
@@ -468,7 +494,13 @@ def _build_ttm_adapter(adapter_factory: Callable[[], object] | None) -> object:
     return TTMOpenModelAdapter()
 
 
-def _run_ttm_adapter(adapter: object, windows: list[object], context: Any) -> Any:
+def _run_ttm_adapter(
+    adapter: object,
+    windows: list[object],
+    context: Any,
+    *,
+    inspect_and_load: bool,
+) -> Any:
     from b08_model_core.adapters.open_models.base import (
         AdapterFailure,
         AdapterReadiness,
@@ -477,6 +509,9 @@ def _run_ttm_adapter(adapter: object, windows: list[object], context: Any) -> An
 
     started = time.monotonic()
     try:
+        if not inspect_and_load:
+            return adapter.run_forecasting(windows, context)  # type: ignore[attr-defined]
+
         inspected = adapter.inspect_environment(context)  # type: ignore[attr-defined]
         if isinstance(inspected, AdapterFailure):
             return inspected
@@ -543,7 +578,7 @@ def _exception_to_adapter_failure(
         task_id=C21TaskId.FORECASTING,
         status=OpenModelAdapterStatus.RUNTIME_FAILED,
         failure_stage="execute",
-        failure_reason="TTM adapter execution raised an exception",
+        failure_reason=str(exc),
         error_type=type(exc).__name__,
         error_detail=str(exc),
         dependency_status="unknown",
@@ -565,6 +600,7 @@ def _adapter_result_to_c33_result(raw_result: Any, context: Any) -> C33AdapterEx
             model_id=raw_result.model_id or "ttm",
             task_id=_task_value(raw_result.task_id),
             status=raw_result.status,
+            adapter_status=raw_result.status,
             metrics=dict(raw_result.metrics),
             failure_stage="",
             failure_reason="",
@@ -582,12 +618,17 @@ def _adapter_result_to_c33_result(raw_result: Any, context: Any) -> C33AdapterEx
                 raw_result.actual_network_used,
                 context,
             ),
+            download_allowed_not_verified=_download_allowed_not_verified(
+                raw_result.actual_network_used,
+                context,
+            ),
         )
     if isinstance(raw_result, AdapterFailure):
         return C33AdapterExecutionResult(
             model_id=raw_result.model_id or "ttm",
             task_id=_task_value(raw_result.task_id),
             status=raw_result.status,
+            adapter_status=raw_result.status,
             metrics={},
             failure_stage=raw_result.failure_stage,
             failure_reason=raw_result.failure_reason,
@@ -602,6 +643,10 @@ def _adapter_result_to_c33_result(raw_result: Any, context: Any) -> C33AdapterEx
             model_ref=raw_result.model_ref,
             cache_dir=raw_result.cache_dir or context.cache_dir,
             actual_network_used=_network_usage_value(
+                raw_result.actual_network_used,
+                context,
+            ),
+            download_allowed_not_verified=_download_allowed_not_verified(
                 raw_result.actual_network_used,
                 context,
             ),
@@ -670,6 +715,12 @@ def _c33_status_for_adapter_result(result: C33AdapterExecutionResult) -> str:
     return _TTM_RUNTIME_FAILED_STATUS
 
 
+def _is_successful_adapter_result(result: C33AdapterExecutionResult) -> bool:
+    from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+
+    return result.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+
+
 def _render_forecasting_reference_section(
     result: C33ForecastingReferenceResult,
 ) -> list[str]:
@@ -725,20 +776,21 @@ def _render_ttm_adapter_execution_section(
     return [
         "## TTM Adapter Execution",
         "",
-        f"- Status: {result.status}",
-        f"- Dependency status: {result.dependency_status}",
-        f"- Weight status: {result.weight_status}",
-        f"- Runtime seconds: {result.runtime_seconds}",
-        f"- Input shape: {_value(result.input_shape)}",
-        f"- Output shape: {_value(result.output_shape)}",
-        f"- Actual network used: {result.actual_network_used}",
-        f"- Adapter: {result.adapter_name}",
-        f"- Model ref: {result.model_ref}",
-        f"- Cache dir: {result.cache_dir}",
-        f"- Failure stage: {result.failure_stage}",
-        f"- Failure reason: {result.failure_reason}",
-        f"- Error type: {result.error_type}",
-        f"- Error detail: {result.error_detail}",
+        f"- adapter_status: {result.adapter_status}",
+        f"- dependency_status: {result.dependency_status}",
+        f"- weight_status: {result.weight_status}",
+        f"- runtime_seconds: {result.runtime_seconds}",
+        f"- input_shape: {_value(result.input_shape)}",
+        f"- output_shape: {_value(result.output_shape)}",
+        f"- actual_network_used: {result.actual_network_used}",
+        f"- download_allowed_not_verified: {result.download_allowed_not_verified}",
+        f"- adapter_name: {result.adapter_name}",
+        f"- model_ref: {result.model_ref}",
+        f"- cache_dir: {result.cache_dir}",
+        f"- failure_stage: {result.failure_stage}",
+        f"- failure_reason: {result.failure_reason}",
+        f"- error_type: {result.error_type}",
+        f"- error_detail: {result.error_detail}",
         "",
     ]
 
@@ -789,13 +841,11 @@ def _runtime_seconds(raw_result: Any) -> float | None:
 
 
 def _network_usage_value(value: bool | str | None, context: Any) -> bool | str | None:
-    if value is not None:
-        return value
-    if context.allow_download:
-        return "download_allowed_not_verified"
-    if context.allow_network:
-        return "network_allowed_not_verified"
-    return False
+    return value
+
+
+def _download_allowed_not_verified(value: bool | str | None, context: Any) -> bool:
+    return bool(context.allow_download and not isinstance(value, bool))
 
 
 def _forecasting_input_shape(windows: list[object]) -> dict[str, Any]:

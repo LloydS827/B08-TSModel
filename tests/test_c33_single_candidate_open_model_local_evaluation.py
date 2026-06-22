@@ -6,7 +6,6 @@ import yaml
 
 from b08_model_core.adapters.open_models.base import (
     AdapterFailure,
-    AdapterReadiness,
     AdapterTaskOutput,
     OpenModelAdapterStatus,
 )
@@ -124,7 +123,7 @@ def test_c33_contract_runner_renders_default_report():
 
 def test_c33_local_runner_records_successful_ttm_adapter_evidence():
     config = load_c33_config(_LOCAL_CONFIG)
-    fake_adapter = _FakeTtmAdapter()
+    fake_adapter = _RunOnlyFakeTtmAdapter()
 
     result = run_c33_single_candidate_open_model_local_evaluation(
         config,
@@ -134,15 +133,19 @@ def test_c33_local_runner_records_successful_ttm_adapter_evidence():
     text = render_c33_report(result)
 
     assert result.status == "local_execution_ttm_forecasting_ready"
-    assert result.forecasting_reference_result is not None
-    assert result.forecasting_reference_result.train_window_count == 42
-    assert result.forecasting_reference_result.test_window_count == 18
-    assert result.ttm_adapter_result is not None
-    assert result.ttm_adapter_result.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
-    assert result.ttm_adapter_result.dependency_status == "available"
-    assert result.ttm_adapter_result.weight_status == "available"
-    assert result.ttm_forecasting_metrics is not None
-    assert result.ttm_forecasting_metrics["count"] > 0
+    assert result.baseline_reference_result is not None
+    assert result.baseline_reference_result.train_window_count == 42
+    assert result.baseline_reference_result.test_window_count == 18
+    assert result.adapter_result is not None
+    assert result.adapter_failure is None
+    assert result.adapter_result.status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert result.adapter_result.adapter_status == OpenModelAdapterStatus.AVAILABLE_AND_RAN
+    assert result.adapter_result.dependency_status == "available"
+    assert result.adapter_result.weight_status == "available"
+    assert result.adapter_result.download_allowed_not_verified is False
+    assert result.ttm_metrics is not None
+    assert result.ttm_metrics["count"] > 0
+    assert result.ttm_residual_ranking
     assert fake_adapter.contexts
     context = fake_adapter.contexts[-1]
     assert context.cache_dir == config.local_execution.model_cache_dir
@@ -157,30 +160,35 @@ def test_c33_local_runner_records_successful_ttm_adapter_evidence():
     assert "TTM Adapter Execution" in text
     assert "TTM Forecasting Metrics" in text
     assert "Separated Metric Interpretation" in text
+    assert "adapter_status" in text
+    assert "download_allowed_not_verified" in text
 
 
 def test_c33_local_runner_maps_missing_dependency_status():
     result = _run_local_with_adapter(
-        _FakeTtmAdapter(
-            inspect_result=AdapterReadiness(
+        _RunOnlyFakeTtmAdapter(
+            run_result=AdapterFailure(
                 model_id="ttm",
+                task_id=C21TaskId.FORECASTING,
+                status=OpenModelAdapterStatus.MISSING_DEPENDENCY,
+                failure_stage="execute",
+                failure_reason="missing dependency",
                 dependency_status="missing:tsfm_public",
                 weight_status="not_checked",
-                adapter_status=OpenModelAdapterStatus.MISSING_DEPENDENCY,
-                adapter_name="FakeTtmAdapter",
             )
         )
     )
 
     assert result.status == "local_execution_ttm_missing_dependency"
-    assert result.ttm_adapter_result is not None
-    assert result.ttm_adapter_result.dependency_status == "missing:tsfm_public"
-    assert result.ttm_forecasting_metrics is None
+    assert result.adapter_result is None
+    assert result.adapter_failure is not None
+    assert result.adapter_failure.dependency_status == "missing:tsfm_public"
+    assert result.ttm_metrics is None
 
 
 def test_c33_local_runner_maps_missing_or_blocked_weights_status():
     result = _run_local_with_adapter(
-        _FakeTtmAdapter(
+        _RunOnlyFakeTtmAdapter(
             run_result=AdapterFailure(
                 model_id="ttm",
                 task_id=C21TaskId.FORECASTING,
@@ -194,28 +202,31 @@ def test_c33_local_runner_maps_missing_or_blocked_weights_status():
     )
 
     assert result.status == "local_execution_ttm_missing_or_blocked_weights"
-    assert result.ttm_adapter_result is not None
-    assert result.ttm_adapter_result.weight_status == "missing_or_blocked"
-    assert result.ttm_forecasting_metrics is None
+    assert result.adapter_result is None
+    assert result.adapter_failure is not None
+    assert result.adapter_failure.weight_status == "missing_or_blocked"
+    assert result.ttm_metrics is None
 
 
 def test_c33_local_runner_converts_adapter_exception_to_runtime_failed_evidence():
     result = _run_local_with_adapter(
-        _FakeTtmAdapter(run_exception=RuntimeError("adapter exploded"))
+        _RunOnlyFakeTtmAdapter(run_exception=RuntimeError("adapter exploded"))
     )
 
     assert result.status == "local_execution_ttm_runtime_failed"
-    assert result.ttm_adapter_result is not None
-    assert result.ttm_adapter_result.status == OpenModelAdapterStatus.RUNTIME_FAILED
-    assert result.ttm_adapter_result.failure_stage == "execute"
-    assert result.ttm_adapter_result.error_type == "RuntimeError"
-    assert result.ttm_adapter_result.error_detail == "adapter exploded"
-    assert result.ttm_forecasting_metrics is None
+    assert result.adapter_result is None
+    assert result.adapter_failure is not None
+    assert result.adapter_failure.status == OpenModelAdapterStatus.RUNTIME_FAILED
+    assert result.adapter_failure.failure_stage == "execute"
+    assert result.adapter_failure.failure_reason == "adapter exploded"
+    assert result.adapter_failure.error_type == "RuntimeError"
+    assert result.adapter_failure.error_detail == "adapter exploded"
+    assert result.ttm_metrics is None
 
 
 def test_c33_local_runner_maps_unsupported_window_shape_status():
     result = _run_local_with_adapter(
-        _FakeTtmAdapter(
+        _RunOnlyFakeTtmAdapter(
             run_result=AdapterFailure(
                 model_id="ttm",
                 task_id=C21TaskId.FORECASTING,
@@ -229,7 +240,28 @@ def test_c33_local_runner_maps_unsupported_window_shape_status():
     )
 
     assert result.status == "local_execution_ttm_unsupported_window_shape"
-    assert result.ttm_forecasting_metrics is None
+    assert result.adapter_result is None
+    assert result.adapter_failure is not None
+    assert result.ttm_metrics is None
+
+
+def test_c33_local_runner_records_download_allowed_not_verified(tmp_path):
+    data = yaml.safe_load(_LOCAL_CONFIG.read_text(encoding="utf-8"))
+    data["safety_policy"]["allow_network"] = True
+    data["safety_policy"]["allow_download"] = True
+    config = load_c33_config(_write_yaml(tmp_path / "local.yaml", data))
+
+    result = run_c33_single_candidate_open_model_local_evaluation(
+        config,
+        config_path=tmp_path / "local.yaml",
+        adapter_factory=lambda: _RunOnlyFakeTtmAdapter(actual_network_used=None),
+    )
+    text = render_c33_report(result)
+
+    assert result.adapter_result is not None
+    assert result.adapter_result.actual_network_used is None
+    assert result.adapter_result.download_allowed_not_verified is True
+    assert "- download_allowed_not_verified: True" in text
 
 
 def test_c33_local_runner_blocks_when_fu13_like_windows_are_insufficient(tmp_path):
@@ -241,16 +273,17 @@ def test_c33_local_runner_blocks_when_fu13_like_windows_are_insufficient(tmp_pat
     result = run_c33_single_candidate_open_model_local_evaluation(
         config,
         config_path=tmp_path / "local.yaml",
-        adapter_factory=lambda: _FakeTtmAdapter(),
+        adapter_factory=lambda: _RunOnlyFakeTtmAdapter(),
     )
 
     assert result.status == "blocked_insufficient_fu13_like_windows"
-    assert result.forecasting_reference_result is None
-    assert result.ttm_adapter_result is None
+    assert result.baseline_reference_result is None
+    assert result.adapter_result is None
+    assert result.adapter_failure is None
     assert result.local_execution_blocked_reason == "insufficient FU13-like windows"
 
 
-def _run_local_with_adapter(fake_adapter: "_FakeTtmAdapter"):
+def _run_local_with_adapter(fake_adapter: "_RunOnlyFakeTtmAdapter"):
     config = load_c33_config(_LOCAL_CONFIG)
     return run_c33_single_candidate_open_model_local_evaluation(
         config,
@@ -259,37 +292,18 @@ def _run_local_with_adapter(fake_adapter: "_FakeTtmAdapter"):
     )
 
 
-class _FakeTtmAdapter:
+class _RunOnlyFakeTtmAdapter:
     def __init__(
         self,
         *,
-        inspect_result: AdapterReadiness | AdapterFailure | None = None,
         run_result: AdapterTaskOutput | AdapterFailure | None = None,
         run_exception: Exception | None = None,
+        actual_network_used: bool | None = False,
     ) -> None:
-        self.inspect_result = inspect_result
         self.run_result = run_result
         self.run_exception = run_exception
+        self.actual_network_used = actual_network_used
         self.contexts = []
-
-    def inspect_environment(self, context):
-        self.contexts.append(context)
-        if self.inspect_result is not None:
-            return self.inspect_result
-        return AdapterReadiness(
-            model_id="ttm",
-            dependency_status="available",
-            weight_status="not_checked",
-            adapter_status=OpenModelAdapterStatus.READY,
-            adapter_name="FakeTtmAdapter",
-            model_ref="fake-ttm",
-            cache_dir=context.cache_dir,
-            actual_network_used=False,
-        )
-
-    def load(self, context):
-        self.contexts.append(context)
-        return self
 
     def run_forecasting(self, windows, context):
         self.contexts.append(context)
@@ -311,10 +325,10 @@ class _FakeTtmAdapter:
             },
             output_shape={"predictions": list(predictions.shape)},
             runtime_seconds=0.01,
-            adapter_name="FakeTtmAdapter",
+            adapter_name="RunOnlyFakeTtmAdapter",
             model_ref="fake-ttm",
             cache_dir=context.cache_dir,
-            actual_network_used=False,
+            actual_network_used=self.actual_network_used,
             metadata={"weight_status": "available"},
         )
 
