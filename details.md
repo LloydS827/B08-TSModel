@@ -1,12 +1,16 @@
-# B08 设备时序基础模型进展台账
+# B08 能源设备时空智能样板进展台账
 
-更新日期：2026-06-16
+更新日期：2026-06-22
 
 ## 1. 当前阶段
 
-项目当前处于 **C3.2 explicit local execution 已实现，下一步进入 C3.3 single-candidate open model local evaluation design** 阶段。
+项目当前处于 **D1 能源设备时空智能样板定位修订完成，下一步进入 C3.3 single-candidate open model local evaluation design** 阶段。
 
-已经完成的主线基础包括：FU13 真实多 CSV 到 canonical observations 的装配、数据诊断、cycle 重构、baseline / TTM 真实窗口 forecasting、`leak_current_monitoring` 场景评测样例、C1 最小证据执行框架、C2 开源模型系统评测、C2.1 六模型 executable adapter 尝试入口、C2.2 默认离线安全配置与 frontier watchlist audit、C3 公开数据 registry，C3.1 NASA PCoE #6 经典 C-MAPSS 的默认离线配置、loader、parser、schema mapping dry-run、RUL target metadata、split/leakage guard、CLI report 和回归测试，以及 C3.2 cross-dataset evaluation contract scaffold 与 explicit local execution。
+已经完成的主线基础包括：FU13 真实多 CSV 到 canonical observations 的装配、数据诊断、cycle / window 重构、baseline / TTM 真实窗口 forecasting、`leak_current_monitoring` 场景评测样例、C1 最小证据执行框架、C2 开源模型适配性证据、C2.1 六模型 executable adapter 尝试入口、C2.2 默认离线安全配置与 frontier watchlist audit、C3 公开数据 registry，C3.1 NASA PCoE #6 经典 C-MAPSS 的默认离线配置、loader、parser、schema mapping dry-run、RUL target metadata、split/leakage guard、CLI report 和回归测试，以及 C3.2 cross-dataset evaluation contract scaffold 与 explicit local execution。
+
+B08 当前定位为公司时空智能在能源设备时序方向的核心样板项目。船舶制造偏空间，能源偏时序，B08 是 A 能力在能源侧的证据项目：用 FU13 observations、cycle / window、baseline / TTM、`leak_current_monitoring`、C 阶段评测和 candidate signal 口径，形成数据层、评测层、信号层、应用输入层四级输出。
+
+D1 修订把 open model evaluation 从模型排行叙事改为模型适配性证据，并补充 B08 -> B06 / S01 / IP 接口口径：B08 -> B06 输出 `equipment_timeseries_observation_package` profile；B08 -> S01 输出系统事件候选；B08 -> IP 支撑 P0-06 设备时序标准观测表、P0-07 周期重构与窗口生成、P0-08 设备时序基础模型适配性评测。
 
 当前 C3.2 的定位不是“直接跑完整公开 benchmark 或开源模型排行榜”，而是在默认离线边界下保留 contract-only 报告，并在显式本机 opt-in 下运行最小 baseline/reference 证据。C3.1 explicit local raw mapping review 已验证完整经典 C-MAPSS schema、RUL metadata 和 split/leakage guard，状态为 `schema_validated_ready_for_c32`，readiness detail 为 `full_classic_cmapss_validated`。C3.2 默认报告状态仍为 `contract_ready_local_execution_blocked`，保留 local execution design 的安全边界；explicit local execution 成功状态为 `local_execution_baseline_reference_ready`，只包含 C-MAPSS RUL baseline evaluation 与 FU13-like forecasting reference。
 
@@ -40,6 +44,7 @@ uv run b08-model-core experiment c-stage-c32 \
 
 | 日期 | 当日完成内容 |
 | --- | --- |
+| 2026-06-22 | 完成 D1 能源设备时空智能样板定位修订：README 和 details 从“设备时序基础模型工作台”升级为“公司时空智能在能源设备时序方向的核心样板项目”；补充数据层、评测层、信号层、应用输入层四级输出；将 C2/C3 统一表述为模型适配性证据而不是 leaderboard；新增 `candidate_signal_report`、B08 -> S01 系统事件候选、B08 -> B06 `equipment_timeseries_observation_package`、B08 -> IP P0-06/P0-07/P0-08 的接口口径；为 `leak_current_monitoring` 补充专家复核字段。 |
 | 2026-06-16 | 完成 C3.2 explicit local execution：在保留默认 `contract_ready_local_execution_blocked` contract command 的同时，新增 `configs/local/c_stage_c32_explicit_local_execution.example.yaml` 本机 opt-in 路径；读取 ignored C-MAPSS raw 后只运行 C-MAPSS RUL baseline evaluation，并用 FU13-like simulation 运行 forecasting reference；报告状态为 `local_execution_baseline_reference_ready`，继续不下载、不写 processed、不检查 model cache、不实例化 open model adapter、不训练、不生成 leaderboard，RUL 与 forecasting metrics separated。 |
 | 2026-06-11 | 完成 C3.2 open model cross-dataset evaluation contract scaffold：新增默认安全 config、loader/validator、runner、Markdown report 和 CLI `experiment c-stage-c32`；报告默认状态为 `contract_ready_local_execution_blocked`，记录 C3.1 prerequisite、dataset view matrix、task compatibility、model candidate status、metric contract、Go / No-Go 和 invalid claims；默认不下载公开数据、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不实例化 open model adapter、不运行模型训练、不计算模型分数、不生成 leaderboard。 |
 | 2026-06-11 | 完成 C3.1 NASA C-MAPSS explicit local raw mapping review：在 ignored 本机目录下载并校验 Zenodo `CMAPSSData.zip`，验证 size `12425978` 和 MD5 `79a22f36e80606c69d0e9e4da5bb2b7a`，只抽取 12 个经典 raw text 文件；通过 `configs/local/c_stage_c31_cmapss_local_raw_mapping_review.example.yaml` 执行本机 opt-in review，得到 `schema_validated_ready_for_c32` / `full_classic_cmapss_validated`，确认 observation rows 6,366,144、trajectory count 1,416、RUL target rows 265,256、split/leakage guard 全 0 或 none；未提交 raw、zip、parquet、cache 或生成报告。 |
@@ -57,7 +62,7 @@ uv run b08-model-core experiment c-stage-c32 \
 
 ## 3. 下一步计划
 
-下一步主线是设计 C3.3 single-candidate open model local evaluation；不是继续扩大 C3.2 baseline 范围，也不是直接训练自研基础模型、扩大到多个未审计公开数据集，或生成跨任务 leaderboard。C3.2 explicit local execution 已经完成，下一步应该在显式本机 opt-in 下验证一个最小 open model adapter/cache/依赖链路。
+下一步主线是设计 C3.3 single-candidate open model local evaluation；目标是补充模型适配性证据，不是继续扩大 C3.2 baseline 范围，也不是直接训练自研基础模型、扩大到多个未审计公开数据集，或生成跨任务 leaderboard。C3.2 explicit local execution 已经完成，下一步应该在显式本机 opt-in 下验证一个最小 open model adapter/cache/依赖链路。
 
 具体计划如下：
 

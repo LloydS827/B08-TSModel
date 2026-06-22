@@ -258,12 +258,91 @@ def test_c31_cmapss_minimal_ingestion_workflow_is_documented():
     assert "source/license review" in details
     assert "local raw mapping review" in details
     assert "schema_validated_ready_for_c32" in details
-    assert "open model cross-dataset evaluation" in details
-    assert "C3.2" in details
-    assert details.count("\n## ") == 3
-    assert "## 1. 当前阶段" in details
-    assert "## 2. 每日更新" in details
-    assert "## 3. 下一步计划" in details
+
+
+def test_energy_equipment_spatiotemporal_positioning_is_documented():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+
+    assert "能源设备时空智能样板" in readme
+    assert "公司时空智能在能源设备时序方向的核心样板项目" in readme
+    assert "船舶制造偏空间" in readme
+    assert "能源偏时序" in readme
+    assert "A 能力在能源侧的证据项目" in readme
+    assert "candidate signals" in readme
+    assert "工程解释与专家复核" in readme
+    assert "运行优化建议输入或系统协同事件候选" in readme
+    assert "数据层" in readme
+    assert "评测层" in readme
+    assert "信号层" in readme
+    assert "应用输入层" in readme
+    assert "B08 -> B06" in readme
+    assert "B08 -> S01" in readme
+    assert "B08 -> IP" in readme
+    assert "模型适配性证据" in readme
+    assert "不生成 leaderboard" in readme
+    assert "FU13 observations" in readme
+    assert "cycle / window" in readme
+    assert "baseline / TTM" in readme
+    assert "leak_current_monitoring" in readme
+    assert "能源设备时空智能样板" in details
+
+
+def test_candidate_signal_and_system_event_interface_is_documented():
+    interface_doc = (
+        REPO_ROOT / "docs/candidate-signal-and-system-event-interface.md"
+    ).read_text(encoding="utf-8")
+
+    assert "candidate_signal_report" in interface_doc
+    for signal_type in ["residual", "trend", "spike", "representation", "imputation"]:
+        assert signal_type in interface_doc
+
+    for event_field in [
+        "device_id",
+        "time_range",
+        "stage",
+        "signal_type",
+        "confidence",
+        "affected_scope",
+        "suggested_action",
+        "review_status",
+    ]:
+        assert event_field in interface_doc
+
+    assert "equipment_timeseries_observation_package" in interface_doc
+    assert "P0-06" in interface_doc
+    assert "canonical observations" in interface_doc
+    assert "quality flags" in interface_doc
+    assert "P0-07" in interface_doc
+    assert "cycle reconstruction" in interface_doc
+    assert "window artifacts" in interface_doc
+    assert "P0-08" in interface_doc
+    assert "baseline / TTM / open model evaluation reports" in interface_doc
+    assert "复用开源模型" in interface_doc
+    assert "轻量适配" in interface_doc
+    assert "条件性自研模型设计" in interface_doc
+    assert "不生成 leaderboard" in interface_doc
+    assert "不是生产告警" in interface_doc
+    assert "不是维修建议" in interface_doc
+
+
+def test_leak_current_monitoring_expert_review_fields_are_documented():
+    leak_current_doc = (REPO_ROOT / "docs/leak-current-scenario-evaluation.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "专家复核" in leak_current_doc
+    assert "candidate_signal_report" in leak_current_doc
+    assert "S01" in leak_current_doc
+    for review_field in [
+        "signal_meaning",
+        "maintenance_confirmation_required",
+        "operation_advice_candidate",
+        "review_status",
+    ]:
+        assert review_field in leak_current_doc
+    assert "不代表生产告警" in leak_current_doc
+    assert "不代表维修建议" in leak_current_doc
 
 
 def test_c32_cross_dataset_evaluation_workflow_is_documented():
@@ -299,6 +378,11 @@ def test_c32_cross_dataset_evaluation_workflow_is_documented():
     assert "contract_ready_local_execution_blocked" in details
     assert "local execution design" in details
     assert "不生成 leaderboard" in details
+    assert "open model cross-dataset evaluation" in details
+    assert details.count("\n## ") == 3
+    assert "## 1. 当前阶段" in details
+    assert "## 2. 每日更新" in details
+    assert "## 3. 下一步计划" in details
 
 
 def test_c32_explicit_local_execution_workflow_is_documented():
