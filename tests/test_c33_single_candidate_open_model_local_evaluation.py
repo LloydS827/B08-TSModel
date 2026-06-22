@@ -146,6 +146,9 @@ def test_c33_local_runner_records_successful_ttm_adapter_evidence():
     assert result.ttm_metrics is not None
     assert result.ttm_metrics["count"] > 0
     assert result.ttm_residual_ranking
+    assert not hasattr(result, "forecasting_reference_result")
+    assert not hasattr(result, "ttm_adapter_result")
+    assert not hasattr(result, "ttm_forecasting_metrics")
     assert fake_adapter.contexts
     context = fake_adapter.contexts[-1]
     assert context.cache_dir == config.local_execution.model_cache_dir

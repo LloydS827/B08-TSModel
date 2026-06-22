@@ -137,9 +137,6 @@ class C33RunResult:
     ttm_metrics: dict[str, float | int | None] | None = None
     ttm_residual_ranking: tuple[dict[str, float | int | str], ...] | None = None
     local_execution_blocked_reason: str = ""
-    forecasting_reference_result: C33ForecastingReferenceResult | None = None
-    ttm_adapter_result: C33AdapterExecutionResult | None = None
-    ttm_forecasting_metrics: dict[str, float | int | None] | None = None
 
 
 _EXPECTED_STAGE = "C3_3_single_candidate_open_model_local_evaluation"
@@ -287,9 +284,6 @@ def run_c33_single_candidate_open_model_local_evaluation(
         adapter_failure=adapter_failure,
         ttm_metrics=ttm_metrics,
         ttm_residual_ranking=ttm_ranking,
-        forecasting_reference_result=forecasting_reference,
-        ttm_adapter_result=adapter_evidence,
-        ttm_forecasting_metrics=ttm_metrics,
     )
 
 
@@ -347,28 +341,24 @@ def render_c33_report(result: C33RunResult) -> str:
                 "",
             ]
         )
-    baseline_reference = (
-        result.baseline_reference_result or result.forecasting_reference_result
-    )
-    adapter_evidence = result.adapter_result or result.adapter_failure or result.ttm_adapter_result
-    ttm_metrics = result.ttm_metrics or result.ttm_forecasting_metrics
-    if baseline_reference is not None:
+    if result.baseline_reference_result is not None:
         lines.extend(
             _render_forecasting_reference_section(
-                baseline_reference,
+                result.baseline_reference_result,
             )
         )
+    adapter_evidence = result.adapter_result or result.adapter_failure
     if adapter_evidence is not None:
         lines.extend(_render_ttm_adapter_execution_section(adapter_evidence))
-    if ttm_metrics is not None:
+    if result.ttm_metrics is not None:
         lines.extend(
-            _render_ttm_forecasting_metrics_section(
-                ttm_metrics,
+            _render_ttm_metrics_section(
+                result.ttm_metrics,
                 result.ttm_residual_ranking or (),
             )
         )
     if (
-        baseline_reference is not None
+        result.baseline_reference_result is not None
         or adapter_evidence is not None
         or result.status == _INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS
     ):
@@ -795,7 +785,7 @@ def _render_ttm_adapter_execution_section(
     ]
 
 
-def _render_ttm_forecasting_metrics_section(
+def _render_ttm_metrics_section(
     metrics: dict[str, float | int | None],
     ranking: tuple[dict[str, float | int | str], ...],
 ) -> list[str]:
