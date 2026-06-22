@@ -766,6 +766,7 @@ def _render_ttm_adapter_execution_section(
     return [
         "## TTM Adapter Execution",
         "",
+        f"- status: {result.status}",
         f"- adapter_status: {result.adapter_status}",
         f"- dependency_status: {result.dependency_status}",
         f"- weight_status: {result.weight_status}",

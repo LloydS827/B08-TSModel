@@ -163,6 +163,7 @@ def test_c33_local_runner_records_successful_ttm_adapter_evidence():
     assert "TTM Adapter Execution" in text
     assert "TTM Forecasting Metrics" in text
     assert "Separated Metric Interpretation" in text
+    assert "- status: available_and_ran" in text
     assert "adapter_status" in text
     assert "download_allowed_not_verified" in text
 
