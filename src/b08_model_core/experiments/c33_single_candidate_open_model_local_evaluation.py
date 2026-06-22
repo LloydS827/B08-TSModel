@@ -91,6 +91,7 @@ class C33RunResult:
 
 
 _EXPECTED_STAGE = "C3_3_single_candidate_open_model_local_evaluation"
+_EXPECTED_C32_LOCAL_STATUS = "local_execution_baseline_reference_ready"
 _EXPECTED_CANDIDATE = {
     "model_id": "ttm",
     "task_id": "forecasting_residual",
@@ -338,13 +339,18 @@ def _load_safety_policy(
 
 def _load_prerequisites(raw: dict[str, Any]) -> C33Prerequisites:
     prerequisites = _required_mapping(raw, "prerequisites")
+    c32_local_status = _required_string(
+        prerequisites, "c32_local_status", "prerequisites"
+    )
+    if c32_local_status != _EXPECTED_C32_LOCAL_STATUS:
+        raise C33ConfigError(
+            f"prerequisites.c32_local_status must be {_EXPECTED_C32_LOCAL_STATUS}"
+        )
     return C33Prerequisites(
         c32_design_doc=Path(
             _required_string(prerequisites, "c32_design_doc", "prerequisites")
         ),
-        c32_local_status=_required_string(
-            prerequisites, "c32_local_status", "prerequisites"
-        ),
+        c32_local_status=c32_local_status,
     )
 
 
