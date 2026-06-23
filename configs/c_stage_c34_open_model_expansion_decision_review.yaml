@@ -1,0 +1,54 @@
+stage: C3_4_open_model_expansion_decision_review
+safety_policy:
+  allow_network: false
+  allow_download: false
+  allow_model_cache: false
+  allow_local_execution: false
+  allow_training: false
+  allow_write_processed: false
+prerequisites:
+  c33_design_doc: docs/superpowers/specs/2026-06-22-c33-single-candidate-open-model-local-evaluation-design.md
+  c33_default_status: contract_ready_single_candidate_local_execution_blocked
+  c32_local_status: local_execution_baseline_reference_ready
+  c22_watchlist_source: configs/c_stage_c22_open_model_executable_upgrade.yaml
+c33_evidence:
+  source: default_contract
+  status: contract_ready_single_candidate_local_execution_blocked
+  candidate: ttm
+  task: fu13_like_forecasting
+  adapter_evidence: not_applicable_default_contract
+decision_policy:
+  require_ttm_status: local_execution_ttm_forecasting_ready
+  required_adapter_fields:
+    - dependency_status
+    - weight_status
+    - adapter_status
+    - runtime_seconds
+    - input_shape
+    - output_shape
+    - actual_network_used
+    - download_allowed_not_verified
+  leaderboard_allowed: false
+  rul_open_model_allowed: false
+  second_candidate_execution_allowed: false
+candidate_review:
+  - candidate_id: chronos_bolt_route
+    display_name: Chronos / Chronos-Bolt
+    c22_source: chronos
+    readiness_status: review_only_not_promoted
+    promotion_blocker: package, license, cache, API shape, and resource review required
+    next_design_requirement: design one FU13-like forecasting adapter/cache path before execution
+  - candidate_id: timesfm_2_5_route
+    display_name: TimesFM 2.5
+    c22_source: timesfm
+    readiness_status: review_only_not_promoted
+    promotion_blocker: package, weights, license, resource, and forecasting API review required
+    next_design_requirement: verify deterministic PyTorch cache path and FU13-like shape contract
+  - candidate_id: moirai_uni2ts_route
+    display_name: Moirai / Uni2TS
+    c22_source: moirai_uni2ts
+    readiness_status: review_only_not_promoted
+    promotion_blocker: dependency, checkpoint compatibility, probabilistic output shape review required
+    next_design_requirement: resolve Uni2TS dependency and output shape before local execution design
+outputs:
+  report: reports/c_stage_c34_open_model_expansion_decision_review.md
