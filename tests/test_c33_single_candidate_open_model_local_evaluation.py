@@ -275,6 +275,19 @@ def test_c33_local_runner_structures_malformed_success_prediction_shape():
     assert result.ttm_metrics is None
 
 
+def test_c33_local_runner_rejects_status_only_success_without_predictions():
+    result = _run_local_with_adapter(
+        _RunOnlyFakeTtmAdapter(run_result=_status_only_success())
+    )
+
+    assert result.status == "local_execution_ttm_unsupported_window_shape"
+    assert result.adapter_result is None
+    assert result.adapter_failure is not None
+    assert result.adapter_failure.failure_stage == "metrics"
+    assert "missing predictions" in result.adapter_failure.failure_reason
+    assert result.ttm_metrics is None
+
+
 def test_c33_local_runner_records_download_allowed_not_verified(tmp_path):
     data = yaml.safe_load(_LOCAL_CONFIG.read_text(encoding="utf-8"))
     data["safety_policy"]["allow_network"] = True
@@ -391,6 +404,28 @@ def _adapter_failure(**kwargs):
     )
 
     return AdapterFailure(task_id=C21TaskId.FORECASTING, **kwargs)
+
+
+def _status_only_success():
+    _, status, task_id = _adapter_output_types()
+
+    class StatusOnlySuccess:
+        pass
+
+    result = StatusOnlySuccess()
+    result.model_id = "ttm"
+    result.task_id = task_id.FORECASTING
+    result.status = status.AVAILABLE_AND_RAN
+    result.metrics = {"runtime_seconds": 0.01}
+    result.input_shape = {"windows": 1}
+    result.output_shape = {}
+    result.runtime_seconds = 0.01
+    result.adapter_name = "StatusOnlySuccess"
+    result.model_ref = "fake-ttm"
+    result.cache_dir = None
+    result.actual_network_used = False
+    result.metadata = {"weight_status": "available"}
+    return result
 
 
 def test_c33_contract_runner_does_not_call_adapter_factory():

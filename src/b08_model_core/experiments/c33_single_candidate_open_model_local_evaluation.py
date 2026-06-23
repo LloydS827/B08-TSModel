@@ -688,7 +688,21 @@ def _exception_to_adapter_failure(
 
 def _adapter_result_to_c33_result(raw_result: Any, context: Any) -> C33AdapterExecutionResult:
     status = getattr(raw_result, "status", "")
-    if _status_value(status) == "available_and_ran" and hasattr(raw_result, "predictions"):
+    if _status_value(status) == "available_and_ran" and not hasattr(
+        raw_result,
+        "predictions",
+    ):
+        from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
+
+        return _c33_result_from_exception(
+            ValueError("available_and_ran adapter output missing predictions"),
+            context,
+            [],
+            failure_stage="metrics",
+            status=OpenModelAdapterStatus.UNSUPPORTED_WINDOW_SHAPE,
+            raw_result=raw_result,
+        )
+    if _status_value(status) == "available_and_ran":
         metadata = dict(getattr(raw_result, "metadata", {}) or {})
         return C33AdapterExecutionResult(
             model_id=getattr(raw_result, "model_id", "") or "ttm",
@@ -745,60 +759,11 @@ def _adapter_result_to_c33_result(raw_result: Any, context: Any) -> C33AdapterEx
                 context,
             ),
         )
-    return _adapter_result_to_c33_result(
-        _exception_to_adapter_failure(
-            TypeError(
-                f"adapter returned unsupported result type: {type(raw_result).__name__}"
-            ),
-            context,
-            [],
-            runtime_seconds=0.0,
-        ),
+    return _c33_result_from_exception(
+        TypeError(f"adapter returned unsupported result type: {type(raw_result).__name__}"),
         context,
-    )
-
-
-def _c33_result_from_exception(
-    exc: Exception,
-    context: Any,
-    windows: list[object],
-    *,
-    failure_stage: str,
-    status: object | None = None,
-    raw_result: Any | None = None,
-) -> C33AdapterExecutionResult:
-    from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
-
-    adapter_status = status or OpenModelAdapterStatus.RUNTIME_FAILED
-    return C33AdapterExecutionResult(
-        model_id=getattr(raw_result, "model_id", "") or "ttm",
-        task_id=_task_value(getattr(raw_result, "task_id", "")) or "forecasting",
-        status=adapter_status,
-        adapter_status=adapter_status,
-        metrics={},
-        failure_stage=failure_stage,
-        failure_reason=str(exc),
-        error_type=type(exc).__name__,
-        error_detail=str(exc),
-        dependency_status=getattr(raw_result, "dependency_status", "unknown"),
-        weight_status=getattr(raw_result, "weight_status", "unknown"),
-        input_shape=dict(
-            getattr(raw_result, "input_shape", None)
-            or _forecasting_input_shape(windows)
-        ),
-        output_shape=dict(getattr(raw_result, "output_shape", None) or {}),
-        runtime_seconds=getattr(raw_result, "runtime_seconds", None),
-        adapter_name=getattr(raw_result, "adapter_name", ""),
-        model_ref=getattr(raw_result, "model_ref", None),
-        cache_dir=getattr(raw_result, "cache_dir", None) or context.cache_dir,
-        actual_network_used=_network_usage_value(
-            getattr(raw_result, "actual_network_used", None),
-            context,
-        ),
-        download_allowed_not_verified=_download_allowed_not_verified(
-            getattr(raw_result, "actual_network_used", None),
-            context,
-        ),
+        [],
+        failure_stage="execute",
     )
 
 
@@ -835,15 +800,6 @@ def _ttm_forecasting_evidence(
     return metrics, ranking
 
 
-def _metric_exception_status(exc: Exception) -> object:
-    from b08_model_core.adapters.open_models.base import OpenModelAdapterStatus
-
-    message = str(exc).lower()
-    if any(token in message for token in ("shape", "broadcast", "dimension", "axis")):
-        return OpenModelAdapterStatus.UNSUPPORTED_WINDOW_SHAPE
-    return OpenModelAdapterStatus.RUNTIME_FAILED
-
-
 def _c33_status_for_adapter_result(result: C33AdapterExecutionResult) -> str:
     status = _status_value(result.status)
     if status == "available_and_ran":
@@ -859,10 +815,6 @@ def _c33_status_for_adapter_result(result: C33AdapterExecutionResult) -> str:
 
 def _is_successful_adapter_result(result: C33AdapterExecutionResult) -> bool:
     return _status_value(result.status) == "available_and_ran"
-
-
-def _status_value(status: object) -> str:
-    return str(getattr(status, "value", status))
 
 
 def _adapter_execution_report_line(result: C33RunResult) -> str:
@@ -1051,18 +1003,6 @@ def _array_shape(value: Any) -> list[int] | None:
 
 def _value(value: object) -> str:
     return str(value)
-
-
-def _adapter_execution_report_line(result: C33RunResult) -> str:
-    if result.baseline_reference_result is None:
-        return "- Adapter execution: disabled in contract-only config"
-    return "- Adapter execution: explicit local TTM run"
-
-
-def _next_step_report_line(result: C33RunResult) -> str:
-    if result.baseline_reference_result is None:
-        return "- Use an explicit local config to record TTM adapter/cache/dependency evidence."
-    return "- Review the structured TTM adapter evidence before any broader C-stage promotion."
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
