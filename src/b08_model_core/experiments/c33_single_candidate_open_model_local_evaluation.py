@@ -146,6 +146,21 @@ _EXPECTED_CANDIDATE = {
     "task_id": "forecasting_residual",
     "dataset_view": "fu13_like_simulated_forecasting",
 }
+_EXPECTED_FORECASTING_METRICS = (
+    "forecasting_mae",
+    "forecasting_rmse",
+    "residual_ranking",
+)
+_EXPECTED_ADAPTER_STATUS_FIELDS = (
+    "dependency_status",
+    "weight_status",
+    "adapter_status",
+    "runtime_seconds",
+    "input_shape",
+    "output_shape",
+    "actual_network_used",
+    "download_allowed_not_verified",
+)
 _CONTRACT_READY_STATUS = "contract_ready_single_candidate_local_execution_blocked"
 _TTM_READY_STATUS = "local_execution_ttm_forecasting_ready"
 _TTM_MISSING_DEPENDENCY_STATUS = "local_execution_ttm_missing_dependency"
@@ -346,7 +361,7 @@ def render_c33_report(result: C33RunResult) -> str:
         f"- Config: {result.config_path}",
         f"- Status: {result.status}",
         f"- Decision: {result.go_no_go_decision}",
-        "- Default path validates the contract only; it does not instantiate adapters or inspect model cache.",
+        _summary_execution_line(result),
         "- Forecasting residual evidence is separated from RUL claims and model leaderboard claims.",
         "",
         "## Safety Policy",
@@ -434,6 +449,23 @@ def render_c33_report(result: C33RunResult) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _summary_execution_line(result: C33RunResult) -> str:
+    if result.status == _CONTRACT_READY_STATUS:
+        return (
+            "- Default path validates the contract only; it does not instantiate "
+            "adapters or inspect model cache."
+        )
+    if result.status == _INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS:
+        return (
+            "- Explicit local path was requested, but FU13-like window generation "
+            "was insufficient before adapter execution."
+        )
+    return (
+        "- Explicit local path reruns the FU13-like baseline reference and records "
+        "TTM adapter/cache/dependency evidence."
+    )
 
 
 def _run_fu13_like_forecasting_reference(
@@ -1120,17 +1152,29 @@ def _load_metric_contract(raw: dict[str, Any]) -> C33MetricContract:
     )
     if leaderboard_allowed is not False:
         raise C33ConfigError("metric_contract.leaderboard_allowed must be false")
+    forecasting_metrics = _required_string_list(
+        metric_contract,
+        "forecasting_metrics",
+        "metric_contract",
+    )
+    if forecasting_metrics != _EXPECTED_FORECASTING_METRICS:
+        raise C33ConfigError(
+            "metric_contract.forecasting_metrics must be "
+            f"{list(_EXPECTED_FORECASTING_METRICS)}"
+        )
+    adapter_status_fields = _required_string_list(
+        metric_contract,
+        "adapter_status_fields",
+        "metric_contract",
+    )
+    if adapter_status_fields != _EXPECTED_ADAPTER_STATUS_FIELDS:
+        raise C33ConfigError(
+            "metric_contract.adapter_status_fields must be "
+            f"{list(_EXPECTED_ADAPTER_STATUS_FIELDS)}"
+        )
     return C33MetricContract(
-        forecasting_metrics=_required_string_list(
-            metric_contract,
-            "forecasting_metrics",
-            "metric_contract",
-        ),
-        adapter_status_fields=_required_string_list(
-            metric_contract,
-            "adapter_status_fields",
-            "metric_contract",
-        ),
+        forecasting_metrics=forecasting_metrics,
+        adapter_status_fields=adapter_status_fields,
         leaderboard_allowed=leaderboard_allowed,
     )
 

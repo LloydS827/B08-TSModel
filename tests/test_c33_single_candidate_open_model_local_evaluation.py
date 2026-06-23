@@ -86,6 +86,26 @@ def test_c33_rejects_wrong_c32_prerequisite_status(tmp_path):
         load_c33_config(_write_yaml(tmp_path / "broken.yaml", data))
 
 
+def test_c33_rejects_rul_metric_in_forecasting_contract(tmp_path):
+    data = yaml.safe_load(_DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    data["metric_contract"]["forecasting_metrics"] = [
+        "forecasting_mae",
+        "rul_mae",
+        "residual_ranking",
+    ]
+    with pytest.raises(C33ConfigError, match="forecasting_metrics"):
+        load_c33_config(_write_yaml(tmp_path / "broken.yaml", data))
+
+
+def test_c33_rejects_missing_adapter_status_field(tmp_path):
+    data = yaml.safe_load(_DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    data["metric_contract"]["adapter_status_fields"].remove(
+        "download_allowed_not_verified"
+    )
+    with pytest.raises(C33ConfigError, match="adapter_status_fields"):
+        load_c33_config(_write_yaml(tmp_path / "broken.yaml", data))
+
+
 def test_c33_rejects_download_without_network(tmp_path):
     data = yaml.safe_load(_LOCAL_CONFIG.read_text(encoding="utf-8"))
     data["safety_policy"]["allow_download"] = True
@@ -457,6 +477,8 @@ def test_c33_local_report_uses_local_execution_wording():
     text = render_c33_report(result)
 
     assert "Adapter execution: explicit local TTM run" in text
+    assert "Explicit local path reruns the FU13-like baseline reference" in text
+    assert "Default path validates the contract only" not in text
     assert "Default adapter execution: disabled" not in text
     assert "Use the explicit local config in the next task" not in text
 
@@ -497,6 +519,10 @@ def test_c33_cli_writes_default_report(tmp_path):
 
 
 def test_c33_cli_writes_explicit_local_report(tmp_path):
+    data = yaml.safe_load(_LOCAL_CONFIG.read_text(encoding="utf-8"))
+    data["local_execution"]["fu13_like"]["days"] = 1
+    data["local_execution"]["fu13_like"]["context_length"] = 10_000
+    config = _write_yaml(tmp_path / "local.yaml", data)
     output = tmp_path / "c33_local_report.md"
 
     exit_code = main(
@@ -504,7 +530,7 @@ def test_c33_cli_writes_explicit_local_report(tmp_path):
             "experiment",
             "c-stage-c33",
             "--config",
-            str(_LOCAL_CONFIG),
+            str(config),
             "--output",
             str(output),
         ]
@@ -512,8 +538,10 @@ def test_c33_cli_writes_explicit_local_report(tmp_path):
 
     assert exit_code == 0
     text = output.read_text(encoding="utf-8")
-    assert "Baseline Forecasting Reference" in text
-    assert "TTM Adapter Execution" in text
+    assert "blocked_insufficient_fu13_like_windows" in text
+    assert "Local Execution Blocked" in text
+    assert "blocked before adapter run" in text
+    assert "Default path validates the contract only" not in text
     assert "Separated Metric Interpretation" in text
 
 
