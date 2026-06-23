@@ -24,6 +24,10 @@ def _write_yaml(path: Path, data: dict) -> Path:
     return path
 
 
+def _load_default_config_data() -> dict:
+    return yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
+
+
 def test_c34_default_config_is_offline_decision_review_only():
     config = load_c34_config(DEFAULT_CONFIG)
 
@@ -55,3 +59,33 @@ def test_c34_default_runner_holds_candidate_expansion():
     assert "Candidate Expansion Review" in text
     assert "review_only_not_promoted" in text
     assert "No leaderboard" in text
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("source", "generated_report"),
+        ("candidate", "chronos"),
+        ("task", "rul_forecasting"),
+    ],
+)
+def test_c34_rejects_wrong_default_c33_evidence_contract(
+    tmp_path: Path,
+    field: str,
+    value: str,
+):
+    data = _load_default_config_data()
+    data["c33_evidence"][field] = value
+    config_path = _write_yaml(tmp_path / "c34.yaml", data)
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(config_path)
+
+
+def test_c34_rejects_wrong_required_ttm_status(tmp_path: Path):
+    data = _load_default_config_data()
+    data["decision_policy"]["require_ttm_status"] = "contract_ready"
+    config_path = _write_yaml(tmp_path / "c34.yaml", data)
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(config_path)

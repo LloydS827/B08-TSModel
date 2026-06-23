@@ -88,7 +88,11 @@ class C34RunResult:
 
 _EXPECTED_STAGE = "C3_4_open_model_expansion_decision_review"
 _CONTRACT_READY_STATUS = "contract_ready_single_candidate_local_execution_blocked"
+_DEFAULT_CONTRACT_SOURCE = "default_contract"
+_DEFAULT_CONTRACT_CANDIDATE = "ttm"
+_DEFAULT_CONTRACT_TASK = "fu13_like_forecasting"
 _DEFAULT_ADAPTER_EVIDENCE = "not_applicable_default_contract"
+_REQUIRED_TTM_STATUS = "local_execution_ttm_forecasting_ready"
 _HOLD_STATUS = "hold_candidate_expansion_pending_ttm_local_evidence"
 _EXPECTED_REQUIRED_ADAPTER_FIELDS = (
     "dependency_status",
@@ -303,6 +307,30 @@ def _load_c33_evidence(raw: dict[str, Any]) -> C34C33Evidence:
     )
     if (
         result.status == _CONTRACT_READY_STATUS
+        and result.source != _DEFAULT_CONTRACT_SOURCE
+    ):
+        raise C34ConfigError(
+            "c33_evidence.source must be "
+            f"{_DEFAULT_CONTRACT_SOURCE} for {result.status}"
+        )
+    if (
+        result.status == _CONTRACT_READY_STATUS
+        and result.candidate != _DEFAULT_CONTRACT_CANDIDATE
+    ):
+        raise C34ConfigError(
+            "c33_evidence.candidate must be "
+            f"{_DEFAULT_CONTRACT_CANDIDATE} for {result.status}"
+        )
+    if (
+        result.status == _CONTRACT_READY_STATUS
+        and result.task != _DEFAULT_CONTRACT_TASK
+    ):
+        raise C34ConfigError(
+            "c33_evidence.task must be "
+            f"{_DEFAULT_CONTRACT_TASK} for {result.status}"
+        )
+    if (
+        result.status == _CONTRACT_READY_STATUS
         and result.adapter_evidence != _DEFAULT_ADAPTER_EVIDENCE
     ):
         raise C34ConfigError(
@@ -331,12 +359,18 @@ def _load_decision_policy(raw: dict[str, Any]) -> C34DecisionPolicy:
     for flag, value in values.items():
         if value is not False:
             raise C34ConfigError(f"decision_policy.{flag} must be false")
+    require_ttm_status = _required_string(
+        policy,
+        "require_ttm_status",
+        "decision_policy",
+    )
+    if require_ttm_status != _REQUIRED_TTM_STATUS:
+        raise C34ConfigError(
+            "decision_policy.require_ttm_status must be "
+            f"{_REQUIRED_TTM_STATUS}"
+        )
     return C34DecisionPolicy(
-        require_ttm_status=_required_string(
-            policy,
-            "require_ttm_status",
-            "decision_policy",
-        ),
+        require_ttm_status=require_ttm_status,
         required_adapter_fields=fields,
         leaderboard_allowed=values["leaderboard_allowed"],
         rul_open_model_allowed=values["rul_open_model_allowed"],
