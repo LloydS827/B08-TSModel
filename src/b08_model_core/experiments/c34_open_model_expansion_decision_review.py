@@ -88,6 +88,7 @@ class C34RunResult:
 
 _EXPECTED_STAGE = "C3_4_open_model_expansion_decision_review"
 _CONTRACT_READY_STATUS = "contract_ready_single_candidate_local_execution_blocked"
+_SUPPORTED_C33_STATUSES = (_CONTRACT_READY_STATUS,)
 _DEFAULT_CONTRACT_SOURCE = "default_contract"
 _DEFAULT_CONTRACT_CANDIDATE = "ttm"
 _DEFAULT_CONTRACT_TASK = "fu13_like_forecasting"
@@ -305,6 +306,11 @@ def _load_c33_evidence(raw: dict[str, Any]) -> C34C33Evidence:
             evidence, "adapter_evidence", "c33_evidence"
         ),
     )
+    if result.status not in _SUPPORTED_C33_STATUSES:
+        raise C34ConfigError(
+            "c33_evidence.status must be one of "
+            f"{list(_SUPPORTED_C33_STATUSES)}"
+        )
     if (
         result.status == _CONTRACT_READY_STATUS
         and result.source != _DEFAULT_CONTRACT_SOURCE

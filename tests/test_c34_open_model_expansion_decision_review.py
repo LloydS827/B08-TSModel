@@ -82,6 +82,15 @@ def test_c34_rejects_wrong_default_c33_evidence_contract(
         load_c34_config(config_path)
 
 
+def test_c34_rejects_unexpected_default_c33_evidence_status(tmp_path: Path):
+    data = _load_default_config_data()
+    data["c33_evidence"]["status"] = "unexpected_status"
+    config_path = _write_yaml(tmp_path / "c34.yaml", data)
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(config_path)
+
+
 def test_c34_rejects_wrong_required_ttm_status(tmp_path: Path):
     data = _load_default_config_data()
     data["decision_policy"]["require_ttm_status"] = "contract_ready"
