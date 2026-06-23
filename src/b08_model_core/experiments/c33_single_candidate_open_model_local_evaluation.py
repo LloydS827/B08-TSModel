@@ -818,6 +818,8 @@ def _is_successful_adapter_result(result: C33AdapterExecutionResult) -> bool:
 
 
 def _adapter_execution_report_line(result: C33RunResult) -> str:
+    if result.status == _INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS:
+        return "- Adapter execution: blocked before adapter run because FU13-like windows were insufficient"
     if (
         result.baseline_reference_result is None
         and result.adapter_result is None
@@ -828,6 +830,8 @@ def _adapter_execution_report_line(result: C33RunResult) -> str:
 
 
 def _next_step_report_line(result: C33RunResult) -> str:
+    if result.status == _INSUFFICIENT_FU13_LIKE_WINDOWS_STATUS:
+        return "- Adjust FU13-like local execution window settings, then rerun C3.3."
     if (
         result.baseline_reference_result is None
         and result.adapter_result is None

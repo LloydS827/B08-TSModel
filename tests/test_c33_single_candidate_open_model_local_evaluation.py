@@ -318,12 +318,15 @@ def test_c33_local_runner_blocks_when_fu13_like_windows_are_insufficient(tmp_pat
         config_path=tmp_path / "local.yaml",
         adapter_factory=lambda: _RunOnlyFakeTtmAdapter(),
     )
+    text = render_c33_report(result)
 
     assert result.status == "blocked_insufficient_fu13_like_windows"
     assert result.baseline_reference_result is None
     assert result.adapter_result is None
     assert result.adapter_failure is None
     assert result.local_execution_blocked_reason == "insufficient FU13-like windows"
+    assert "blocked before adapter run" in text
+    assert "Adjust FU13-like local execution window settings" in text
 
 
 def _run_local_with_adapter(fake_adapter: "_RunOnlyFakeTtmAdapter"):
