@@ -15,6 +15,9 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = (
     REPO_ROOT / "configs/c_stage_c34_open_model_expansion_decision_review.yaml"
 )
+LOCAL_CONFIG = (
+    REPO_ROOT / "configs/local/c_stage_c34_review_c33_local_ttm_evidence.example.yaml"
+)
 
 
 def _write_yaml(path: Path, data: dict) -> Path:
@@ -98,3 +101,196 @@ def test_c34_rejects_wrong_required_ttm_status(tmp_path: Path):
 
     with pytest.raises(C34ConfigError):
         load_c34_config(config_path)
+
+
+def test_c34_ready_c33_evidence_allows_candidate_expansion_design(tmp_path):
+    data = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": "local_execution_ttm_forecasting_ready",
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": {
+            "dependency_status": "available",
+            "weight_status": "available",
+            "adapter_status": "available_and_ran",
+            "runtime_seconds": 0.01,
+            "input_shape": {"windows": 18, "X": [32, 8]},
+            "output_shape": {"predictions": [18, 8, 8]},
+            "actual_network_used": False,
+            "download_allowed_not_verified": False,
+        },
+    }
+    config = load_c34_config(_write_yaml(tmp_path / "ready.yaml", data))
+    result = run_c34_open_model_expansion_decision_review(config, tmp_path / "ready.yaml")
+
+    assert result.status == "candidate_expansion_design_ready"
+    assert "C3.5 second forecasting candidate design" in render_c34_report(result)
+
+
+@pytest.mark.parametrize(
+    "c33_status",
+    [
+        "local_execution_ttm_missing_dependency",
+        "local_execution_ttm_missing_or_blocked_weights",
+        "local_execution_ttm_runtime_failed",
+    ],
+)
+def test_c34_blocker_c33_evidence_blocks_candidate_expansion(tmp_path, c33_status):
+    data = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": c33_status,
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": {
+            "failure_reason": "cache miss",
+            "dependency_status": "available",
+            "weight_status": "missing_or_blocked",
+        },
+    }
+    config = load_c34_config(_write_yaml(tmp_path / "blocked.yaml", data))
+    result = run_c34_open_model_expansion_decision_review(config, tmp_path / "blocked.yaml")
+
+    assert result.status == "blocked_candidate_expansion_due_to_ttm_evidence_gap"
+
+
+def test_c34_unsupported_window_shape_requires_shape_and_blocks(tmp_path: Path):
+    data = _load_default_config_data()
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": "local_execution_ttm_unsupported_window_shape",
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": {
+            "failure_reason": "window rank mismatch",
+            "dependency_status": "available",
+            "weight_status": "available",
+            "input_shape": {"windows": 18, "X": [32, 8]},
+        },
+    }
+
+    config = load_c34_config(_write_yaml(tmp_path / "unsupported_shape.yaml", data))
+    result = run_c34_open_model_expansion_decision_review(
+        config,
+        tmp_path / "unsupported_shape.yaml",
+    )
+
+    assert result.status == "blocked_candidate_expansion_due_to_ttm_evidence_gap"
+
+    data["c33_evidence"]["adapter_evidence"].pop("input_shape")
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "missing_shape.yaml", data))
+
+
+def test_c34_insufficient_windows_holds_and_requires_reason(tmp_path: Path):
+    data = _load_default_config_data()
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": "blocked_insufficient_fu13_like_windows",
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": {"blocked_reason": "need at least one evaluation window"},
+    }
+
+    config = load_c34_config(_write_yaml(tmp_path / "insufficient.yaml", data))
+    result = run_c34_open_model_expansion_decision_review(
+        config,
+        tmp_path / "insufficient.yaml",
+    )
+
+    assert result.status == "hold_candidate_expansion_pending_ttm_local_evidence"
+
+    data["c33_evidence"]["adapter_evidence"] = {}
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "missing_reason.yaml", data))
+
+
+def test_c34_unknown_c33_status_is_config_error(tmp_path: Path):
+    data = _load_default_config_data()
+    data["c33_evidence"]["status"] = "local_execution_ttm_surprise"
+    config_path = _write_yaml(tmp_path / "unknown.yaml", data)
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(config_path)
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("actual_network_used", None),
+        ("download_allowed_not_verified", "false"),
+    ],
+)
+def test_c34_ready_c33_evidence_rejects_invalid_adapter_fields(
+    tmp_path: Path,
+    field: str,
+    value,
+):
+    data = _load_default_config_data()
+    adapter_evidence = {
+        "dependency_status": "available",
+        "weight_status": "available",
+        "adapter_status": "available_and_ran",
+        "runtime_seconds": 0.01,
+        "input_shape": {"windows": 18, "X": [32, 8]},
+        "output_shape": {"predictions": [18, 8, 8]},
+        "actual_network_used": False,
+        "download_allowed_not_verified": False,
+    }
+    if value is None:
+        adapter_evidence.pop(field)
+    else:
+        adapter_evidence[field] = value
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": "local_execution_ttm_forecasting_ready",
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": adapter_evidence,
+    }
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "invalid_ready.yaml", data))
+
+
+def test_c34_ready_c33_evidence_rejects_extra_adapter_field(tmp_path: Path):
+    data = _load_default_config_data()
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": "local_execution_ttm_forecasting_ready",
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": {
+            "dependency_status": "available",
+            "weight_status": "available",
+            "adapter_status": "available_and_ran",
+            "runtime_seconds": 0.01,
+            "input_shape": {"windows": 18, "X": [32, 8]},
+            "output_shape": {"predictions": [18, 8, 8]},
+            "actual_network_used": False,
+            "download_allowed_not_verified": False,
+            "report_path": "reports/generated.md",
+        },
+    }
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "extra_ready.yaml", data))
+
+
+def test_c34_runner_has_no_adapter_or_report_execution_hook():
+    config = load_c34_config(DEFAULT_CONFIG)
+    result = run_c34_open_model_expansion_decision_review(config, DEFAULT_CONFIG)
+
+    assert result.status == "hold_candidate_expansion_pending_ttm_local_evidence"
+    assert not hasattr(result, "adapter_result")
+    assert not hasattr(result, "model_cache_manifest")
+
+
+def test_c34_local_evidence_example_is_review_only_blocker():
+    config = load_c34_config(LOCAL_CONFIG)
+    result = run_c34_open_model_expansion_decision_review(config, LOCAL_CONFIG)
+
+    assert result.status == "blocked_candidate_expansion_due_to_ttm_evidence_gap"
+    assert config.safety_policy.allow_model_cache is False
+    assert config.safety_policy.allow_local_execution is False

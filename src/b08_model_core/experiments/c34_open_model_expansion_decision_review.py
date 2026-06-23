@@ -35,7 +35,7 @@ class C34C33Evidence:
     status: str
     candidate: str
     task: str
-    adapter_evidence: str
+    adapter_evidence: str | dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -88,13 +88,39 @@ class C34RunResult:
 
 _EXPECTED_STAGE = "C3_4_open_model_expansion_decision_review"
 _CONTRACT_READY_STATUS = "contract_ready_single_candidate_local_execution_blocked"
-_SUPPORTED_C33_STATUSES = (_CONTRACT_READY_STATUS,)
+_READY_STATUS = "local_execution_ttm_forecasting_ready"
+_BLOCKED_STATUSES_REQUIRING_FAILURE = (
+    "local_execution_ttm_missing_dependency",
+    "local_execution_ttm_missing_or_blocked_weights",
+    "local_execution_ttm_runtime_failed",
+)
+_UNSUPPORTED_WINDOW_SHAPE_STATUS = "local_execution_ttm_unsupported_window_shape"
+_INSUFFICIENT_WINDOWS_STATUS = "blocked_insufficient_fu13_like_windows"
+_SUPPORTED_C33_STATUSES = (
+    _CONTRACT_READY_STATUS,
+    _READY_STATUS,
+    *_BLOCKED_STATUSES_REQUIRING_FAILURE,
+    _UNSUPPORTED_WINDOW_SHAPE_STATUS,
+    _INSUFFICIENT_WINDOWS_STATUS,
+)
 _DEFAULT_CONTRACT_SOURCE = "default_contract"
+_EXPLICIT_LOCAL_SOURCE = "explicit_local_reviewed"
 _DEFAULT_CONTRACT_CANDIDATE = "ttm"
 _DEFAULT_CONTRACT_TASK = "fu13_like_forecasting"
 _DEFAULT_ADAPTER_EVIDENCE = "not_applicable_default_contract"
 _REQUIRED_TTM_STATUS = "local_execution_ttm_forecasting_ready"
 _HOLD_STATUS = "hold_candidate_expansion_pending_ttm_local_evidence"
+_DESIGN_READY_STATUS = "candidate_expansion_design_ready"
+_EVIDENCE_GAP_STATUS = "blocked_candidate_expansion_due_to_ttm_evidence_gap"
+_C33_TO_C34_STATUS = {
+    _CONTRACT_READY_STATUS: _HOLD_STATUS,
+    _READY_STATUS: _DESIGN_READY_STATUS,
+    "local_execution_ttm_missing_dependency": _EVIDENCE_GAP_STATUS,
+    "local_execution_ttm_missing_or_blocked_weights": _EVIDENCE_GAP_STATUS,
+    _UNSUPPORTED_WINDOW_SHAPE_STATUS: _EVIDENCE_GAP_STATUS,
+    "local_execution_ttm_runtime_failed": _EVIDENCE_GAP_STATUS,
+    _INSUFFICIENT_WINDOWS_STATUS: _HOLD_STATUS,
+}
 _EXPECTED_REQUIRED_ADAPTER_FIELDS = (
     "dependency_status",
     "weight_status",
@@ -153,14 +179,10 @@ def run_c34_open_model_expansion_decision_review(
     config: C34Config,
     config_path: str | Path,
 ) -> C34RunResult:
-    if config.c33_evidence.status != _CONTRACT_READY_STATUS:
-        raise C34ConfigError(
-            "C3.4 default runner only supports contract-ready C3.3 evidence"
-        )
     return C34RunResult(
         config_path=Path(config_path),
         stage=config.stage,
-        status=_HOLD_STATUS,
+        status=_C33_TO_C34_STATUS[config.c33_evidence.status],
         safety_policy=config.safety_policy,
         prerequisites=config.prerequisites,
         c33_evidence=config.c33_evidence,
@@ -248,7 +270,7 @@ def render_c34_report(result: C34RunResult) -> str:
             "",
             "## Next Step",
             "",
-            "- Complete explicit local C3.3 TTM forecasting evidence before promoting any candidate expansion path.",
+            f"- {_next_step_for_status(result.status)}",
             "",
         ]
     )
@@ -302,48 +324,132 @@ def _load_c33_evidence(raw: dict[str, Any]) -> C34C33Evidence:
         status=_required_string(evidence, "status", "c33_evidence"),
         candidate=_required_string(evidence, "candidate", "c33_evidence"),
         task=_required_string(evidence, "task", "c33_evidence"),
-        adapter_evidence=_required_string(
-            evidence, "adapter_evidence", "c33_evidence"
-        ),
+        adapter_evidence=_required_adapter_evidence(evidence),
     )
     if result.status not in _SUPPORTED_C33_STATUSES:
         raise C34ConfigError(
             "c33_evidence.status must be one of "
             f"{list(_SUPPORTED_C33_STATUSES)}"
         )
-    if (
-        result.status == _CONTRACT_READY_STATUS
-        and result.source != _DEFAULT_CONTRACT_SOURCE
-    ):
+    if result.status == _CONTRACT_READY_STATUS:
+        _validate_default_contract_evidence(result)
+    else:
+        _validate_explicit_local_evidence(result)
+    return result
+
+
+def _validate_default_contract_evidence(result: C34C33Evidence) -> None:
+    if result.source != _DEFAULT_CONTRACT_SOURCE:
         raise C34ConfigError(
             "c33_evidence.source must be "
             f"{_DEFAULT_CONTRACT_SOURCE} for {result.status}"
         )
-    if (
-        result.status == _CONTRACT_READY_STATUS
-        and result.candidate != _DEFAULT_CONTRACT_CANDIDATE
-    ):
+    if result.candidate != _DEFAULT_CONTRACT_CANDIDATE:
         raise C34ConfigError(
             "c33_evidence.candidate must be "
             f"{_DEFAULT_CONTRACT_CANDIDATE} for {result.status}"
         )
-    if (
-        result.status == _CONTRACT_READY_STATUS
-        and result.task != _DEFAULT_CONTRACT_TASK
-    ):
+    if result.task != _DEFAULT_CONTRACT_TASK:
         raise C34ConfigError(
             "c33_evidence.task must be "
             f"{_DEFAULT_CONTRACT_TASK} for {result.status}"
         )
-    if (
-        result.status == _CONTRACT_READY_STATUS
-        and result.adapter_evidence != _DEFAULT_ADAPTER_EVIDENCE
-    ):
+    if result.adapter_evidence != _DEFAULT_ADAPTER_EVIDENCE:
         raise C34ConfigError(
             "c33_evidence.adapter_evidence must be "
             f"{_DEFAULT_ADAPTER_EVIDENCE} for {result.status}"
         )
-    return result
+
+
+def _validate_explicit_local_evidence(result: C34C33Evidence) -> None:
+    if result.source != _EXPLICIT_LOCAL_SOURCE:
+        raise C34ConfigError(
+            "c33_evidence.source must be "
+            f"{_EXPLICIT_LOCAL_SOURCE} for {result.status}"
+        )
+    if result.candidate != _DEFAULT_CONTRACT_CANDIDATE:
+        raise C34ConfigError(
+            "c33_evidence.candidate must be "
+            f"{_DEFAULT_CONTRACT_CANDIDATE} for {result.status}"
+        )
+    if result.task != _DEFAULT_CONTRACT_TASK:
+        raise C34ConfigError(
+            "c33_evidence.task must be "
+            f"{_DEFAULT_CONTRACT_TASK} for {result.status}"
+        )
+    if not isinstance(result.adapter_evidence, dict):
+        raise C34ConfigError(
+            "c33_evidence.adapter_evidence must be a mapping "
+            f"for {result.status}"
+        )
+
+    if result.status == _READY_STATUS:
+        _validate_ready_adapter_evidence(result.adapter_evidence)
+    elif result.status in _BLOCKED_STATUSES_REQUIRING_FAILURE:
+        _validate_failure_adapter_evidence(result.adapter_evidence)
+    elif result.status == _UNSUPPORTED_WINDOW_SHAPE_STATUS:
+        _validate_failure_adapter_evidence(result.adapter_evidence)
+        if not (
+            _is_non_empty_mapping(result.adapter_evidence.get("input_shape"))
+            or _is_non_empty_mapping(result.adapter_evidence.get("output_shape"))
+        ):
+            raise C34ConfigError(
+                "c33_evidence.adapter_evidence input_shape or output_shape "
+                f"must be a non-empty mapping for {result.status}"
+            )
+    elif result.status == _INSUFFICIENT_WINDOWS_STATUS:
+        if not (
+            _is_non_empty_string(result.adapter_evidence.get("blocked_reason"))
+            or _is_non_empty_string(result.adapter_evidence.get("failure_reason"))
+        ):
+            raise C34ConfigError(
+                "c33_evidence.adapter_evidence blocked_reason or failure_reason "
+                f"must be a non-empty string for {result.status}"
+            )
+
+
+def _validate_ready_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
+    if set(adapter_evidence) != set(_EXPECTED_REQUIRED_ADAPTER_FIELDS):
+        raise C34ConfigError(
+            "c33_evidence.adapter_evidence fields must exactly match "
+            f"{list(_EXPECTED_REQUIRED_ADAPTER_FIELDS)}"
+        )
+    for field in ("dependency_status", "weight_status", "adapter_status"):
+        _required_non_empty_string_field(adapter_evidence, field)
+    runtime_seconds = adapter_evidence.get("runtime_seconds")
+    if (
+        isinstance(runtime_seconds, bool)
+        or not isinstance(runtime_seconds, int | float)
+        or runtime_seconds < 0
+    ):
+        raise C34ConfigError(
+            "c33_evidence.adapter_evidence.runtime_seconds must be a "
+            "non-negative number"
+        )
+    for field in ("input_shape", "output_shape"):
+        if not _is_non_empty_mapping(adapter_evidence.get(field)):
+            raise C34ConfigError(
+                f"c33_evidence.adapter_evidence.{field} must be a non-empty mapping"
+            )
+    actual_network_used = adapter_evidence.get("actual_network_used")
+    if not (
+        isinstance(actual_network_used, bool)
+        or _is_non_empty_string(actual_network_used)
+    ):
+        raise C34ConfigError(
+            "c33_evidence.adapter_evidence.actual_network_used must be a boolean "
+            "or non-empty string"
+        )
+    if not isinstance(adapter_evidence.get("download_allowed_not_verified"), bool):
+        raise C34ConfigError(
+            "c33_evidence.adapter_evidence.download_allowed_not_verified "
+            "must be a boolean"
+        )
+
+
+def _validate_failure_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
+    for field in ("failure_reason", "dependency_status", "weight_status"):
+        _required_non_empty_string_field(adapter_evidence, field)
 
 
 def _load_decision_policy(raw: dict[str, Any]) -> C34DecisionPolicy:
@@ -445,6 +551,17 @@ def _required_mapping(raw: dict[str, Any], key: str) -> dict[str, Any]:
     return value
 
 
+def _required_adapter_evidence(raw: dict[str, Any]) -> str | dict[str, Any]:
+    value = raw.get("adapter_evidence")
+    if isinstance(value, str) and value.strip():
+        return value
+    if isinstance(value, dict):
+        return value
+    raise C34ConfigError(
+        "c33_evidence.adapter_evidence must be a non-empty string or mapping"
+    )
+
+
 def _required_string(
     raw: dict[str, Any],
     key: str,
@@ -474,3 +591,37 @@ def _required_bool(raw: dict[str, Any], key: str, context: str) -> bool:
     if not isinstance(value, bool):
         raise C34ConfigError(f"{context}.{key} must be a boolean")
     return value
+
+
+def _required_non_empty_string_field(raw: dict[str, Any], key: str) -> str:
+    value = raw.get(key)
+    if not _is_non_empty_string(value):
+        raise C34ConfigError(
+            f"c33_evidence.adapter_evidence.{key} must be a non-empty string"
+        )
+    return value
+
+
+def _is_non_empty_string(value: Any) -> bool:
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_non_empty_mapping(value: Any) -> bool:
+    return isinstance(value, dict) and bool(value)
+
+
+def _next_step_for_status(status: str) -> str:
+    if status == _DESIGN_READY_STATUS:
+        return (
+            "C3.5 second forecasting candidate design may proceed as a "
+            "review-only design step."
+        )
+    if status == _EVIDENCE_GAP_STATUS:
+        return (
+            "Resolve the local TTM evidence gap before promoting any candidate "
+            "expansion path."
+        )
+    return (
+        "Complete explicit local C3.3 TTM forecasting evidence before promoting "
+        "any candidate expansion path."
+    )
