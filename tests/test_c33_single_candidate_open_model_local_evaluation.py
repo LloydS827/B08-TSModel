@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.experiments.c33_single_candidate_open_model_local_evaluation import (
     C33ConfigError,
     load_c33_config,
@@ -473,3 +474,45 @@ def test_c33_contract_report_keeps_contract_only_wording():
         "Use an explicit local config to record TTM adapter/cache/dependency evidence."
         in text
     )
+
+
+def test_c33_cli_writes_default_report(tmp_path):
+    output = tmp_path / "c33_report.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c33",
+            "--config",
+            str(_DEFAULT_CONFIG),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    text = output.read_text(encoding="utf-8")
+    assert "C3.3 Single-Candidate Open Model Local Evaluation Report" in text
+    assert "contract_ready_single_candidate_local_execution_blocked" in text
+
+
+def test_c33_cli_returns_one_for_download_without_network_config_error(tmp_path):
+    data = yaml.safe_load(_LOCAL_CONFIG.read_text(encoding="utf-8"))
+    data["safety_policy"]["allow_download"] = True
+    data["safety_policy"]["allow_network"] = False
+    config = _write_yaml(tmp_path / "broken.yaml", data)
+    output = tmp_path / "c33_report.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c33",
+            "--config",
+            str(config),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 1
+    assert not output.exists()

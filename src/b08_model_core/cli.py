@@ -44,6 +44,11 @@ from b08_model_core.experiments.c32_open_model_cross_dataset_evaluation import (
     render_c32_report,
     run_c32_open_model_cross_dataset_evaluation,
 )
+from b08_model_core.experiments.c33_single_candidate_open_model_local_evaluation import (
+    load_c33_config,
+    render_c33_report,
+    run_c33_single_candidate_open_model_local_evaluation,
+)
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
 from b08_model_core.real_data.forecasting import (
@@ -176,6 +181,9 @@ def main(argv: list[str] | None = None) -> int:
     c_stage_c32 = experiment_sub.add_parser("c-stage-c32")
     c_stage_c32.add_argument("--config", required=True)
     c_stage_c32.add_argument("--output", required=True)
+    c_stage_c33 = experiment_sub.add_parser("c-stage-c33")
+    c_stage_c33.add_argument("--config", required=True)
+    c_stage_c33.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -365,6 +373,19 @@ def main(argv: list[str] | None = None) -> int:
             output = Path(args.output)
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(render_c32_report(result), encoding="utf-8")
+        except (FileNotFoundError, ValueError, OSError, PermissionError):
+            return 1
+        return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c33":
+        try:
+            config = load_c33_config(args.config)
+            result = run_c33_single_candidate_open_model_local_evaluation(
+                config,
+                config_path=args.config,
+            )
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_c33_report(result), encoding="utf-8")
         except (FileNotFoundError, ValueError, OSError, PermissionError):
             return 1
         return 0
