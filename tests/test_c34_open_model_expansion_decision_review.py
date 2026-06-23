@@ -179,6 +179,38 @@ def test_c34_ready_c33_evidence_rejects_empty_shapes(
         load_c34_config(_write_yaml(tmp_path / "empty_shape_ready.yaml", data))
 
 
+@pytest.mark.parametrize("runtime_seconds", [float("nan"), float("inf")])
+def test_c34_ready_c33_evidence_rejects_non_finite_runtime_seconds(
+    tmp_path: Path,
+    runtime_seconds: float,
+):
+    data = _load_default_config_data()
+    data["c33_evidence"] = _ready_c33_evidence()
+    data["c33_evidence"]["adapter_evidence"]["runtime_seconds"] = runtime_seconds
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "non_finite_runtime_ready.yaml", data))
+
+
+@pytest.mark.parametrize(
+    "output_shape",
+    [
+        {"predictions": None},
+        {"predictions": "18x8x8"},
+    ],
+)
+def test_c34_ready_c33_evidence_rejects_invalid_shape_values(
+    tmp_path: Path,
+    output_shape: dict,
+):
+    data = _load_default_config_data()
+    data["c33_evidence"] = _ready_c33_evidence()
+    data["c33_evidence"]["adapter_evidence"]["output_shape"] = output_shape
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "invalid_shape_ready.yaml", data))
+
+
 @pytest.mark.parametrize(
     "c33_status",
     [
@@ -189,6 +221,12 @@ def test_c34_ready_c33_evidence_rejects_empty_shapes(
 )
 def test_c34_blocker_c33_evidence_blocks_candidate_expansion(tmp_path, c33_status):
     data = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    dependency_status = "available"
+    weight_status = "available"
+    if c33_status == "local_execution_ttm_missing_dependency":
+        dependency_status = "missing:tsfm_public"
+    elif c33_status == "local_execution_ttm_missing_or_blocked_weights":
+        weight_status = "missing_or_blocked"
     data["c33_evidence"] = {
         "source": "explicit_local_reviewed",
         "status": c33_status,
@@ -196,14 +234,84 @@ def test_c34_blocker_c33_evidence_blocks_candidate_expansion(tmp_path, c33_statu
         "task": "fu13_like_forecasting",
         "adapter_evidence": {
             "failure_reason": "cache miss",
-            "dependency_status": "available",
-            "weight_status": "missing_or_blocked",
+            "dependency_status": dependency_status,
+            "weight_status": weight_status,
         },
     }
     config = load_c34_config(_write_yaml(tmp_path / "blocked.yaml", data))
-    result = run_c34_open_model_expansion_decision_review(config, tmp_path / "blocked.yaml")
+    result = run_c34_open_model_expansion_decision_review(
+        config,
+        tmp_path / "blocked.yaml",
+    )
 
     assert result.status == "blocked_candidate_expansion_due_to_ttm_evidence_gap"
+
+
+@pytest.mark.parametrize(
+    ("c33_status", "adapter_field", "adapter_value"),
+    [
+        (
+            "local_execution_ttm_missing_dependency",
+            "dependency_status",
+            "available",
+        ),
+        (
+            "local_execution_ttm_missing_or_blocked_weights",
+            "weight_status",
+            "available",
+        ),
+    ],
+)
+def test_c34_blocker_c33_evidence_rejects_contradictory_status_details(
+    tmp_path: Path,
+    c33_status: str,
+    adapter_field: str,
+    adapter_value: str,
+):
+    data = _load_default_config_data()
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": c33_status,
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": {
+            "failure_reason": "cache miss",
+            "dependency_status": "missing:tsfm_public",
+            "weight_status": "missing_or_blocked",
+        },
+    }
+    data["c33_evidence"]["adapter_evidence"][adapter_field] = adapter_value
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "contradictory_blocker.yaml", data))
+
+
+def test_c34_evidence_gap_report_requires_resolving_gap_to_ready_evidence(
+    tmp_path: Path,
+):
+    data = _load_default_config_data()
+    data["c33_evidence"] = {
+        "source": "explicit_local_reviewed",
+        "status": "local_execution_ttm_missing_dependency",
+        "candidate": "ttm",
+        "task": "fu13_like_forecasting",
+        "adapter_evidence": {
+            "failure_reason": "cache miss",
+            "dependency_status": "missing:tsfm_public",
+            "weight_status": "available",
+        },
+    }
+
+    config = load_c34_config(_write_yaml(tmp_path / "blocked.yaml", data))
+    result = run_c34_open_model_expansion_decision_review(
+        config,
+        tmp_path / "blocked.yaml",
+    )
+    text = render_c34_report(result)
+
+    assert "Resolve the TTM evidence gap" in text
+    assert "ready evidence" in text
+    assert "local evidence exists" not in text
 
 
 def test_c34_unsupported_window_shape_requires_shape_and_blocks(tmp_path: Path):

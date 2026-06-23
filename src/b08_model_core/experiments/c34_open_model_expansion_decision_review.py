@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -391,9 +393,9 @@ def _validate_explicit_local_evidence(result: C34C33Evidence) -> None:
     if result.status == _READY_STATUS:
         _validate_ready_adapter_evidence(result.adapter_evidence)
     elif result.status in _BLOCKED_STATUSES_REQUIRING_FAILURE:
-        _validate_failure_adapter_evidence(result.adapter_evidence)
+        _validate_failure_adapter_evidence(result.adapter_evidence, result.status)
     elif result.status == _UNSUPPORTED_WINDOW_SHAPE_STATUS:
-        _validate_failure_adapter_evidence(result.adapter_evidence)
+        _validate_failure_adapter_evidence(result.adapter_evidence, result.status)
         if not (
             _is_non_empty_mapping(result.adapter_evidence.get("input_shape"))
             or _is_non_empty_mapping(result.adapter_evidence.get("output_shape"))
@@ -430,11 +432,12 @@ def _validate_ready_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
     if (
         isinstance(runtime_seconds, bool)
         or not isinstance(runtime_seconds, int | float)
+        or not math.isfinite(runtime_seconds)
         or runtime_seconds < 0
     ):
         raise C34ConfigError(
             "c33_evidence.adapter_evidence.runtime_seconds must be a "
-            "non-negative number"
+            "finite non-negative number"
         )
     for field in ("input_shape", "output_shape"):
         _validate_shape_mapping(adapter_evidence, field)
@@ -454,9 +457,28 @@ def _validate_ready_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
         )
 
 
-def _validate_failure_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
+def _validate_failure_adapter_evidence(
+    adapter_evidence: dict[str, Any],
+    status: str,
+) -> None:
     for field in ("failure_reason", "dependency_status", "weight_status"):
         _required_non_empty_string_field(adapter_evidence, field)
+    dependency_status = adapter_evidence["dependency_status"].strip().lower()
+    weight_status = adapter_evidence["weight_status"].strip().lower()
+    if status == "local_execution_ttm_missing_dependency" and (
+        "missing" not in dependency_status
+    ):
+        raise C34ConfigError(
+            "c33_evidence.adapter_evidence.dependency_status must describe "
+            f"a missing dependency for {status}"
+        )
+    if status == "local_execution_ttm_missing_or_blocked_weights" and not (
+        "missing" in weight_status or "blocked" in weight_status
+    ):
+        raise C34ConfigError(
+            "c33_evidence.adapter_evidence.weight_status must describe "
+            f"missing or blocked weights for {status}"
+        )
 
 
 def _validate_shape_mapping(adapter_evidence: dict[str, Any], field: str) -> None:
@@ -466,10 +488,25 @@ def _validate_shape_mapping(adapter_evidence: dict[str, Any], field: str) -> Non
             f"c33_evidence.adapter_evidence.{field} must be a non-empty mapping"
         )
     for key, value in shape.items():
-        if isinstance(value, (list, tuple)) and not value:
+        if _is_positive_int(value):
+            continue
+        if (
+            isinstance(value, Sequence)
+            and not isinstance(value, str | bytes | bytearray)
+            and value
+            and all(_is_positive_int(item) for item in value)
+        ):
+            continue
+        if isinstance(value, Sequence) and not isinstance(
+            value, str | bytes | bytearray
+        ) and not value:
             raise C34ConfigError(
                 f"c33_evidence.adapter_evidence.{field}.{key} must not be empty"
             )
+        raise C34ConfigError(
+            f"c33_evidence.adapter_evidence.{field}.{key} must be a positive "
+            "integer or non-empty sequence of positive integers"
+        )
 
 
 def _load_decision_policy(raw: dict[str, Any]) -> C34DecisionPolicy:
@@ -630,6 +667,10 @@ def _is_non_empty_mapping(value: Any) -> bool:
     return isinstance(value, dict) and bool(value)
 
 
+def _is_positive_int(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
 def _next_step_for_status(status: str) -> str:
     if status == _DESIGN_READY_STATUS:
         return (
@@ -638,8 +679,8 @@ def _next_step_for_status(status: str) -> str:
         )
     if status == _EVIDENCE_GAP_STATUS:
         return (
-            "Resolve the local TTM evidence gap before promoting any candidate "
-            "expansion path."
+            "Resolve the TTM evidence gap and reach TTM ready evidence before "
+            "promoting any candidate expansion path."
         )
     return (
         "Complete explicit local C3.3 TTM forecasting evidence before promoting "
@@ -652,6 +693,11 @@ def _summary_for_status(status: str) -> str:
         return (
             "C3.3 local TTM forecasting evidence is ready; C3.5 second "
             "forecasting candidate design may proceed."
+        )
+    if status == _EVIDENCE_GAP_STATUS:
+        return (
+            "TTM evidence gap remains unresolved; candidate expansion waits "
+            "until TTM ready evidence is reached."
         )
     return (
         "Default path is review-only and holds candidate expansion until TTM "
