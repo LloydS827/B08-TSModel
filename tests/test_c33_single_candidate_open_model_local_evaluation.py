@@ -496,6 +496,27 @@ def test_c33_cli_writes_default_report(tmp_path):
     assert "contract_ready_single_candidate_local_execution_blocked" in text
 
 
+def test_c33_cli_writes_explicit_local_report(tmp_path):
+    output = tmp_path / "c33_local_report.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c33",
+            "--config",
+            str(_LOCAL_CONFIG),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    text = output.read_text(encoding="utf-8")
+    assert "Baseline Forecasting Reference" in text
+    assert "TTM Adapter Execution" in text
+    assert "Separated Metric Interpretation" in text
+
+
 def test_c33_cli_returns_one_for_download_without_network_config_error(tmp_path):
     data = yaml.safe_load(_LOCAL_CONFIG.read_text(encoding="utf-8"))
     data["safety_policy"]["allow_download"] = True

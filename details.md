@@ -49,12 +49,12 @@ uv run b08-model-core experiment c-stage-c33 \
 C3.3 explicit local TTM 入口：
 
 ```bash
-uv run b08-model-core experiment c-stage-c33 \
+HF_HOME=hf_cache uv run b08-model-core experiment c-stage-c33 \
   --config configs/local/c_stage_c33_ttm_fu13_like_local_evaluation.example.yaml \
   --output reports/c_stage_c33_ttm_fu13_like_local_evaluation.md
 ```
 
-默认边界保持不变：不下载公开数据、不读取本机 raw files、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不写 processed data、不运行模型训练、不生成 leaderboard、不提交公开数据文件、不提交真实数据、不提交本机 cache 或生成报告；任何联网、下载、raw mapping、权重路径和 cache 使用都必须通过显式本机配置进入，并在报告中记录。C3.2 本机执行只读取 ignored 的 `data/public/cmapss/raw`，不运行 open model adapter；C3.3 本机执行只运行 TTM on FU13-like forecasting。C-MAPSS RUL baseline-only，RUL metrics 和 forecasting metrics 分开解释。
+默认边界保持不变：不下载公开数据、不读取本机 raw files、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不写 processed data、不运行模型训练、不生成 leaderboard、不提交公开数据文件、不提交真实数据、不提交本机 cache 或生成报告；任何联网、下载、raw mapping、权重路径和 cache 使用都必须通过显式本机配置进入，并在报告中记录。C3.2 本机执行只读取 ignored 的 `data/public/cmapss/raw`，不运行 open model adapter；C3.3 本机执行会重跑 FU13-like baseline reference，然后只尝试 TTM adapter on FU13-like forecasting。C-MAPSS RUL baseline-only，RUL metrics 和 forecasting metrics 分开解释。
 
 ## 2. 每日更新
 
