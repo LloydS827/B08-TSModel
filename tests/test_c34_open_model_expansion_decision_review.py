@@ -213,6 +213,27 @@ def test_c34_ready_c33_evidence_rejects_invalid_shape_values(
 
 
 @pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("actual_network_used", "unknown"),
+        ("actual_network_used", True),
+        ("download_allowed_not_verified", True),
+    ],
+)
+def test_c34_ready_c33_evidence_rejects_review_unsafe_network_or_download_evidence(
+    tmp_path: Path,
+    field: str,
+    value,
+):
+    data = _load_default_config_data()
+    data["c33_evidence"] = _ready_c33_evidence()
+    data["c33_evidence"]["adapter_evidence"][field] = value
+
+    with pytest.raises(C34ConfigError):
+        load_c34_config(_write_yaml(tmp_path / "unsafe_ready.yaml", data))
+
+
+@pytest.mark.parametrize(
     "c33_status",
     [
         "local_execution_ttm_missing_dependency",

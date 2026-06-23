@@ -441,19 +441,15 @@ def _validate_ready_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
         )
     for field in ("input_shape", "output_shape"):
         _validate_shape_mapping(adapter_evidence, field)
-    actual_network_used = adapter_evidence.get("actual_network_used")
-    if not (
-        isinstance(actual_network_used, bool)
-        or _is_non_empty_string(actual_network_used)
-    ):
+    if adapter_evidence.get("actual_network_used") is not False:
         raise C34ConfigError(
-            "c33_evidence.adapter_evidence.actual_network_used must be a boolean "
-            "or non-empty string"
+            "c33_evidence.adapter_evidence.actual_network_used must be false "
+            f"for {_READY_STATUS}"
         )
-    if not isinstance(adapter_evidence.get("download_allowed_not_verified"), bool):
+    if adapter_evidence.get("download_allowed_not_verified") is not False:
         raise C34ConfigError(
             "c33_evidence.adapter_evidence.download_allowed_not_verified "
-            "must be a boolean"
+            f"must be false for {_READY_STATUS}"
         )
 
 
