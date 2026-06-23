@@ -400,6 +400,53 @@ def test_c32_explicit_local_execution_workflow_is_documented():
     assert "FU13-like forecasting reference" in details
 
 
+def test_c33_single_candidate_local_evaluation_workflow_is_documented():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+    section_header = "### C3.3. Single-candidate open model local evaluation"
+    next_header = "\n## 项目边界"
+
+    assert section_header in readme
+    assert next_header in readme
+    c33_section = readme.split(section_header, 1)[1].split(next_header, 1)[0]
+
+    assert "c-stage-c33" in c33_section
+    assert (
+        "configs/c_stage_c33_single_candidate_open_model_local_evaluation.yaml"
+        in c33_section
+    )
+    assert (
+        "reports/c_stage_c33_single_candidate_open_model_local_evaluation.md"
+        in c33_section
+    )
+    assert (
+        "configs/local/c_stage_c33_ttm_fu13_like_local_evaluation.example.yaml"
+        in c33_section
+    )
+    assert "reports/c_stage_c33_ttm_fu13_like_local_evaluation.md" in c33_section
+    assert "contract_ready_single_candidate_local_execution_blocked" in c33_section
+    assert "不检查 model cache" in c33_section
+    assert "不实例化 TTM" in c33_section
+    assert "TTM on FU13-like forecasting" in c33_section
+    assert "C-MAPSS RUL remains baseline-only" in c33_section
+    assert "RUL metrics 和 forecasting metrics separated" in c33_section
+    assert "不生成 leaderboard" in c33_section
+    assert "不运行模型训练" in c33_section
+    assert "不提交 raw / cache / report" in c33_section
+    assert (
+        "docs/superpowers/specs/2026-06-22-c33-single-candidate-open-model-local-evaluation-design.md"
+        in readme
+    )
+    assert (
+        "docs/superpowers/plans/2026-06-22-c33-single-candidate-open-model-local-evaluation-plan.md"
+        in readme
+    )
+    assert "C3.3 single-candidate open model local evaluation" in details
+    assert "C3.4 decision review" in details
+    assert "Review C3.3 TTM local evidence" in details
+    assert "C-MAPSS RUL baseline-only" in details
+
+
 def test_c31_cli_help_is_available():
     result = subprocess.run(
         [

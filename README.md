@@ -29,7 +29,7 @@ B08 当前按四个层级组织输出：
 | 层级 | 输出 | 当前支撑 |
 | --- | --- | --- |
 | 数据层 | canonical observations、cycle 重构、窗口生成、质量标记 | FU13 observations、cycle / window、数据诊断 |
-| 评测层 | baseline、TTM、MOMENT、Chronos、TimesFM、Moirai 等模型适配性证据 | C1、C2、C2.1、C2.2、C3、C3.1、C3.2 |
+| 评测层 | baseline、TTM、MOMENT、Chronos、TimesFM、Moirai 等模型适配性证据 | C1、C2、C2.1、C2.2、C3、C3.1、C3.2、C3.3 |
 | 信号层 | residual、trend、spike、representation、imputation 候选信号 | `leak_current_monitoring`、C1 task evidence |
 | 应用输入层 | 设备状态解释输入、异常候选、运行优化建议输入、系统协同事件候选 | `candidate_signal_report`、B08 -> S01 event candidate |
 
@@ -49,7 +49,7 @@ B08 当前按四个层级组织输出：
 - `leak_current_monitoring` 场景评测样例：输出 residual candidate signal。
 - C1 证据执行框架：统一 E1 forecasting residual、E2 representation、E3 imputation 的报告口径。
 - C2/C2.1/C2.2 开源模型适配性证据入口：覆盖核心模型 audit、task attempt、adapter 尝试、版本化目标矩阵、frontier watchlist audit 和结构化失败记录。
-- C3/C3.1/C3.2 公开数据与跨数据 contract：验证 C-MAPSS RUL baseline evaluation 和 FU13-like forecasting reference 的分离指标口径，不生成 leaderboard。
+- C3/C3.1/C3.2/C3.3 公开数据、跨数据 contract 与单候选本机评测：验证 C-MAPSS RUL baseline evaluation、FU13-like forecasting reference 和 TTM adapter/cache evidence 的分离指标口径，不生成 leaderboard。
 - `uv` + `pytest` 的本地可复现研发验证路径。
 
 当前 FU13 canonical observations 事实基础：
@@ -294,6 +294,30 @@ uv run b08-model-core experiment c-stage-c32 \
 
 本机执行仍不下载公开数据、不写 processed data、不检查 model cache、不运行 open model adapter、不训练、不生成 leaderboard。RUL metrics 和 forecasting metrics separated：C-MAPSS RUL 使用 RUL MAE / RMSE / NASA score；FU13-like forecasting 使用 forecasting MAE / RMSE / residual ranking；二者不合成为单一排名。
 
+### C3.3. Single-candidate open model local evaluation
+
+默认 contract-only 入口：
+
+```bash
+uv run b08-model-core experiment c-stage-c33 \
+  --config configs/c_stage_c33_single_candidate_open_model_local_evaluation.yaml \
+  --output reports/c_stage_c33_single_candidate_open_model_local_evaluation.md
+```
+
+C3.3 在 C3.2 explicit local execution 之后只验证一个开源模型候选：TTM on FU13-like forecasting。默认状态为 `contract_ready_single_candidate_local_execution_blocked`，默认路径不联网、不下载、不检查 model cache、不实例化 TTM、不运行模型训练、不写 processed data、不生成 leaderboard。
+
+显式本机 TTM 执行入口：
+
+```bash
+HF_HOME=hf_cache uv run b08-model-core experiment c-stage-c33 \
+  --config configs/local/c_stage_c33_ttm_fu13_like_local_evaluation.example.yaml \
+  --output reports/c_stage_c33_ttm_fu13_like_local_evaluation.md
+```
+
+该 explicit local opt-in 会重跑 FU13-like baseline reference，然后只尝试 TTM adapter on FU13-like forecasting，并记录 dependency status、weight status、adapter status、runtime、input/output shape、actual network used 和 download allowed not verified。C-MAPSS RUL remains baseline-only：C3.3 不在 C-MAPSS RUL 上运行 open model adapter，C-MAPSS RUL 仍沿用 C3.2 的 RUL baseline evaluation。RUL metrics 和 forecasting metrics separated：RUL MAE / RMSE / NASA score 与 forecasting MAE / RMSE / residual ranking 不合并为单一排名。
+
+本阶段仍不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练、不生成 leaderboard，不提交 raw / cache / report。任何本机权重、cache 或联网下载尝试都必须通过显式本机配置进入，并在报告中保留结构化证据；生成的 Markdown report、模型 cache 和 raw / zip / parquet 文件仍保持 ignored。
+
 ## 项目边界
 
 当前不能推出：
@@ -351,6 +375,12 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 - [C2.2 开源模型真实执行升级计划](docs/superpowers/plans/2026-06-08-c22-open-model-executable-evaluation-upgrade-plan.md)
 - [C3 公开数据 registry 设计](docs/superpowers/specs/2026-06-09-c3-public-dataset-registry-design.md)
 - [C3.1 C-MAPSS 最小接入设计](docs/superpowers/specs/2026-06-09-c31-cmapss-minimal-ingestion-design.md)
+- [C3.2 open model cross-dataset evaluation 设计](docs/superpowers/specs/2026-06-11-c32-open-model-cross-dataset-evaluation-design.md)
+- [C3.2 open model cross-dataset evaluation 计划](docs/superpowers/plans/2026-06-11-c32-open-model-cross-dataset-evaluation-plan.md)
+- [C3.2 explicit local execution 设计](docs/superpowers/specs/2026-06-16-c32-explicit-local-execution-design.md)
+- [C3.2 explicit local execution 计划](docs/superpowers/plans/2026-06-16-c32-explicit-local-execution.md)
+- [C3.3 single-candidate open model local evaluation 设计](docs/superpowers/specs/2026-06-22-c33-single-candidate-open-model-local-evaluation-design.md)
+- [C3.3 single-candidate open model local evaluation 计划](docs/superpowers/plans/2026-06-22-c33-single-candidate-open-model-local-evaluation-plan.md)
 - [候选信号与系统事件接口草案](docs/candidate-signal-and-system-event-interface.md)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
 - [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)

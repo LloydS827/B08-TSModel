@@ -1,0 +1,40 @@
+stage: C3_3_single_candidate_open_model_local_evaluation
+safety_policy:
+  allow_network: false
+  allow_download: false
+  allow_model_cache: true
+  allow_local_execution: true
+  allow_training: false
+  allow_write_processed: false
+prerequisites:
+  c32_design_doc: docs/superpowers/specs/2026-06-16-c32-explicit-local-execution-design.md
+  c32_local_status: local_execution_baseline_reference_ready
+candidate:
+  model_id: ttm
+  model_ref: ibm-granite/granite-timeseries-ttm-r2
+  task_id: forecasting_residual
+  dataset_view: fu13_like_simulated_forecasting
+metric_contract:
+  forecasting_metrics: [forecasting_mae, forecasting_rmse, residual_ranking]
+  adapter_status_fields:
+    - dependency_status
+    - weight_status
+    - adapter_status
+    - runtime_seconds
+    - input_shape
+    - output_shape
+    - actual_network_used
+    - download_allowed_not_verified
+  leaderboard_allowed: false
+local_execution:
+  enabled: true
+  model_cache_dir: hf_cache
+  fu13_like:
+    days: 3
+    seed: 42
+    context_length: 32
+    prediction_length: 8
+    max_windows: 60
+    residual_top_k: 5
+outputs:
+  report: reports/c_stage_c33_ttm_fu13_like_local_evaluation.md
