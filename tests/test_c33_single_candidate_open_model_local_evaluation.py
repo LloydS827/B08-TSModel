@@ -106,6 +106,13 @@ def test_c33_rejects_missing_adapter_status_field(tmp_path):
         load_c33_config(_write_yaml(tmp_path / "broken.yaml", data))
 
 
+def test_c33_rejects_missing_network_adapter_status_field(tmp_path):
+    data = yaml.safe_load(_DEFAULT_CONFIG.read_text(encoding="utf-8"))
+    data["metric_contract"]["adapter_status_fields"].remove("actual_network_used")
+    with pytest.raises(C33ConfigError, match="adapter_status_fields"):
+        load_c33_config(_write_yaml(tmp_path / "broken.yaml", data))
+
+
 def test_c33_rejects_download_without_network(tmp_path):
     data = yaml.safe_load(_LOCAL_CONFIG.read_text(encoding="utf-8"))
     data["safety_policy"]["allow_download"] = True
