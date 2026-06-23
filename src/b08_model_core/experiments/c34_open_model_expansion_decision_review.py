@@ -155,6 +155,11 @@ _INVALID_CLAIMS = (
     "No second-candidate execution approval",
     "No production maintenance recommendation",
 )
+_READY_ADAPTER_STATUS_FIELDS = {
+    "dependency_status": "available",
+    "weight_status": "available",
+    "adapter_status": "available_and_ran",
+}
 
 
 def load_c34_config(path: str | Path) -> C34Config:
@@ -201,7 +206,7 @@ def render_c34_report(result: C34RunResult) -> str:
         f"- Stage: {result.stage}",
         f"- Config: {result.config_path}",
         f"- Status: {result.status}",
-        "- Default path is review-only and holds candidate expansion until TTM local evidence exists.",
+        f"- {_summary_for_status(result.status)}",
         "",
         "## Safety Policy",
         "",
@@ -218,7 +223,7 @@ def render_c34_report(result: C34RunResult) -> str:
             f"- Candidate: {result.c33_evidence.candidate}",
             f"- Task: {result.c33_evidence.task}",
             f"- Adapter evidence: {result.c33_evidence.adapter_evidence}",
-            "- Candidate expansion stays blocked until local TTM forecasting evidence reaches the required status.",
+            f"- {_evidence_gate_note_for_status(result.status)}",
             "",
             "## Decision Policy",
             "",
@@ -257,7 +262,7 @@ def render_c34_report(result: C34RunResult) -> str:
             "",
             "## Go / No-Go",
             "",
-            "- Go: write a follow-up design only after C3.3 records local TTM evidence.",
+            f"- Go: {_go_condition_for_status(result.status)}",
             "- No-Go: execute Chronos, TimesFM, Moirai, or any second candidate from this default review.",
             "",
             "## Invalid Claims",
@@ -414,8 +419,13 @@ def _validate_ready_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
             "c33_evidence.adapter_evidence fields must exactly match "
             f"{list(_EXPECTED_REQUIRED_ADAPTER_FIELDS)}"
         )
-    for field in ("dependency_status", "weight_status", "adapter_status"):
-        _required_non_empty_string_field(adapter_evidence, field)
+    for field, expected in _READY_ADAPTER_STATUS_FIELDS.items():
+        value = _required_non_empty_string_field(adapter_evidence, field)
+        if value != expected:
+            raise C34ConfigError(
+                f"c33_evidence.adapter_evidence.{field} must be {expected} "
+                f"for {_READY_STATUS}"
+            )
     runtime_seconds = adapter_evidence.get("runtime_seconds")
     if (
         isinstance(runtime_seconds, bool)
@@ -427,10 +437,7 @@ def _validate_ready_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
             "non-negative number"
         )
     for field in ("input_shape", "output_shape"):
-        if not _is_non_empty_mapping(adapter_evidence.get(field)):
-            raise C34ConfigError(
-                f"c33_evidence.adapter_evidence.{field} must be a non-empty mapping"
-            )
+        _validate_shape_mapping(adapter_evidence, field)
     actual_network_used = adapter_evidence.get("actual_network_used")
     if not (
         isinstance(actual_network_used, bool)
@@ -450,6 +457,19 @@ def _validate_ready_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
 def _validate_failure_adapter_evidence(adapter_evidence: dict[str, Any]) -> None:
     for field in ("failure_reason", "dependency_status", "weight_status"):
         _required_non_empty_string_field(adapter_evidence, field)
+
+
+def _validate_shape_mapping(adapter_evidence: dict[str, Any], field: str) -> None:
+    shape = adapter_evidence.get(field)
+    if not _is_non_empty_mapping(shape):
+        raise C34ConfigError(
+            f"c33_evidence.adapter_evidence.{field} must be a non-empty mapping"
+        )
+    for key, value in shape.items():
+        if isinstance(value, (list, tuple)) and not value:
+            raise C34ConfigError(
+                f"c33_evidence.adapter_evidence.{field}.{key} must not be empty"
+            )
 
 
 def _load_decision_policy(raw: dict[str, Any]) -> C34DecisionPolicy:
@@ -625,3 +645,33 @@ def _next_step_for_status(status: str) -> str:
         "Complete explicit local C3.3 TTM forecasting evidence before promoting "
         "any candidate expansion path."
     )
+
+
+def _summary_for_status(status: str) -> str:
+    if status == _DESIGN_READY_STATUS:
+        return (
+            "C3.3 local TTM forecasting evidence is ready; C3.5 second "
+            "forecasting candidate design may proceed."
+        )
+    return (
+        "Default path is review-only and holds candidate expansion until TTM "
+        "local evidence exists."
+    )
+
+
+def _evidence_gate_note_for_status(status: str) -> str:
+    if status == _DESIGN_READY_STATUS:
+        return (
+            "C3.5 second forecasting candidate design may proceed from the "
+            "reviewed local TTM forecasting evidence."
+        )
+    return (
+        "Candidate expansion stays blocked until local TTM forecasting evidence "
+        "reaches the required status."
+    )
+
+
+def _go_condition_for_status(status: str) -> str:
+    if status == _DESIGN_READY_STATUS:
+        return "write the C3.5 second forecasting candidate design."
+    return "write a follow-up design only after C3.3 records local TTM evidence."
