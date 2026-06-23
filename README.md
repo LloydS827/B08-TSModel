@@ -29,7 +29,7 @@ B08 当前按四个层级组织输出：
 | 层级 | 输出 | 当前支撑 |
 | --- | --- | --- |
 | 数据层 | canonical observations、cycle 重构、窗口生成、质量标记 | FU13 observations、cycle / window、数据诊断 |
-| 评测层 | baseline、TTM、MOMENT、Chronos、TimesFM、Moirai 等模型适配性证据 | C1、C2、C2.1、C2.2、C3、C3.1、C3.2、C3.3 |
+| 评测层 | baseline、TTM、MOMENT、Chronos、TimesFM、Moirai 等模型适配性证据 | C1、C2、C2.1、C2.2、C3、C3.1、C3.2、C3.3、C3.4 |
 | 信号层 | residual、trend、spike、representation、imputation 候选信号 | `leak_current_monitoring`、C1 task evidence |
 | 应用输入层 | 设备状态解释输入、异常候选、运行优化建议输入、系统协同事件候选 | `candidate_signal_report`、B08 -> S01 event candidate |
 
@@ -49,7 +49,7 @@ B08 当前按四个层级组织输出：
 - `leak_current_monitoring` 场景评测样例：输出 residual candidate signal。
 - C1 证据执行框架：统一 E1 forecasting residual、E2 representation、E3 imputation 的报告口径。
 - C2/C2.1/C2.2 开源模型适配性证据入口：覆盖核心模型 audit、task attempt、adapter 尝试、版本化目标矩阵、frontier watchlist audit 和结构化失败记录。
-- C3/C3.1/C3.2/C3.3 公开数据、跨数据 contract 与单候选本机评测：验证 C-MAPSS RUL baseline evaluation、FU13-like forecasting reference 和 TTM adapter/cache evidence 的分离指标口径，不生成 leaderboard。
+- C3/C3.1/C3.2/C3.3/C3.4 公开数据、跨数据 contract、单候选本机评测与扩展决策复核：验证 C-MAPSS RUL baseline evaluation、FU13-like forecasting reference、TTM adapter/cache evidence 和 candidate expansion decision review 的分离指标口径，不生成 leaderboard。
 - `uv` + `pytest` 的本地可复现研发验证路径。
 
 当前 FU13 canonical observations 事实基础：
@@ -318,6 +318,30 @@ HF_HOME=hf_cache uv run b08-model-core experiment c-stage-c33 \
 
 本阶段仍不下载公开数据、不读取本机 raw files、不写 processed data、不运行模型训练、不生成 leaderboard，不提交 raw / cache / report。任何本机权重、cache 或联网下载尝试都必须通过显式本机配置进入，并在报告中保留结构化证据；生成的 Markdown report、模型 cache 和 raw / zip / parquet 文件仍保持 ignored。
 
+### C3.4. Open model expansion decision review
+
+默认 decision review 入口：
+
+```bash
+uv run b08-model-core experiment c-stage-c34 \
+  --config configs/c_stage_c34_open_model_expansion_decision_review.yaml \
+  --output reports/c_stage_c34_open_model_expansion_decision_review.md
+```
+
+C3.4 只复核 C3.3 TTM on FU13-like forecasting 证据是否足以进入下一个 forecasting open model 的设计。默认配置使用 C3.3 contract evidence，状态为 `hold_candidate_expansion_pending_ttm_local_evidence`，表示在没有显式本机 TTM 证据前，不扩展候选。
+
+本机证据复核入口：
+
+```bash
+uv run b08-model-core experiment c-stage-c34 \
+  --config configs/local/c_stage_c34_review_c33_local_ttm_evidence.example.yaml \
+  --output reports/c_stage_c34_review_c33_local_ttm_evidence.md
+```
+
+ready gate 要求 C3.3 evidence status 为 `local_execution_ttm_forecasting_ready`，并且 adapter evidence 必须包含 dependency status、weight status、adapter status、runtime、input/output shape、actual network used 和 download allowed not verified。只有这些字段完整且一致时，C3.4 才允许进入后续 C3.5 second forecasting candidate design；否则继续 hold 或记录 evidence gap。
+
+C3.4 不运行第二候选 open model，不检查 model cache，不实例化 adapter，不下载权重，不读取 raw files，不训练，不写 processed data，不生成 leaderboard。Chronos / Chronos-Bolt、TimesFM 2.5、Moirai / Uni2TS 只保留为 review-only candidate route；本阶段不把它们提升为可执行候选，也不产生 RUL open-model claim。
+
 ## 项目边界
 
 当前不能推出：
@@ -381,6 +405,8 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 - [C3.2 explicit local execution 计划](docs/superpowers/plans/2026-06-16-c32-explicit-local-execution.md)
 - [C3.3 single-candidate open model local evaluation 设计](docs/superpowers/specs/2026-06-22-c33-single-candidate-open-model-local-evaluation-design.md)
 - [C3.3 single-candidate open model local evaluation 计划](docs/superpowers/plans/2026-06-22-c33-single-candidate-open-model-local-evaluation-plan.md)
+- [C3.4 open model expansion decision review 设计](docs/superpowers/specs/2026-06-23-c34-open-model-expansion-decision-review-design.md)
+- [C3.4 open model expansion decision review 计划](docs/superpowers/plans/2026-06-23-c34-open-model-expansion-decision-review-plan.md)
 - [候选信号与系统事件接口草案](docs/candidate-signal-and-system-event-interface.md)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
 - [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)

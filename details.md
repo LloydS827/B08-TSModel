@@ -1,18 +1,18 @@
 # B08 能源设备时空智能样板进展台账
 
-更新日期：2026-06-22
+更新日期：2026-06-23
 
 ## 1. 当前阶段
 
-项目当前处于 **C3.3 single-candidate open model local evaluation implemented，下一步进入 C3.4 decision review** 阶段。
+项目当前处于 **C3.4 open model expansion decision review implemented** 阶段。
 
-已经完成的主线基础包括：FU13 真实多 CSV 到 canonical observations 的装配、数据诊断、cycle / window 重构、baseline / TTM 真实窗口 forecasting、`leak_current_monitoring` 场景评测样例、C1 最小证据执行框架、C2 开源模型适配性证据、C2.1 六模型 executable adapter 尝试入口、C2.2 默认离线安全配置与 frontier watchlist audit、C3 公开数据 registry，C3.1 NASA PCoE #6 经典 C-MAPSS 的默认离线配置、loader、parser、schema mapping dry-run、RUL target metadata、split/leakage guard、CLI report 和回归测试，C3.2 cross-dataset evaluation contract scaffold 与 explicit local execution，以及 C3.3 single-candidate open model local evaluation。
+已经完成的主线基础包括：FU13 真实多 CSV 到 canonical observations 的装配、数据诊断、cycle / window 重构、baseline / TTM 真实窗口 forecasting、`leak_current_monitoring` 场景评测样例、C1 最小证据执行框架、C2 开源模型适配性证据、C2.1 六模型 executable adapter 尝试入口、C2.2 默认离线安全配置与 frontier watchlist audit、C3 公开数据 registry，C3.1 NASA PCoE #6 经典 C-MAPSS 的默认离线配置、loader、parser、schema mapping dry-run、RUL target metadata、split/leakage guard、CLI report 和回归测试，C3.2 cross-dataset evaluation contract scaffold 与 explicit local execution，C3.3 single-candidate open model local evaluation，以及 C3.4 open model expansion decision review。
 
 B08 当前定位为公司时空智能在能源设备时序方向的核心样板项目。船舶制造偏空间，能源偏时序，B08 是 A 能力在能源侧的证据项目：用 FU13 observations、cycle / window、baseline / TTM、`leak_current_monitoring`、C 阶段评测和 candidate signal 口径，形成数据层、评测层、信号层、应用输入层四级输出。
 
 D1 修订把 open model evaluation 从模型排行叙事改为模型适配性证据，并补充 B08 -> B06 / S01 / IP 接口口径：B08 -> B06 输出 `equipment_timeseries_observation_package` profile；B08 -> S01 输出系统事件候选；B08 -> IP 支撑 P0-06 设备时序标准观测表、P0-07 周期重构与窗口生成、P0-08 设备时序基础模型适配性评测。
 
-当前 C3.3 的定位不是“直接跑完整公开 benchmark 或开源模型排行榜”，而是在默认离线边界下保留 contract-only 报告，并在显式本机 opt-in 下只验证 TTM on FU13-like forecasting 的 adapter/cache/dependency 证据。C3.1 explicit local raw mapping review 已验证完整经典 C-MAPSS schema、RUL metadata 和 split/leakage guard，状态为 `schema_validated_ready_for_c32`，readiness detail 为 `full_classic_cmapss_validated`。C3.2 默认报告状态为 `contract_ready_local_execution_blocked`，保留 local execution design 的安全边界；explicit local execution 成功状态为 `local_execution_baseline_reference_ready`，只包含 C-MAPSS RUL baseline evaluation 与 FU13-like forecasting reference。C3.3 默认报告状态为 `contract_ready_single_candidate_local_execution_blocked`，本机成功状态为 `local_execution_ttm_forecasting_ready`。
+当前 C3.4 decision review 的定位不是“直接跑第二个 open model 或生成开源模型排行榜”，而是复核 C3.3 single-candidate open model local evaluation 的 TTM 本机证据，决定是否进入下一步单一 forecasting 候选设计。C3.1 explicit local raw mapping review 已验证完整经典 C-MAPSS schema、RUL metadata 和 split/leakage guard，状态为 `schema_validated_ready_for_c32`，readiness detail 为 `full_classic_cmapss_validated`。C3.2 默认报告状态为 `contract_ready_local_execution_blocked`，保留 local execution design 的安全边界；explicit local execution 成功状态为 `local_execution_baseline_reference_ready`，只包含 C-MAPSS RUL baseline evaluation 与 FU13-like forecasting reference。C3.3 默认报告状态为 `contract_ready_single_candidate_local_execution_blocked`，本机成功状态为 `local_execution_ttm_forecasting_ready`。C3.4 默认报告状态为 `hold_candidate_expansion_pending_ttm_local_evidence`，只有记录完整 ready evidence 后才进入 C3.5 second forecasting candidate design。
 
 当前默认入口：
 
@@ -54,12 +54,29 @@ HF_HOME=hf_cache uv run b08-model-core experiment c-stage-c33 \
   --output reports/c_stage_c33_ttm_fu13_like_local_evaluation.md
 ```
 
-默认边界保持不变：不下载公开数据、不读取本机 raw files、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不写 processed data、不运行模型训练、不生成 leaderboard、不提交公开数据文件、不提交真实数据、不提交本机 cache 或生成报告；任何联网、下载、raw mapping、权重路径和 cache 使用都必须通过显式本机配置进入，并在报告中记录。C3.2 本机执行只读取 ignored 的 `data/public/cmapss/raw`，不运行 open model adapter；C3.3 本机执行会重跑 FU13-like baseline reference，然后只尝试 TTM adapter on FU13-like forecasting。C-MAPSS RUL baseline-only，RUL metrics 和 forecasting metrics 分开解释。
+C3.4 默认入口：
+
+```bash
+uv run b08-model-core experiment c-stage-c34 \
+  --config configs/c_stage_c34_open_model_expansion_decision_review.yaml \
+  --output reports/c_stage_c34_open_model_expansion_decision_review.md
+```
+
+C3.4 本机证据复核入口：
+
+```bash
+uv run b08-model-core experiment c-stage-c34 \
+  --config configs/local/c_stage_c34_review_c33_local_ttm_evidence.example.yaml \
+  --output reports/c_stage_c34_review_c33_local_ttm_evidence.md
+```
+
+默认边界保持不变：不下载公开数据、不读取本机 raw files、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不写 processed data、不运行模型训练、不生成 leaderboard、不提交公开数据文件、不提交真实数据、不提交本机 cache 或生成报告；任何联网、下载、raw mapping、权重路径和 cache 使用都必须通过显式本机配置进入，并在报告中记录。C3.2 本机执行只读取 ignored 的 `data/public/cmapss/raw`，不运行 open model adapter；C3.3 本机执行会重跑 FU13-like baseline reference，然后只尝试 TTM adapter on FU13-like forecasting；C3.4 只复核 C3.3 evidence，不运行第二候选 open model，不检查 cache，不下载，不训练。C-MAPSS RUL baseline-only，RUL metrics 和 forecasting metrics 分开解释。
 
 ## 2. 每日更新
 
 | 日期 | 当日完成内容 |
 | --- | --- |
+| 2026-06-23 | 完成 C3.4 open model expansion decision review implemented：新增默认 decision review CLI `c-stage-c34`、默认报告状态 `hold_candidate_expansion_pending_ttm_local_evidence`，并提供 `configs/local/c_stage_c34_review_c33_local_ttm_evidence.example.yaml` 用于复核 C3.3 explicit local TTM evidence；C3.4 只做 review-only candidate expansion decision，不运行第二候选 open model、不检查 cache、不训练、不生成 leaderboard，ready gate 要求 C3.3 `local_execution_ttm_forecasting_ready` 以及完整 adapter evidence 字段。 |
 | 2026-06-22 | 完成 D1 能源设备时空智能样板定位修订，并完成 C3.3 single-candidate open model local evaluation：README 和 details 从“设备时序基础模型工作台”升级为“公司时空智能在能源设备时序方向的核心样板项目”；补充数据层、评测层、信号层、应用输入层四级输出；将 C2/C3 统一表述为模型适配性证据而不是 leaderboard；新增 `candidate_signal_report`、B08 -> S01 系统事件候选、B08 -> B06 `equipment_timeseries_observation_package`、B08 -> IP P0-06/P0-07/P0-08 的接口口径；为 `leak_current_monitoring` 补充专家复核字段；新增 C3.3 默认 contract-only CLI 和 explicit local TTM on FU13-like forecasting 入口，默认不检查 cache、不实例化 TTM，本机 opt-in 记录 adapter/cache/dependency 证据，C-MAPSS RUL remains baseline-only。 |
 | 2026-06-16 | 完成 C3.2 explicit local execution：在保留默认 `contract_ready_local_execution_blocked` contract command 的同时，新增 `configs/local/c_stage_c32_explicit_local_execution.example.yaml` 本机 opt-in 路径；读取 ignored C-MAPSS raw 后只运行 C-MAPSS RUL baseline evaluation，并用 FU13-like simulation 运行 forecasting reference；报告状态为 `local_execution_baseline_reference_ready`，继续不下载、不写 processed、不检查 model cache、不实例化 open model adapter、不训练、不生成 leaderboard，RUL 与 forecasting metrics separated。 |
 | 2026-06-11 | 完成 C3.2 open model cross-dataset evaluation contract scaffold：新增默认安全 config、loader/validator、runner、Markdown report 和 CLI `experiment c-stage-c32`；报告默认状态为 `contract_ready_local_execution_blocked`，记录 C3.1 prerequisite、dataset view matrix、task compatibility、model candidate status、metric contract、Go / No-Go 和 invalid claims；默认不下载公开数据、不读取 C-MAPSS raw、不读取 FU13 real、不检查 model cache、不实例化 open model adapter、不运行模型训练、不计算模型分数、不生成 leaderboard。 |
@@ -78,12 +95,12 @@ HF_HOME=hf_cache uv run b08-model-core experiment c-stage-c33 \
 
 ## 3. 下一步计划
 
-下一步主线是 C3.4 decision review：复核 C3.3 single-candidate open model local evaluation 的 TTM 本机证据，决定是否扩展到另一个 forecasting open model，或继续收束为阶段性 Go / No-Go。目标仍是补充模型适配性证据，不是继续扩大 C3.2 baseline 范围，也不是直接训练自研基础模型、扩大到多个未审计公开数据集，或生成跨任务 leaderboard。
+下一步主线取决于 C3.4 evidence status：如果仍是默认 / hold，则先运行或复核 C3.3 explicit local TTM evidence，再考虑任何第二候选；如果已经记录 ready evidence，则进入 C3.5 second forecasting candidate design，且仍然只设计单一候选，不进入完整 open model 竞赛。目标仍是补充模型适配性证据，不是继续扩大 C3.2 baseline 范围，也不是直接训练自研基础模型、扩大到多个未审计公开数据集，或生成跨任务 leaderboard。
 
 具体计划如下：
 
-1. Review C3.3 TTM local evidence：复核 dependency status、weight status、adapter status、runtime、shape、actual network used 和 download allowed not verified。
-2. 决定是否扩展到另一个 forecasting open model：只在 C3.3 证据足以支撑 adapter/cache 流程后再新增候选，不进入完整 open model 竞赛。
+1. Review C3.3 TTM local evidence：如果 C3.4 仍为 default / hold，则先运行或复核 C3.3 explicit local TTM evidence，补齐 dependency status、weight status、adapter status、runtime、shape、actual network used 和 download allowed not verified。
+2. 如果 C3.4 已记录 ready evidence：进入 C3.5 second forecasting candidate design，single candidate only，只设计一个 forecasting open model 的 adapter/cache path，不进入完整 open model 竞赛。
 3. 保持 C-MAPSS RUL baseline-only：C-MAPSS RUL 使用 RUL MAE / RMSE / NASA score 作为公开 RUL baseline bar，除非另行批准 RUL adapter design，否则不做 open model RUL。
 4. 保持指标分离：FU13-like forecasting 使用 forecasting MAE / RMSE / residual ranking；不生成 leaderboard，不把 RUL 与 forecasting 合成单一排名。
 5. 继续保留安全边界：默认不下载公开数据、不提交 raw / zip / parquet / cache / report、不运行训练；任何 raw、权重、cache、联网执行都必须使用 explicit local opt-in 配置。

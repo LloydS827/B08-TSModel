@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from b08_model_core.cli import main
 from b08_model_core.experiments.c34_open_model_expansion_decision_review import (
     C34ConfigError,
     load_c34_config,
@@ -453,3 +454,44 @@ def test_c34_local_evidence_example_is_review_only_blocker():
     assert result.status == "blocked_candidate_expansion_due_to_ttm_evidence_gap"
     assert config.safety_policy.allow_model_cache is False
     assert config.safety_policy.allow_local_execution is False
+
+
+def test_c34_cli_writes_default_decision_report(tmp_path):
+    output = tmp_path / "c34_report.md"
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c34",
+            "--config",
+            str(DEFAULT_CONFIG),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 0
+    text = output.read_text(encoding="utf-8")
+    assert "C3.4 Open Model Expansion Decision Review Report" in text
+    assert "hold_candidate_expansion_pending_ttm_local_evidence" in text
+
+
+def test_c34_cli_config_error_returns_one_without_output(tmp_path, capsys):
+    data = _load_default_config_data()
+    data["decision_policy"]["leaderboard_allowed"] = True
+    config_path = _write_yaml(tmp_path / "leaderboard_allowed.yaml", data)
+    output = tmp_path / "c34_report.md"
+
+    exit_code = main(
+        [
+            "experiment",
+            "c-stage-c34",
+            "--config",
+            str(config_path),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert exit_code == 1
+    assert not output.exists()
+    assert "C3.4 config error" in capsys.readouterr().err

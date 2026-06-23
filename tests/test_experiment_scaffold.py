@@ -447,6 +447,28 @@ def test_c33_single_candidate_local_evaluation_workflow_is_documented():
     assert "C-MAPSS RUL baseline-only" in details
 
 
+def test_readme_documents_c34_decision_review_workflow():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    section_header = "### C3.4. Open model expansion decision review"
+    next_header = "\n## 项目边界"
+
+    assert section_header in readme
+    c34_section = readme.split(section_header, 1)[1].split(next_header, 1)[0]
+    assert "c-stage-c34" in c34_section
+    assert "configs/c_stage_c34_open_model_expansion_decision_review.yaml" in c34_section
+    assert "configs/local/c_stage_c34_review_c33_local_ttm_evidence.example.yaml" in c34_section
+    assert "不运行第二候选 open model" in c34_section
+    assert "不生成 leaderboard" in c34_section
+
+
+def test_details_records_c34_completion_and_next_step():
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+
+    assert "C3.4 open model expansion decision review implemented" in details
+    assert "C3.5 second forecasting candidate design" in details
+    assert "hold_candidate_expansion_pending_ttm_local_evidence" in details
+
+
 def test_c31_cli_help_is_available():
     result = subprocess.run(
         [

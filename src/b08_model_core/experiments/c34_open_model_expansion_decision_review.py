@@ -201,7 +201,7 @@ def run_c34_open_model_expansion_decision_review(
 
 def render_c34_report(result: C34RunResult) -> str:
     lines = [
-        "# C3.4 Open Model Expansion Decision Review",
+        "# C3.4 Open Model Expansion Decision Review Report",
         "",
         "## Summary",
         "",
