@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -48,6 +49,12 @@ from b08_model_core.experiments.c33_single_candidate_open_model_local_evaluation
     load_c33_config,
     render_c33_report,
     run_c33_single_candidate_open_model_local_evaluation,
+)
+from b08_model_core.experiments.c34_open_model_expansion_decision_review import (
+    C34ConfigError,
+    load_c34_config,
+    render_c34_report,
+    run_c34_open_model_expansion_decision_review,
 )
 from b08_model_core.foundation import FoundationModelStatus
 from b08_model_core.real_data.diagnostics import build_fu13_diagnostics, render_fu13_diagnostics
@@ -184,6 +191,9 @@ def main(argv: list[str] | None = None) -> int:
     c_stage_c33 = experiment_sub.add_parser("c-stage-c33")
     c_stage_c33.add_argument("--config", required=True)
     c_stage_c33.add_argument("--output", required=True)
+    c_stage_c34 = experiment_sub.add_parser("c-stage-c34")
+    c_stage_c34.add_argument("--config", required=True)
+    c_stage_c34.add_argument("--output", required=True)
 
     args = parser.parse_args(argv)
     if args.command == "simulate":
@@ -387,6 +397,23 @@ def main(argv: list[str] | None = None) -> int:
             output.parent.mkdir(parents=True, exist_ok=True)
             output.write_text(render_c33_report(result), encoding="utf-8")
         except (FileNotFoundError, ValueError, OSError, PermissionError):
+            return 1
+        return 0
+    if args.command == "experiment" and args.experiment_command == "c-stage-c34":
+        try:
+            config = load_c34_config(args.config)
+            result = run_c34_open_model_expansion_decision_review(
+                config,
+                config_path=args.config,
+            )
+            output = Path(args.output)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(render_c34_report(result), encoding="utf-8")
+        except C34ConfigError as exc:
+            sys.stderr.write(f"C3.4 config error: {exc}\n")
+            return 1
+        except (FileNotFoundError, OSError, PermissionError) as exc:
+            sys.stderr.write(f"C3.4 file error: {exc}\n")
             return 1
         return 0
     if args.command == "experiment" and args.experiment_command == "c-stage-c21":
