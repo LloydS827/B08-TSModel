@@ -319,6 +319,33 @@ def test_readme_documents_post_c34_c_stage_roadmap():
     )
 
 
+def test_c34_evidence_path_review_is_documented_and_gated():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+    review_path = REPO_ROOT / "docs/reviews/2026-06-26-c34-evidence-path-review.md"
+
+    assert review_path.exists()
+    review = review_path.read_text(encoding="utf-8")
+
+    assert "C3.4 Evidence Path Review" in review
+    assert "hold_candidate_expansion_pending_ttm_local_evidence" in review
+    assert "blocked_candidate_expansion_due_to_ttm_evidence_gap" in review
+    assert "local_execution_ttm_forecasting_ready" in review
+    assert "candidate_expansion_design_ready" in review
+    assert "C3.5 blocked" in review
+    assert "single second forecasting candidate design" in review
+    assert (
+        "no reviewed C3.3 TTM local evidence" in review
+        or "没有已复核的 C3.3 TTM 本机证据" in review
+    )
+    assert "不生成 leaderboard" in review
+    assert "不运行第二候选 open model" in review
+    assert "不提交 generated reports" in review
+    assert "docs/reviews/2026-06-26-c34-evidence-path-review.md" in readme
+    assert "docs/reviews/2026-06-26-c34-evidence-path-review.md" in details
+    assert details.count("\n## ") == 3
+
+
 def test_candidate_signal_and_system_event_interface_is_documented():
     interface_doc = (
         REPO_ROOT / "docs/candidate-signal-and-system-event-interface.md"
