@@ -288,6 +288,37 @@ def test_energy_equipment_spatiotemporal_positioning_is_documented():
     assert "能源设备时空智能样板" in details
 
 
+def test_readme_documents_post_c34_c_stage_roadmap():
+    readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+
+    assert "## 后续发展路线" in readme
+    assert "## 快速开始" in readme
+    assert readme.index("## 后续发展路线") < readme.index("## 快速开始")
+    roadmap = readme.split("## 后续发展路线", 1)[1].split("\n## 快速开始", 1)[0]
+
+    assert "论文/专利证据优先" in roadmap
+    assert "工程样板承接" in roadmap
+    assert "C3.4" in roadmap
+    assert "C3.5" in roadmap
+    assert "candidate_expansion_design_ready" in roadmap
+    assert "single second forecasting candidate design" in roadmap
+    assert "E2 representation" in roadmap
+    assert "E3 imputation/reconstruction" in roadmap
+    assert "weak-label" in roadmap
+    assert "E5 patent effect" in roadmap
+    assert "C -> B" in roadmap
+    assert "go_to_b_minimal_prototype" in roadmap
+    assert "stay_in_c_adaptation" in roadmap
+    assert "knowledge_only_consolidation" in roadmap
+    assert "no_go_hold" in roadmap
+    assert "不生成 leaderboard" in roadmap
+    assert "不直接训练自研基础模型" in roadmap
+    assert (
+        "docs/superpowers/specs/2026-06-26-c-stage-post-c34-roadmap-design.md"
+        in roadmap
+    )
+
+
 def test_candidate_signal_and_system_event_interface_is_documented():
     interface_doc = (
         REPO_ROOT / "docs/candidate-signal-and-system-event-interface.md"
@@ -467,6 +498,30 @@ def test_details_records_c34_completion_and_next_step():
     assert "C3.4 open model expansion decision review implemented" in details
     assert "C3.5 second forecasting candidate design" in details
     assert "hold_candidate_expansion_pending_ttm_local_evidence" in details
+
+
+def test_details_records_post_c34_roadmap_and_preserves_ledger_shape():
+    details = (REPO_ROOT / "details.md").read_text(encoding="utf-8")
+
+    assert "更新日期：2026-06-26" in details
+    assert (
+        "C3.4 open model expansion decision review implemented; "
+        "post-C3.4 C-stage roadmap documented"
+        in details
+    )
+    assert "| 2026-06-26 |" in details
+    assert "C3.4 / C3.5 gate" in details
+    assert "single second forecasting candidate design" in details
+    assert "E2 representation" in details
+    assert "E3 imputation/reconstruction" in details
+    assert "weak-label" in details
+    assert "E5 patent effect" in details
+    assert "C -> B decision review" in details
+    assert "go_to_b_minimal_prototype" in details
+    assert "stay_in_c_adaptation" in details
+    assert "knowledge_only_consolidation" in details
+    assert "no_go_hold" in details
+    assert details.count("\n## ") == 3
 
 
 def test_c31_cli_help_is_available():
