@@ -4,7 +4,7 @@
 
 ## 1. 当前阶段
 
-项目当前处于 **C3.4 open model expansion decision review implemented; post-C3.4 C-stage roadmap documented** 阶段。
+项目当前处于 **C3.4 open model expansion decision review implemented; post-C3.4 C-stage roadmap documented; C3.4 evidence path reviewed** 阶段。
 
 已经完成的主线基础包括：FU13 真实多 CSV 到 canonical observations 的装配、数据诊断、cycle / window 重构、baseline / TTM 真实窗口 forecasting、`leak_current_monitoring` 场景评测样例、C1 最小证据执行框架、C2 开源模型适配性证据、C2.1 六模型 executable adapter 尝试入口、C2.2 默认离线安全配置与 frontier watchlist audit、C3 公开数据 registry，C3.1 NASA PCoE #6 经典 C-MAPSS 的默认离线配置、loader、parser、schema mapping dry-run、RUL target metadata、split/leakage guard、CLI report 和回归测试，C3.2 cross-dataset evaluation contract scaffold 与 explicit local execution，C3.3 single-candidate open model local evaluation，以及 C3.4 open model expansion decision review。
 
@@ -76,7 +76,7 @@ uv run b08-model-core experiment c-stage-c34 \
 
 | 日期 | 当日完成内容 |
 | --- | --- |
-| 2026-06-26 | 完成 post-C3.4 C-stage roadmap documented：把后续路线写入 README，明确论文/专利证据优先、工程样板承接、模型原型 gate 后置；保持 C3.4 / C3.5 gate，只有 C3.4 达到 `candidate_expansion_design_ready` 后才进入 C3.5 `single second forecasting candidate design`；中期转向 `E2 representation`、`E3 imputation/reconstruction`、weak-label candidate signal review 和 `E5 patent effect`，后期形成 C -> B decision review，默认决策包括 `go_to_b_minimal_prototype`、`stay_in_c_adaptation`、`knowledge_only_consolidation` 和 `no_go_hold`。 |
+| 2026-06-26 | 完成 post-C3.4 C-stage roadmap documented，并补充 [C3.4 evidence path review](docs/reviews/2026-06-26-c34-evidence-path-review.md)：把后续路线写入 README，明确论文/专利证据优先、工程样板承接、模型原型 gate 后置；保持 C3.4 / C3.5 gate，当前 tracked review 结论是默认仓库证据仍为 `hold_candidate_expansion_pending_ttm_local_evidence`，本机 review example 为 `blocked_candidate_expansion_due_to_ttm_evidence_gap`，尚未达到 `candidate_expansion_design_ready`；中期转向 `E2 representation`、`E3 imputation/reconstruction`、weak-label candidate signal review 和 `E5 patent effect`，后期形成 C -> B decision review。 |
 | 2026-06-23 | 完成 C3.4 open model expansion decision review implemented：新增默认 decision review CLI `c-stage-c34`、默认报告状态 `hold_candidate_expansion_pending_ttm_local_evidence`，并提供 `configs/local/c_stage_c34_review_c33_local_ttm_evidence.example.yaml` 用于复核 C3.3 explicit local TTM evidence；C3.4 只做 review-only candidate expansion decision，不运行第二候选 open model、不检查 cache、不训练、不生成 leaderboard，ready gate 要求 C3.3 `local_execution_ttm_forecasting_ready` 以及完整 adapter evidence 字段。 |
 | 2026-06-22 | 完成 D1 能源设备时空智能样板定位修订，并完成 C3.3 single-candidate open model local evaluation：README 和 details 从“设备时序基础模型工作台”升级为“公司时空智能在能源设备时序方向的核心样板项目”；补充数据层、评测层、信号层、应用输入层四级输出；将 C2/C3 统一表述为模型适配性证据而不是 leaderboard；新增 `candidate_signal_report`、B08 -> S01 系统事件候选、B08 -> B06 `equipment_timeseries_observation_package`、B08 -> IP P0-06/P0-07/P0-08 的接口口径；为 `leak_current_monitoring` 补充专家复核字段；新增 C3.3 默认 contract-only CLI 和 explicit local TTM on FU13-like forecasting 入口，默认不检查 cache、不实例化 TTM，本机 opt-in 记录 adapter/cache/dependency 证据，C-MAPSS RUL remains baseline-only。 |
 | 2026-06-16 | 完成 C3.2 explicit local execution：在保留默认 `contract_ready_local_execution_blocked` contract command 的同时，新增 `configs/local/c_stage_c32_explicit_local_execution.example.yaml` 本机 opt-in 路径；读取 ignored C-MAPSS raw 后只运行 C-MAPSS RUL baseline evaluation，并用 FU13-like simulation 运行 forecasting reference；报告状态为 `local_execution_baseline_reference_ready`，继续不下载、不写 processed、不检查 model cache、不实例化 open model adapter、不训练、不生成 leaderboard，RUL 与 forecasting metrics separated。 |
@@ -96,11 +96,11 @@ uv run b08-model-core experiment c-stage-c34 \
 
 ## 3. 下一步计划
 
-下一步主线改为 post-C3.4 C-stage roadmap：先守住 C3.4 / C3.5 gate，再从 forecasting-only 转向多任务证据，最后形成 C -> B decision review。目标仍是补充可复核证据，不是扩大 open model 竞赛、直接训练自研模型或生成跨任务 leaderboard。
+下一步主线改为 post-C3.4 C-stage roadmap：先守住 C3.4 / C3.5 gate，延续 Review C3.3 TTM local evidence / C3.4 evidence path，再从 forecasting-only 转向多任务证据，最后形成 C -> B decision review。目标仍是补充可复核证据，不是扩大 open model 竞赛、直接训练自研模型或生成跨任务 leaderboard。
 
 具体计划如下：
 
-1. Review C3.3 TTM local evidence / C3.4 evidence path：如果 C3.4 仍为 default / hold，则先运行或复核 C3.3 explicit local TTM evidence；如果 C3.4 记录 blocker，则先修 TTM dependency/cache/shape/runtime gap。
+1. 补齐 C3.3 TTM local evidence / C3.4 evidence path：当前 tracked review 见 [C3.4 evidence path review](docs/reviews/2026-06-26-c34-evidence-path-review.md)，默认仓库证据仍为 hold，本机 review example 是 blocker；下一步先运行或复核 C3.3 explicit local TTM evidence，并用 C3.4 本机证据复核入口确认是否达到 `candidate_expansion_design_ready`。
 2. C3.5 single second forecasting candidate design：只有 C3.4 达到 `candidate_expansion_design_ready` 后才进入；仍然只设计一个 forecasting 候选，不做多模型竞赛，不生成 leaderboard。
 3. E2 / E3 多任务证据：补齐 `E2 representation` 和 `E3 imputation/reconstruction`，明确 stage、quality_flag、failure_proxy、mask policy、输入排除和 split/leakage 边界。
 4. Weak-label 与 E5 patent effect：把 residual、reconstruction error、trend/spike candidate 和专家复核入口连接起来，并沉淀 P1-P5 的最小技术效果样例。

@@ -71,6 +71,8 @@ B08 后续默认按“论文/专利证据优先，工程样板承接，模型原
 
 短期重点是 C3.4 / C3.5 gate。若 C3.4 仍为 `hold_candidate_expansion_pending_ttm_local_evidence`，下一步先运行或复核 C3.3 explicit local TTM evidence；若 C3.4 记录 `blocked_candidate_expansion_due_to_ttm_evidence_gap`，下一步先修 TTM dependency/cache/shape/runtime blocker；只有当 C3.4 达到 `candidate_expansion_design_ready` 后，才进入 C3.5 `single second forecasting candidate design`。C3.5 仍然只设计一个 forecasting 候选，不执行多模型竞赛，不生成 leaderboard。
 
+当前 C3.4 evidence path 的 tracked review 见 [C3.4 Evidence Path Review](docs/reviews/2026-06-26-c34-evidence-path-review.md)：默认仓库证据仍是 hold，本机 review example 是 blocker 示例，尚未进入 C3.5 ready。
+
 中期重点从 forecasting-only 转向多任务证据：补齐 `E2 representation`、`E3 imputation/reconstruction`、weak-label candidate signal review 和 `E5 patent effect`。这些任务用于判断模型是否支持设备状态理解、候选异常信号和论文/专利技术效果样例，不能写成生产告警、RUL 精确估计或自动维修建议。
 
 后期形成 C -> B decision review。只有当开源模型和工程 baseline 在 representation / imputation / weak-label 任务上存在稳定缺口，并且结构感知输入、阶段编码、多任务头或弱标签目标有明确实验必要性时，才进入 `go_to_b_minimal_prototype`；否则默认选择 `stay_in_c_adaptation`、`knowledge_only_consolidation` 或 `no_go_hold`。
@@ -419,6 +421,7 @@ hf_cache/                               # 本机 Hugging Face cache，ignored
 - [C3.3 single-candidate open model local evaluation 计划](docs/superpowers/plans/2026-06-22-c33-single-candidate-open-model-local-evaluation-plan.md)
 - [C3.4 open model expansion decision review 设计](docs/superpowers/specs/2026-06-23-c34-open-model-expansion-decision-review-design.md)
 - [C3.4 open model expansion decision review 计划](docs/superpowers/plans/2026-06-23-c34-open-model-expansion-decision-review-plan.md)
+- [C3.4 evidence path review](docs/reviews/2026-06-26-c34-evidence-path-review.md)
 - [候选信号与系统事件接口草案](docs/candidate-signal-and-system-event-interface.md)
 - [TTM 真实数据能力复核报告](docs/ttm-real-data-evaluation.md)
 - [漏液电流监测场景评测报告](docs/leak-current-scenario-evaluation.md)
